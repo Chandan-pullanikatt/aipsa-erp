@@ -12,7 +12,17 @@ const api = axios.create({
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const publicAuthEndpoints = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/join',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+      '/auth/accept-invite'
+    ];
+    const isPublicAuthRoute = publicAuthEndpoints.some(route => err.config?.url?.includes(route));
+
+    if (err.response?.status === 401 && !isPublicAuthRoute) {
       Cookies.remove('user');
       fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
       window.location.href = '/login';
