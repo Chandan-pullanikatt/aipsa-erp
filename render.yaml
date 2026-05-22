@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: aipsa-erp-api
+    runtime: node
+    rootDir: apps/api
+    buildCommand: npm install && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: WEB_URL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
