@@ -43,7 +43,17 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const password = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    diagnostics: {
+      hasSuperAdminPassword: !!process.env.SUPER_ADMIN_PASSWORD,
+      passwordLength: password.length,
+      passwordChars: Array.from(password).map(c => c.charCodeAt(0)),
+      passwordMasked: password.length > 4 ? password.slice(0, 2) + '*'.repeat(password.length - 4) + password.slice(-2) : '****'
+    }
+  });
 });
 
 // Routes

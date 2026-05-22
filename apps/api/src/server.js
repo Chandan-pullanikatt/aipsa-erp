@@ -9,6 +9,8 @@ async function autoSeed() {
   try {
     const email = 'admin@aipsa.org';
     const password = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+    console.log('[Auto-Seed] Password source:', process.env.SUPER_ADMIN_PASSWORD ? 'Environment Variable' : 'Default Fallback');
+    console.log('[Auto-Seed] Hashing password of length:', password.length);
     const hashed = await bcrypt.hash(password, 12);
     
     const existing = await prisma.user.findUnique({ where: { email } });
