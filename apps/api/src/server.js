@@ -8,10 +8,11 @@ const prisma = new PrismaClient();
 async function autoSeed() {
   try {
     const email = 'admin@aipsa.org';
+    const password = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+    const hashed = await bcrypt.hash(password, 12);
+    
     const existing = await prisma.user.findUnique({ where: { email } });
     if (!existing) {
-      const password = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
-      const hashed = await bcrypt.hash(password, 12);
       await prisma.user.create({
         data: {
           email,
@@ -25,7 +26,11 @@ async function autoSeed() {
       });
       console.log(`[Auto-Seed] Super admin (${email}) created successfully.`);
     } else {
-      console.log(`[Auto-Seed] Super admin (${email}) already exists. Skipping.`);
+      await prisma.user.update({
+        where: { email },
+        data: { password: hashed },
+      });
+      console.log(`[Auto-Seed] Super admin (${email}) password synchronized successfully.`);
     }
   } catch (err) {
     console.error('[Auto-Seed] Error seeding super admin:', err);
