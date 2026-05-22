@@ -4,24 +4,28 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
-import { 
-  Calendar, 
-  Clock, 
-  AlertCircle, 
-  FileText, 
-  CheckCircle, 
-  CreditCard, 
-  BookOpen, 
-  Bell, 
-  Download, 
-  Printer, 
-  User, 
-  Award, 
-  Pin, 
-  AlertTriangle, 
+import {
+  Calendar,
+  Clock,
+  AlertCircle,
+  FileText,
+  CheckCircle,
+  CreditCard,
+  BookOpen,
+  Bell,
+  Download,
+  Printer,
+  User,
+  Award,
+  Pin,
+  AlertTriangle,
   ChevronRight,
   ExternalLink,
-  Info
+  Info,
+  Send,
+  X,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 
 // Interfaces
@@ -182,6 +186,13 @@ function StudentPortalContent() {
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [receiptDetails, setReceiptDetails] = useState<any | null>(null);
 
+  // Homework submission modal
+  const [submitHwItem, setSubmitHwItem] = useState<HomeworkItem | null>(null);
+  const [submitNote, setSubmitNote] = useState('');
+  const [submitUrl, setSubmitUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+
   // General Notification Banners
   const [error, setError] = useState<string | null>(null);
 
@@ -337,6 +348,26 @@ function StudentPortalContent() {
       console.error('Failed to load receipt details', err);
     } finally {
       setLoadingReceipt(false);
+    }
+  };
+
+  const handleSubmitHomework = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!submitHwItem) return;
+    setSubmitting(true);
+    try {
+      await api.post(`/homework/${submitHwItem.id}/submit`, {
+        note: submitNote.trim() || undefined,
+        attachmentUrl: submitUrl.trim() || undefined,
+      });
+      setSubmittedIds(prev => new Set([...prev, submitHwItem.id]));
+      setSubmitHwItem(null);
+      setSubmitNote('');
+      setSubmitUrl('');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to submit homework.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1024,6 +1055,20 @@ function StudentPortalContent() {
                               Attachment
                             </a>
                           )}
+                          {submittedIds.has(hw.id) ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1D7A4A] bg-[#E5F6EE] border border-[#1D7A4A]/10 px-2.5 py-1 rounded-full">
+                              <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
+                              Submitted
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setSubmitHwItem(hw)}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-[#1D7A4A] hover:bg-[#155B37] px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                            >
+                              <Send className="w-3 h-3" strokeWidth={2.5} />
+                              Submit
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1075,6 +1120,69 @@ function StudentPortalContent() {
           </div>
         )}
       </div>
+
+      {/* POPUP: HOMEWORK SUBMISSION MODAL */}
+      {submitHwItem && (
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn font-body">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-2xl overflow-hidden max-w-md w-full">
+            <div className="bg-[#1A1D23] px-6 py-4 flex items-center justify-between text-white">
+              <div>
+                <h3 className="font-bold text-sm font-display">Submit Homework</h3>
+                <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{submitHwItem.title}</p>
+              </div>
+              <button
+                onClick={() => { setSubmitHwItem(null); setSubmitNote(''); setSubmitUrl(''); }}
+                className="text-gray-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" strokeWidth={2} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitHomework} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 font-display">Your Notes / Answer</label>
+                <textarea
+                  rows={4}
+                  placeholder="Write your answer, notes, or comments here..."
+                  value={submitNote}
+                  onChange={(e) => setSubmitNote(e.target.value)}
+                  className="w-full border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 font-display">Attachment Link (optional)</label>
+                <input
+                  type="url"
+                  placeholder="e.g. https://drive.google.com/..."
+                  value={submitUrl}
+                  onChange={(e) => setSubmitUrl(e.target.value)}
+                  className="w-full border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setSubmitHwItem(null); setSubmitNote(''); setSubmitUrl(''); }}
+                  className="px-4 py-2 border border-[#E5E7EB] hover:bg-gray-50 text-xs font-semibold text-gray-700 rounded-lg transition-all cursor-pointer font-display"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || (!submitNote.trim() && !submitUrl.trim())}
+                  className="px-5 py-2 bg-[#1D7A4A] hover:bg-[#155B37] text-white text-xs font-semibold rounded-lg transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-display"
+                >
+                  {submitting ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} /> Submitting...</>
+                  ) : (
+                    <><Send className="w-3.5 h-3.5" strokeWidth={2} /> Submit Homework</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* POPUP OVERLAY: PRINTABLE OFFICIAL FEE RECEIPT */}
       {selectedReceipt && (

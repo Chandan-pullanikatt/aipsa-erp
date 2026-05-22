@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
 import { 
@@ -155,11 +156,20 @@ interface AnnouncementItem {
   createdBy: { firstName: string; lastName: string };
 }
 
-export default function ParentDashboard() {
+function ParentDashboardContent() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+
   const [parentName, setParentName] = useState('');
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [activeStudent, setActiveStudent] = useState<StudentItem | null>(null);
   const [activeTab, setActiveTab] = useState<'attendance' | 'fees' | 'exams' | 'homework' | 'announcements'>('attendance');
+
+  useEffect(() => {
+    if (tabParam && ['attendance', 'fees', 'exams', 'homework', 'announcements'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [tabParam]);
 
   // Loading States
   const [loadingStudents, setLoadingStudents] = useState(true);
@@ -507,7 +517,7 @@ export default function ParentDashboard() {
                   Validating Credentials...
                 </>
               ) : (
-                'Link Student Account font-display'
+                'Link Student Account'
               )}
             </button>
 
@@ -1393,5 +1403,18 @@ export default function ParentDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ParentDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="py-40 text-center text-sm text-gray-400 font-body">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1D7A4A] mx-auto mb-4"></div>
+        Loading Portal Workspace...
+      </div>
+    }>
+      <ParentDashboardContent />
+    </Suspense>
   );
 }

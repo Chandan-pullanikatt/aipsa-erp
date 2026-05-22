@@ -42,6 +42,7 @@ const ICON_MAP = {
   Communication: Bell,
   LMS: BookOpen,
   Curriculum: BookOpen,
+  'LMS / Curriculum': BookOpen,
   Staff: UserCog,
   'School Profile': Settings2,
   // Other roles
@@ -50,6 +51,7 @@ const ICON_MAP = {
   Fees: Receipt,
   'Exams & Results': ClipboardList,
   Results: ClipboardList,
+  Announcements: Bell,
 };
 
 function getIcon(label: string) {
@@ -67,8 +69,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Examinations', href: '/school/exams', available: true },
       { label: 'Timetable', href: '/school/timetable', available: true },
       { label: 'Communication', href: '/school/communication', available: true },
-      { label: 'LMS', href: '/school/lms', available: false },
-      { label: 'Curriculum', href: '/school/curriculum', available: true },
+      { label: 'LMS / Curriculum', href: '/school/curriculum', available: true },
       { label: 'Staff', href: '/school/staff', available: true },
       { label: 'School Profile', href: '/school/profile', available: true },
     ];
@@ -93,10 +94,11 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
   } else if (role === 'PARENT') {
     items = [
       { label: 'Dashboard', href: '/parent', available: true },
-      { label: 'Attendance', href: '/parent/attendance', available: false },
-      { label: 'Fees', href: '/parent/fees', available: false },
-      { label: 'Results', href: '/parent/results', available: false },
-      { label: 'Homework', href: '/parent/homework', available: false },
+      { label: 'Attendance', href: '/parent?tab=attendance', available: true },
+      { label: 'Fees', href: '/parent?tab=fees', available: true },
+      { label: 'Results', href: '/parent?tab=exams', available: true },
+      { label: 'Homework', href: '/parent?tab=homework', available: true },
+      { label: 'Announcements', href: '/parent?tab=announcements', available: true },
     ];
   }
 
@@ -124,7 +126,7 @@ function groupNavItems(items: NavItem[], role: AuthUser['role']): { standalone: 
 
   const dashboard = items.find(i => i.label === 'Dashboard');
 
-  const academicsList = ['Students', 'Attendance', 'Curriculum', 'LMS', 'Examinations', 'Timetable'];
+  const academicsList = ['Students', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Timetable'];
   const financeList = ['Fee Management'];
   const operationsList = ['Staff'];
   const managementList = ['Communication', 'School Profile'];
