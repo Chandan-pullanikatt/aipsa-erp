@@ -43,7 +43,7 @@ const MODULES = [
   { label: 'Examinations', href: '/school/exams', available: true, desc: 'Exams, marks & report cards', icon: ClipboardList },
   { label: 'Timetable', href: '/school/timetable', available: true, desc: 'Class & teacher schedules', icon: LayoutGrid },
   { label: 'Communication', href: '/school/communication', available: true, desc: 'Announcements & circulars', icon: Bell },
-  { label: 'LMS', href: '/school/lms', available: false, desc: 'Courses & learning content', icon: BookOpen },
+  { label: 'LMS', href: '/school/lms', available: true, desc: 'Courses & learning content', icon: BookOpen },
   { label: 'Curriculum', href: '/school/curriculum', available: true, desc: 'Syllabus & lesson planning', icon: BookOpen },
   { label: 'Staff', href: '/school/staff', available: true, desc: 'Manage credentials & roles', icon: UserCog },
   { label: 'School Profile', href: '/school/profile', available: true, desc: 'Update school information', icon: Settings2 },
