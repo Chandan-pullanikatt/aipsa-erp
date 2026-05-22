@@ -1,0 +1,10 @@
+node_modules/
+.claude/
+.env
+.env.local
+.env.production
+.next/
+dist/
+build/
+*.log
+.DS_Store

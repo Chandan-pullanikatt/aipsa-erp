@@ -1,0 +1,263 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import api from '@/lib/api';
+import { 
+  GraduationCap, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  ChevronDown, 
+  ChevronUp, 
+  Layers, 
+  Users, 
+  Check, 
+  X, 
+  Activity
+} from 'lucide-react';
+
+interface ClassItem {
+  id: string;
+  name: string;
+  _count: { sections: number; students: number };
+}
+
+interface Section {
+  id: string;
+  name: string;
+  _count: { students: number };
+}
+
+export default function ClassesPage() {
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<Record<string, Section[]>>({});
+  const [expandedClass, setExpandedClass] = useState<string | null>(null);
+  const [newClassName, setNewClassName] = useState('');
+  const [newSectionName, setNewSectionName] = useState('');
+  const [addingSectionFor, setAddingSectionFor] = useState<string | null>(null);
+  const [editingClass, setEditingClass] = useState<{ id: string; name: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  async function fetchClasses() {
+    const { data } = await api.get('/sis/classes');
+    setClasses(data);
+    setLoading(false);
+  }
+
+  async function fetchSections(classId: string) {
+    const { data } = await api.get(`/sis/classes/${classId}/sections`);
+    setSections((prev) => ({ ...prev, [classId]: data }));
+  }
+
+  useEffect(() => { fetchClasses().catch(console.error); }, []);
+
+  async function handleToggleClass(classId: string) {
+    if (expandedClass === classId) {
+      setExpandedClass(null);
+    } else {
+      setExpandedClass(classId);
+      if (!sections[classId]) await fetchSections(classId);
+    }
+  }
+
+  async function handleAddClass(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+    try {
+      await api.post('/sis/classes', { name: newClassName.trim() });
+      setNewClassName('');
+      fetchClasses();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create class.');
+    }
+  }
+
+  async function handleUpdateClass(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingClass) return;
+    try {
+      await api.put(`/sis/classes/${editingClass.id}`, { name: editingClass.name });
+      setEditingClass(null);
+      fetchClasses();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update class.');
+    }
+  }
+
+  async function handleDeleteClass(id: string) {
+    if (!confirm('Delete this class? This cannot be undone.')) return;
+    try {
+      await api.delete(`/sis/classes/${id}`);
+      fetchClasses();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Cannot delete class.');
+    }
+  }
+
+  async function handleAddSection(e: React.FormEvent, classId: string) {
+    e.preventDefault();
+    if (!newSectionName.trim()) return;
+    try {
+      await api.post(`/sis/classes/${classId}/sections`, { name: newSectionName.trim() });
+      setNewSectionName('');
+      setAddingSectionFor(null);
+      fetchSections(classId);
+      fetchClasses();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create section.');
+    }
+  }
+
+  async function handleDeleteSection(sectionId: string, classId: string) {
+    if (!confirm('Delete this section?')) return;
+    try {
+      await api.delete(`/sis/sections/${sectionId}`);
+      fetchSections(classId);
+      fetchClasses();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Cannot delete section.');
+    }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6 pb-12">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E5E7EB]">
+        <div>
+          <h1 className="font-display text-[32px] font-bold leading-tight text-[#1A1D23]">Classes & Sections</h1>
+          <p className="font-body text-[14px] text-[#6B7280] mt-1">
+            Configure administrative classes, academic grade levels, and corresponding classroom sections.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-sm rounded-lg px-4 py-3 flex justify-between items-center shadow-sm">
+          <span className="font-semibold">{error}</span>
+          <button onClick={() => setError('')} className="text-[#DC2626] hover:text-[#991B1B] font-bold">
+            <X className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        </div>
+      )}
+
+      {/* Add class Form */}
+      <form onSubmit={handleAddClass} className="flex gap-2.5 bg-[#F9FAFB] p-3 border border-[#E5E7EB] rounded-xl shadow-sm">
+        <input
+          value={newClassName}
+          onChange={(e) => setNewClassName(e.target.value)}
+          placeholder="New class name (e.g. Class 1)"
+          className="flex-1 border border-[#E5E7EB] rounded-lg px-3.5 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
+        />
+        <button type="submit" className="px-4 py-2 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-sm font-bold transition-all inline-flex items-center gap-1.5 shadow-sm">
+          <Plus className="w-4 h-4" strokeWidth={2.25} />
+          Add Class
+        </button>
+      </form>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm font-semibold text-[#1D7A4A] bg-[#E5F6EE] px-4 py-3 rounded-lg border border-[#26A96B]/10 animate-pulse w-fit">
+          <Activity className="w-4 h-4 animate-spin text-[#1D7A4A]" />
+          <span>Synchronizing Classroom Hierarchies...</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {classes.map((cls) => (
+            <div key={cls.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm hover:border-[#1D7A4A]/20 transition-all">
+              <div className="flex items-center px-4 py-3.5 gap-3">
+                <button onClick={() => handleToggleClass(cls.id)} className="flex-1 flex items-center gap-3.5 text-left group">
+                  <div className="w-8 h-8 rounded-lg bg-[#E5F6EE] text-[#1D7A4A] flex items-center justify-center font-bold text-xs border border-[#26A96B]/15">
+                    {cls.name.match(/\d+/) ? cls.name.match(/\d+/)?.[0] : cls.name[0]}
+                  </div>
+                  <div>
+                    <span className="font-bold text-[#1A1D23] text-sm block group-hover:text-[#1D7A4A] transition-colors">{cls.name}</span>
+                    <span className="text-xs text-[#6B7280] font-medium mt-0.5 inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-0.5"><Layers className="w-3.5 h-3.5" strokeWidth={1.75} />{cls._count.sections} Section{cls._count.sections !== 1 ? 's' : ''}</span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-0.5"><Users className="w-3.5 h-3.5" strokeWidth={1.75} />{cls._count.students} Student{cls._count.students !== 1 ? 's' : ''}</span>
+                    </span>
+                  </div>
+                  <span className="ml-auto text-[#9CA3AF] hover:text-[#1A1D23] transition-colors">
+                    {expandedClass === cls.id ? (
+                      <ChevronUp className="w-4 h-4 text-[#6B7280]" strokeWidth={2.25} />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-[#6B7280]" strokeWidth={2.25} />
+                    )}
+                  </span>
+                </button>
+                <div className="flex items-center border-l border-[#E5E7EB] pl-3 gap-1">
+                  <button onClick={() => setEditingClass({ id: cls.id, name: cls.name })} className="p-1.5 rounded-md hover:bg-[#F3F4F6] text-[#4B5563] hover:text-[#1D7A4A] transition-all">
+                    <Edit2 className="w-3.5 h-3.5" strokeWidth={2} />
+                  </button>
+                  <button onClick={() => handleDeleteClass(cls.id)} className="p-1.5 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
+                    <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
+
+              {editingClass?.id === cls.id && (
+                <form onSubmit={handleUpdateClass} className="px-4 pb-3.5 flex gap-2 border-t border-[#F3F4F6] pt-3 bg-[#F9FAFB]/50">
+                  <input
+                    value={editingClass.name}
+                    onChange={(e) => setEditingClass({ ...editingClass, name: e.target.value })}
+                    className="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
+                  />
+                  <button type="submit" className="px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm">Save</button>
+                  <button type="button" onClick={() => setEditingClass(null)} className="px-3.5 py-1.5 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
+                </form>
+              )}
+
+              {expandedClass === cls.id && (
+                <div className="border-t border-[#F3F4F6] px-4 py-4 bg-[#F9FAFB]/60 space-y-3">
+                  <div className="space-y-2">
+                    {(sections[cls.id] ?? []).map((sec) => (
+                      <div key={sec.id} className="flex items-center justify-between text-sm bg-white border border-[#E5E7EB] p-2.5 rounded-lg shadow-sm">
+                        <span className="text-[#4B5563] font-semibold text-xs inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#1D7A4A]"></span>
+                          Section {sec.name} 
+                          <span className="text-[#9CA3AF] font-medium">({sec._count.students} students)</span>
+                        </span>
+                        <button onClick={() => handleDeleteSection(sec.id, cls.id)} className="p-1 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
+                          <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        </button>
+                      </div>
+                    ))}
+                    {(sections[cls.id] ?? []).length === 0 && (
+                      <p className="text-xs text-[#9CA3AF] font-semibold italic">No sections created yet for this class grade.</p>
+                    )}
+                  </div>
+
+                  {addingSectionFor === cls.id ? (
+                    <form onSubmit={(e) => handleAddSection(e, cls.id)} className="flex gap-2.5 pt-1">
+                      <input
+                        value={newSectionName}
+                        onChange={(e) => setNewSectionName(e.target.value)}
+                        placeholder="Section name (e.g. A)"
+                        className="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
+                        autoFocus
+                      />
+                      <button type="submit" className="px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm">Add</button>
+                      <button type="button" onClick={() => setAddingSectionFor(null)} className="px-3.5 py-1.5 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
+                    </form>
+                  ) : (
+                    <button onClick={() => { setAddingSectionFor(cls.id); setNewSectionName(''); }} className="inline-flex items-center gap-1 text-xs font-bold text-[#1D7A4A] hover:text-[#155B37] transition-all">
+                      <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                      Add Section
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {classes.length === 0 && (
+            <div className="text-center py-12 px-4 bg-white rounded-xl border border-[#E5E7EB] shadow-sm">
+              <GraduationCap className="mx-auto h-12 w-12 text-[#9CA3AF] mb-3 animate-pulse" strokeWidth={1.25} />
+              <h3 className="text-sm font-bold text-[#1A1D23] mb-1">No Academic Classes</h3>
+              <p className="text-xs text-[#6B7280]">Add your institution's grade levels and administrative sections to begin enrolling students.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
