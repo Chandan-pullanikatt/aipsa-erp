@@ -14,9 +14,6 @@
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build --workspaces"
   },
-  "dependencies": {
-    "next": "16.2.6"
-  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }
