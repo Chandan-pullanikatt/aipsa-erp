@@ -2,6 +2,7 @@ services:
   - type: web
     name: aipsa-erp-api
     runtime: node
+    nodeVersion: "20"
     rootDir: apps/api
     buildCommand: npm install && npx prisma migrate deploy
     startCommand: npm start

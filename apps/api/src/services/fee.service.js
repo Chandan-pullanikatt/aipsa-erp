@@ -109,7 +109,7 @@ async function getStudentFeeAccount(tenantId, studentId, academicYear) {
     }),
   ]);
 
-  const paidByCategory: Record<string, number> = {};
+  const paidByCategory = {};
   payments.forEach(p => {
     paidByCategory[p.feeCategoryId] = (paidByCategory[p.feeCategoryId] || 0) + p.amount;
   });
@@ -223,7 +223,7 @@ async function getDueReport(tenantId, { classId, academicYear } = {}) {
     select: { studentId: true, amount: true },
   });
 
-  const paidByStudent: Record<string, number> = {};
+  const paidByStudent = {};
   allPayments.forEach(p => { paidByStudent[p.studentId] = (paidByStudent[p.studentId] || 0) + p.amount; });
 
   return students.map(s => {

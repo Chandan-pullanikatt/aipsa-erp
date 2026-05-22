@@ -129,7 +129,7 @@ async function getMarksEntry(tenantId, examId, subjectId) {
     prisma.examResult.findMany({ where: { tenantId, examId, subjectId } }),
   ]);
 
-  const resultMap: Record<string, any> = {};
+  const resultMap = {};
   existing.forEach(r => { resultMap[r.studentId] = r; });
 
   return {
@@ -178,7 +178,7 @@ async function getStudentReportCard(tenantId, studentId, academicYear) {
     include: { subject: { select: { id: true, name: true, code: true } } },
   });
 
-  const examResults: Record<string, any[]> = {};
+  const examResults = {};
   exams.forEach(e => { examResults[e.id] = []; });
   results.forEach(r => { if (examResults[r.examId]) examResults[r.examId].push(r); });
 
