@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
+  // Disabled on Vercel — babel-plugin-react-compiler is a devDependency and can break serverless builds.
 };
 
 export default nextConfig;
