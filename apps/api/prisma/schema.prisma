@@ -36,8 +36,10 @@ model Tenant {
   exams          Exam[]
   examResults    ExamResult[]
   periods        Period[]
-  homeworks      Homework[]
-  lmsMaterials   LmsMaterial[]
+  homeworks            Homework[]
+  lmsMaterials         LmsMaterial[]
+  lmsMaterialProgress  LmsMaterialProgress[]
+  homeworkSubmissions  HomeworkSubmission[]
 
   @@map("tenants")
 }
@@ -97,9 +99,11 @@ model User {
   collectedPayments     FeePayment[]   @relation("FeeCollector")
   createdAnnouncements  Announcement[] @relation("AnnouncementCreator")
   notifications         Notification[] @relation("UserNotifications")
-  taughtSubjects        Subject[]      @relation("SubjectTeacher")
-  taughtPeriods         Period[]       @relation("PeriodTeacher")
-  postedHomeworks       Homework[]     @relation("HomeworkTeacher")
+  taughtSubjects        Subject[]             @relation("SubjectTeacher")
+  taughtPeriods         Period[]              @relation("PeriodTeacher")
+  postedHomeworks       Homework[]            @relation("HomeworkTeacher")
+  lmsProgress           LmsMaterialProgress[] @relation("LmsProgress")
+  gradedSubmissions     HomeworkSubmission[]  @relation("HomeworkGrader")
 
   @@map("users")
 }
@@ -226,15 +230,16 @@ model Student {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  class       Class?         @relation(fields: [classId], references: [id])
-  section     Section?       @relation(fields: [sectionId], references: [id])
-  user        User?          @relation(fields: [userId], references: [id])
-  guardians   Guardian[]
-  attendance  Attendance[]
-  leaves      Leave[]
-  feePayments FeePayment[]
-  examResults ExamResult[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class               Class?               @relation(fields: [classId], references: [id])
+  section             Section?             @relation(fields: [sectionId], references: [id])
+  user                User?                @relation(fields: [userId], references: [id])
+  guardians           Guardian[]
+  attendance          Attendance[]
+  leaves              Leave[]
+  feePayments         FeePayment[]
+  examResults         ExamResult[]
+  homeworkSubmissions HomeworkSubmission[]
 
   @@unique([tenantId, admissionNumber])
   @@index([tenantId])
@@ -624,10 +629,11 @@ model Homework {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  teacher User     @relation("HomeworkTeacher", fields: [teacherId], references: [id])
-  class   Class    @relation(fields: [classId], references: [id])
-  subject Subject? @relation(fields: [subjectId], references: [id])
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacher     User                 @relation("HomeworkTeacher", fields: [teacherId], references: [id])
+  class       Class                @relation(fields: [classId], references: [id])
+  subject     Subject?             @relation(fields: [subjectId], references: [id])
+  submissions HomeworkSubmission[]
 
   @@index([tenantId, classId])
   @@index([tenantId, teacherId])
@@ -648,9 +654,52 @@ model LmsMaterial {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject   Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  progress  LmsMaterialProgress[]
 
   @@index([tenantId, subjectId])
   @@map("lms_materials")
+}
+
+model LmsMaterialProgress {
+  id          String   @id @default(cuid())
+  tenantId    String
+  materialId  String
+  userId      String
+  completedAt DateTime @default(now())
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  material LmsMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user     User        @relation("LmsProgress", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, userId])
+  @@index([tenantId, userId])
+  @@map("lms_material_progress")
+}
+
+// ─── Homework Submissions ─────────────────────────────────────────────────────
+
+model HomeworkSubmission {
+  id            String    @id @default(cuid())
+  tenantId      String
+  homeworkId    String
+  studentId     String
+  note          String?
+  attachmentUrl String?
+  submittedAt   DateTime  @default(now())
+  grade         String?
+  feedback      String?
+  gradedAt      DateTime?
+  gradedById    String?
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  homework  Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  gradedBy  User?    @relation("HomeworkGrader", fields: [gradedById], references: [id])
+
+  @@unique([homeworkId, studentId])
+  @@index([tenantId, homeworkId])
+  @@index([tenantId, studentId])
+  @@map("homework_submissions")
 }

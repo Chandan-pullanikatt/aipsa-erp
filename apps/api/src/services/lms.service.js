@@ -23,16 +23,59 @@ async function listLmsSubjects(tenantId, filters = {}) {
   });
 }
 
-async function getSubjectMaterials(tenantId, subjectId) {
+async function getSubjectMaterials(tenantId, subjectId, userId) {
   const subject = await prisma.subject.findFirst({
     where: { id: subjectId, tenantId },
   });
   if (!subject) throw Object.assign(new Error('Subject not found'), { status: 404 });
 
-  return prisma.lmsMaterial.findMany({
+  const materials = await prisma.lmsMaterial.findMany({
     where: { tenantId, subjectId },
     orderBy: { sequence: 'asc' },
   });
+
+  if (!userId) return materials;
+
+  const progressRecords = await prisma.lmsMaterialProgress.findMany({
+    where: { tenantId, userId, materialId: { in: materials.map(m => m.id) } },
+    select: { materialId: true },
+  });
+  const completedIds = new Set(progressRecords.map(p => p.materialId));
+
+  return materials.map(m => ({ ...m, completed: completedIds.has(m.id) }));
+}
+
+async function toggleMaterialProgress(tenantId, materialId, userId) {
+  const material = await prisma.lmsMaterial.findFirst({
+    where: { id: materialId, tenantId },
+  });
+  if (!material) throw Object.assign(new Error('Material not found'), { status: 404 });
+
+  const existing = await prisma.lmsMaterialProgress.findUnique({
+    where: { materialId_userId: { materialId, userId } },
+  });
+
+  if (existing) {
+    await prisma.lmsMaterialProgress.delete({ where: { materialId_userId: { materialId, userId } } });
+    return { completed: false };
+  } else {
+    await prisma.lmsMaterialProgress.create({ data: { tenantId, materialId, userId } });
+    return { completed: true };
+  }
+}
+
+async function getSubjectProgress(tenantId, subjectId, userId) {
+  const [total, completed] = await Promise.all([
+    prisma.lmsMaterial.count({ where: { tenantId, subjectId } }),
+    prisma.lmsMaterialProgress.count({
+      where: {
+        tenantId,
+        userId,
+        material: { subjectId },
+      },
+    }),
+  ]);
+  return { total, completed, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
 }
 
 async function createMaterial(tenantId, subjectId, data) {
@@ -94,4 +137,6 @@ module.exports = {
   createMaterial,
   updateMaterial,
   deleteMaterial,
+  toggleMaterialProgress,
+  getSubjectProgress,
 };

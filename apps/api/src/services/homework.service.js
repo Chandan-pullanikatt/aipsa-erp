@@ -86,4 +86,65 @@ async function getTeacherClasses(tenantId, teacherId) {
   return all.filter(c => seen.has(c.id) ? false : seen.add(c.id));
 }
 
-module.exports = { createHomework, listHomework, updateHomework, deleteHomework, getTeacherClasses };
+async function submitHomework(tenantId, homeworkId, studentId, { note, attachmentUrl }) {
+  const hw = await prisma.homework.findFirst({ where: { id: homeworkId, tenantId } });
+  if (!hw) throw Object.assign(new Error('Homework not found'), { status: 404 });
+
+  return prisma.homeworkSubmission.upsert({
+    where: { homeworkId_studentId: { homeworkId, studentId } },
+    update: {
+      note: note || null,
+      attachmentUrl: attachmentUrl || null,
+      submittedAt: new Date(),
+      grade: null,
+      feedback: null,
+      gradedAt: null,
+      gradedById: null,
+    },
+    create: {
+      tenantId,
+      homeworkId,
+      studentId,
+      note: note || null,
+      attachmentUrl: attachmentUrl || null,
+    },
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
+    },
+  });
+}
+
+async function getSubmissions(tenantId, homeworkId) {
+  const hw = await prisma.homework.findFirst({ where: { id: homeworkId, tenantId } });
+  if (!hw) throw Object.assign(new Error('Homework not found'), { status: 404 });
+
+  return prisma.homeworkSubmission.findMany({
+    where: { tenantId, homeworkId },
+    orderBy: { submittedAt: 'desc' },
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
+      gradedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+}
+
+async function gradeSubmission(tenantId, submissionId, gradedById, { grade, feedback }) {
+  const sub = await prisma.homeworkSubmission.findFirst({ where: { id: submissionId, tenantId } });
+  if (!sub) throw Object.assign(new Error('Submission not found'), { status: 404 });
+
+  return prisma.homeworkSubmission.update({
+    where: { id: submissionId },
+    data: { grade: grade || null, feedback: feedback || null, gradedAt: new Date(), gradedById },
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
+    },
+  });
+}
+
+async function getMySubmission(tenantId, homeworkId, studentId) {
+  return prisma.homeworkSubmission.findUnique({
+    where: { homeworkId_studentId: { homeworkId, studentId } },
+  });
+}
+
+module.exports = { createHomework, listHomework, updateHomework, deleteHomework, getTeacherClasses, submitHomework, getSubmissions, gradeSubmission, getMySubmission };

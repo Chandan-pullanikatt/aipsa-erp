@@ -68,8 +68,25 @@ router.get('/subjects', async (req, res, next) => {
 // GET /api/lms/subjects/:subjectId/materials
 router.get('/subjects/:subjectId/materials', async (req, res, next) => {
   try {
-    const materials = await lms.getSubjectMaterials(req.tenant.id, req.params.subjectId);
+    const userId = ['STUDENT', 'PARENT'].includes(req.user.role) ? req.user.id : null;
+    const materials = await lms.getSubjectMaterials(req.tenant.id, req.params.subjectId, userId);
     res.json(materials);
+  } catch (err) { next(err); }
+});
+
+// GET /api/lms/subjects/:subjectId/progress
+router.get('/subjects/:subjectId/progress', async (req, res, next) => {
+  try {
+    const progress = await lms.getSubjectProgress(req.tenant.id, req.params.subjectId, req.user.id);
+    res.json(progress);
+  } catch (err) { next(err); }
+});
+
+// POST /api/lms/materials/:id/progress  (student/parent toggle)
+router.post('/materials/:id/progress', authorize('STUDENT', 'PARENT'), async (req, res, next) => {
+  try {
+    const result = await lms.toggleMaterialProgress(req.tenant.id, req.params.id, req.user.id);
+    res.json(result);
   } catch (err) { next(err); }
 });
 
