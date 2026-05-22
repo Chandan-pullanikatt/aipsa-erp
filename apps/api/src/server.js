@@ -8,7 +8,8 @@ const prisma = new PrismaClient();
 async function autoSeed() {
   try {
     const email = 'admin@aipsa.org';
-    const password = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+    const rawPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+    const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
     console.log('[Auto-Seed] Password source:', process.env.SUPER_ADMIN_PASSWORD ? 'Environment Variable' : 'Default Fallback');
     console.log('[Auto-Seed] Hashing password of length:', password.length);
     const hashed = await bcrypt.hash(password, 12);

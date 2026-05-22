@@ -56,7 +56,8 @@ async function login({ email, password }) {
   const userCount = await prisma.user.count();
   if (userCount === 0) {
     try {
-      const seedPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+      const rawPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+      const seedPassword = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
       const hashed = await bcrypt.hash(seedPassword, 12);
       await prisma.user.create({
         data: {

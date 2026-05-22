@@ -10,11 +10,12 @@ async function main() {
     return;
   }
 
-  const password = process.env.SUPER_ADMIN_PASSWORD;
-  if (!password) {
+  const rawPassword = process.env.SUPER_ADMIN_PASSWORD;
+  if (!rawPassword) {
     console.error('SUPER_ADMIN_PASSWORD environment variable is required to run seed.');
     process.exit(1);
   }
+  const password = rawPassword.trim();
 
   const hashed = await bcrypt.hash(password, 12);
 

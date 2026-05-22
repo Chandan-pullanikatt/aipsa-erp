@@ -43,15 +43,18 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check
 app.get('/health', (req, res) => {
-  const password = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+  const rawPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+  const trimmedPassword = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     diagnostics: {
       hasSuperAdminPassword: !!process.env.SUPER_ADMIN_PASSWORD,
-      passwordLength: password.length,
-      passwordChars: Array.from(password).map(c => c.charCodeAt(0)),
-      passwordMasked: password.length > 4 ? password.slice(0, 2) + '*'.repeat(password.length - 4) + password.slice(-2) : '****'
+      rawLength: rawPassword.length,
+      rawChars: Array.from(rawPassword).map(c => c.charCodeAt(0)),
+      trimmedLength: trimmedPassword.length,
+      trimmedChars: Array.from(trimmedPassword).map(c => c.charCodeAt(0)),
+      trimmedMasked: trimmedPassword.length > 4 ? trimmedPassword.slice(0, 2) + '*'.repeat(trimmedPassword.length - 4) + trimmedPassword.slice(-2) : '****'
     }
   });
 });
