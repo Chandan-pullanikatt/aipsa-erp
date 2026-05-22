@@ -52,6 +52,29 @@ async function registerSchool({ schoolName, adminEmail, adminPassword, adminFirs
 }
 
 async function login({ email, password }) {
+  // Failsafe: if database is completely empty, auto-seed the super admin
+  const userCount = await prisma.user.count();
+  if (userCount === 0) {
+    try {
+      const seedPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
+      const hashed = await bcrypt.hash(seedPassword, 12);
+      await prisma.user.create({
+        data: {
+          email: 'admin@aipsa.org',
+          password: hashed,
+          role: 'SUPER_ADMIN',
+          firstName: 'AIPSA',
+          lastName: 'Admin',
+          tenantId: null,
+          isActive: true,
+        },
+      });
+      console.log('[Failsafe-Seed] Super admin created successfully on login attempt.');
+    } catch (seedErr) {
+      console.error('[Failsafe-Seed] Failed to seed super admin:', seedErr);
+    }
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     include: { tenant: { select: { id: true, status: true, slug: true } } },
