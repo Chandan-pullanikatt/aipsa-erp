@@ -1,5 +1,5 @@
 /**
- * AIPSA ERP — Demo Seed Script
+ * AIPSA Digital School — Demo Seed Script
  * School: St. Mary's Academy
  *
  * Run:  node prisma/demo_seed.js    (from apps/api directory)
@@ -142,7 +142,7 @@ async function main() {
   const parent1 = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: 'david.mathew@gmail.com',
+      email: 'davidmathew@gmail.com',
       password: await hash('Parent@1234'),
       role: 'PARENT',
       firstName: 'David',
@@ -155,7 +155,7 @@ async function main() {
   const parent2 = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: 'sunita.sharma@gmail.com',
+      email: 'sunitasharma@gmail.com',
       password: await hash('Parent@1234'),
       role: 'PARENT',
       firstName: 'Sunita',
@@ -168,9 +168,9 @@ async function main() {
   console.log('✅  Users created (admin + 3 teachers + 2 parents)');
 
   // ── 6. Classes ───────────────────────────────────────────────────────────────
-  const class6 = await prisma.class.create({ data: { tenantId: tenant.id, name: 'Class 6' } });
-  const class7 = await prisma.class.create({ data: { tenantId: tenant.id, name: 'Class 7' } });
-  const class8 = await prisma.class.create({ data: { tenantId: tenant.id, name: 'Class 8' } });
+  const class6 = await prisma.class.create({ data: { tenantId: tenant.id, name: 'Class 6', joinCode: 'CL6A-DEMO' } });
+  const class7 = await prisma.class.create({ data: { tenantId: tenant.id, name: 'Class 7', joinCode: 'CL7A-DEMO' } });
+  const class8 = await prisma.class.create({ data: { tenantId: tenant.id, name: 'Class 8', joinCode: 'CL8A-DEMO' } });
 
   // ── 7. Sections ──────────────────────────────────────────────────────────────
   const sec6A  = await prisma.section.create({ data: { tenantId: tenant.id, classId: class6.id, name: 'A' } });
@@ -315,6 +315,9 @@ async function main() {
       { tenantId: tenant.id, studentId: st1.id,  feeCategoryId: fcTuition.id, academicYear: AY, amount: 3000, month: 'May 2026',   paidAt: new Date('2026-05-05'), method: 'BANK_TRANSFER', referenceNumber: 'NEFT20260505-B1',receiptNumber: 'RCP-2026-00004', collectedById: schoolAdmin.id, note: 'May tuition fee' },
       { tenantId: tenant.id, studentId: st4.id,  feeCategoryId: fcTuition.id, academicYear: AY, amount: 3500, month: 'May 2026',   paidAt: new Date('2026-05-10'), method: 'UPI',           referenceNumber: 'UPI20260510-C1', receiptNumber: 'RCP-2026-00005', collectedById: schoolAdmin.id, note: 'May tuition fee' },
       { tenantId: tenant.id, studentId: st9.id,  feeCategoryId: fcDev.id,     academicYear: AY, amount: 2500,                      paidAt: new Date('2026-05-18'), method: 'CHEQUE',        referenceNumber: 'CHQ-104521',     receiptNumber: 'RCP-2026-00006', collectedById: schoolAdmin.id, note: 'Annual development fee' },
+      // Rohan Mathew — clear all annual fees so his portal has full access (used as the "cleared dues" demo account)
+      { tenantId: tenant.id, studentId: st4.id,  feeCategoryId: fcSports.id,  academicYear: AY, amount: 1500,                      paidAt: new Date('2026-04-12'), method: 'UPI',           referenceNumber: 'UPI20260412-A3', receiptNumber: 'RCP-2026-00007', collectedById: schoolAdmin.id, note: 'Annual sports fee' },
+      { tenantId: tenant.id, studentId: st4.id,  feeCategoryId: fcDev.id,     academicYear: AY, amount: 2500,                      paidAt: new Date('2026-04-12'), method: 'UPI',           referenceNumber: 'UPI20260412-A4', receiptNumber: 'RCP-2026-00008', collectedById: schoolAdmin.id, note: 'Annual development fee' },
     ],
   });
 
@@ -522,7 +525,12 @@ async function main() {
   console.log('║  Rohan Mathew  ADM-2026-0004  PIN: 100004  [linked to David]     ║');
   console.log('║  Pooja Sharma  ADM-2026-0007  PIN: 100007  [linked to Sunita]    ║');
   console.log('╠══════════════════════════════════════════════════════════════════╣');
-  console.log('║  School Join Code: STMA-DEMO                                     ║');
+  console.log('║  Teacher/Parent Join Code (school): STMA-DEMO                    ║');
+  console.log('╠══════════════════════════════════════════════════════════════════╣');
+  console.log('║  STUDENT CLASS JOIN CODES (use at /student-join)                 ║');
+  console.log('║  Class 6 → CL6A-DEMO                                             ║');
+  console.log('║  Class 7 → CL7A-DEMO                                             ║');
+  console.log('║  Class 8 → CL8A-DEMO                                             ║');
   console.log('╚══════════════════════════════════════════════════════════════════╝\n');
 }
 

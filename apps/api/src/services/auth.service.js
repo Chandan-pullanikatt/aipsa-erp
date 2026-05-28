@@ -108,6 +108,7 @@ async function login({ email, password }) {
       tenantId: user.tenantId,
       tenantStatus: user.tenant?.status ?? null,
       tenantSlug: user.tenant?.slug ?? null,
+      mustChangePassword: user.mustChangePassword ?? false,
     },
   };
 }
@@ -138,6 +139,28 @@ async function resetPassword(token, newPassword) {
     prisma.user.update({ where: { id: record.userId }, data: { password: hashed } }),
     prisma.passwordReset.update({ where: { id: record.id }, data: { used: true } }),
   ]);
+}
+
+// ─── Change Password (forced on first login) ─────────────────────────────────
+
+async function changePassword(userId, { currentPassword, newPassword }) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) throw Object.assign(new Error('Current password is incorrect'), { status: 400 });
+
+  if (currentPassword === newPassword) {
+    throw Object.assign(new Error('New password must be different from your current password'), { status: 400 });
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashed, mustChangePassword: false },
+  });
+
+  return { message: 'Password changed successfully.' };
 }
 
 // ─── Join Code ────────────────────────────────────────────────────────────────
@@ -290,6 +313,7 @@ async function linkStudentToParent(userId, tenantId, { admissionNumber, portalPi
 
 module.exports = {
   registerSchool, login, requestPasswordReset, resetPassword,
+  changePassword,
   getOrCreateJoinCode, regenerateJoinCode,
   inviteUser, acceptInvite,
   joinSchool, linkStudentToParent,

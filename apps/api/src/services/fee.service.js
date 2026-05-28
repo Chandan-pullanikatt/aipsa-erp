@@ -56,12 +56,16 @@ async function listStructures(tenantId, { academicYear, classId } = {}) {
 }
 
 async function createStructure(tenantId, data) {
-  const { feeCategoryId, classId, amount, frequency, academicYear } = data;
+  const { feeCategoryId, classId, amount, frequency, academicYear, dueDate } = data;
   const year = academicYear || currentAcademicYear();
   const cat = await prisma.feeCategory.findFirst({ where: { id: feeCategoryId, tenantId } });
   if (!cat) throw Object.assign(new Error('Fee category not found'), { status: 404 });
   return prisma.feeStructure.create({
-    data: { tenantId, feeCategoryId, classId: classId || null, amount: parseFloat(amount), frequency, academicYear: year },
+    data: {
+      tenantId, feeCategoryId, classId: classId || null,
+      amount: parseFloat(amount), frequency, academicYear: year,
+      dueDate: dueDate ? new Date(dueDate) : null,
+    },
     include: { feeCategory: { select: { id: true, name: true } }, class: { select: { id: true, name: true } } },
   });
 }
@@ -69,10 +73,15 @@ async function createStructure(tenantId, data) {
 async function updateStructure(tenantId, id, data) {
   const s = await prisma.feeStructure.findFirst({ where: { id, tenantId } });
   if (!s) throw Object.assign(new Error('Fee structure not found'), { status: 404 });
-  const { amount, frequency, isActive } = data;
+  const { amount, frequency, isActive, dueDate } = data;
   return prisma.feeStructure.update({
     where: { id },
-    data: { ...(amount !== undefined && { amount: parseFloat(amount) }), ...(frequency && { frequency }), ...(isActive !== undefined && { isActive }) },
+    data: {
+      ...(amount !== undefined && { amount: parseFloat(amount) }),
+      ...(frequency && { frequency }),
+      ...(isActive !== undefined && { isActive }),
+      ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+    },
     include: { feeCategory: { select: { id: true, name: true } }, class: { select: { id: true, name: true } } },
   });
 }
@@ -88,13 +97,19 @@ async function deleteStructure(tenantId, id) {
 async function getStudentFeeAccount(tenantId, studentId, academicYear) {
   const year = academicYear || currentAcademicYear();
 
-  const student = await prisma.student.findFirst({
-    where: { id: studentId, tenantId },
-    include: { class: { select: { id: true, name: true } } },
-  });
+  const [student, schoolProfile] = await Promise.all([
+    prisma.student.findFirst({
+      where: { id: studentId, tenantId },
+      include: { class: { select: { id: true, name: true } } },
+    }),
+    prisma.schoolProfile.findUnique({ where: { tenantId } }),
+  ]);
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
 
-  const [structures, payments] = await Promise.all([
+  const lateFeeAmount   = schoolProfile?.lateFeeAmount   ?? 0;
+  const lateFeeGraceDays = schoolProfile?.lateFeeGraceDays ?? 0;
+
+  const [structures, payments, waivers] = await Promise.all([
     prisma.feeStructure.findMany({
       where: {
         tenantId, academicYear: year, isActive: true,
@@ -107,6 +122,9 @@ async function getStudentFeeAccount(tenantId, studentId, academicYear) {
       orderBy: { paidAt: 'desc' },
       include: { feeCategory: { select: { id: true, name: true } } },
     }),
+    prisma.lateFeeWaiver.findMany({
+      where: { tenantId, studentId, academicYear: year },
+    }),
   ]);
 
   const paidByCategory = {};
@@ -114,24 +132,71 @@ async function getStudentFeeAccount(tenantId, studentId, academicYear) {
     paidByCategory[p.feeCategoryId] = (paidByCategory[p.feeCategoryId] || 0) + p.amount;
   });
 
+  const waivedStructureIds = new Set(waivers.map(w => w.feeStructureId));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
   const breakdown = structures.map(s => {
     const paid = paidByCategory[s.feeCategoryId] || 0;
-    const due = Math.max(0, s.amount - paid);
+    const due  = Math.max(0, s.amount - paid);
+
+    let daysOverdue = 0;
+    let lateFeeApplicable = false;
+    let lateFee = 0;
+    const isWaived = waivedStructureIds.has(s.id);
+
+    if (s.dueDate && due > 0) {
+      const graceCutoff = new Date(s.dueDate);
+      graceCutoff.setDate(graceCutoff.getDate() + lateFeeGraceDays);
+      graceCutoff.setHours(0, 0, 0, 0);
+      daysOverdue = Math.max(0, Math.floor((today - new Date(s.dueDate)) / 86400000));
+      lateFeeApplicable = today > graceCutoff;
+      lateFee = lateFeeApplicable && !isWaived ? lateFeeAmount : 0;
+    }
+
     return {
+      structureId: s.id,
       feeCategoryId: s.feeCategoryId,
       feeCategoryName: s.feeCategory.name,
       structureAmount: s.amount,
       frequency: s.frequency,
+      dueDate: s.dueDate,
       paid,
       due,
+      daysOverdue,
+      lateFeeApplicable,
+      lateFeeWaived: isWaived,
+      lateFee,
     };
   });
 
   const totalStructure = structures.reduce((a, s) => a + s.amount, 0);
-  const totalPaid = payments.reduce((a, p) => a + p.amount, 0);
-  const totalDue = Math.max(0, totalStructure - totalPaid);
+  const totalPaid      = payments.reduce((a, p) => a + p.amount, 0);
+  const totalDue       = Math.max(0, totalStructure - totalPaid);
+  const totalLateFee   = breakdown.reduce((a, b) => a + b.lateFee, 0);
 
-  return { student, academicYear: year, breakdown, payments, summary: { totalStructure, totalPaid, totalDue } };
+  return {
+    student, academicYear: year, breakdown, payments,
+    summary: { totalStructure, totalPaid, totalDue, totalLateFee },
+    lateFeePolicy: { lateFeeAmount, lateFeeGraceDays },
+  };
+}
+
+// ─── Late Fee Waivers ─────────────────────────────────────────────────────────
+
+async function createLateFeeWaiver(tenantId, studentId, { feeStructureId, academicYear }, waivedById) {
+  const year = academicYear || currentAcademicYear();
+  return prisma.lateFeeWaiver.upsert({
+    where: { tenantId_studentId_feeStructureId_academicYear: { tenantId, studentId, feeStructureId, academicYear: year } },
+    create: { tenantId, studentId, feeStructureId, academicYear: year, waivedById },
+    update: { waivedById },
+  });
+}
+
+async function deleteLateFeeWaiver(tenantId, studentId, { feeStructureId, academicYear }) {
+  const year = academicYear || currentAcademicYear();
+  await prisma.lateFeeWaiver.deleteMany({
+    where: { tenantId, studentId, feeStructureId, academicYear: year },
+  });
 }
 
 // ─── Payments ────────────────────────────────────────────────────────────────
@@ -243,4 +308,5 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listStructures, createStructure, updateStructure, deleteStructure,
   getStudentFeeAccount, recordPayment, listPayments, getPayment, getDueReport,
+  createLateFeeWaiver, deleteLateFeeWaiver,
 };

@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { 
-  School, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Globe, 
-  Calendar, 
-  Award, 
-  Save, 
-  Check, 
+import {
+  School,
+  MapPin,
+  Phone,
+  Mail,
+  Globe,
+  Calendar,
+  Award,
+  Save,
+  Check,
   AlertTriangle,
-  Activity
+  Activity,
+  IndianRupee,
 } from 'lucide-react';
 
 interface Profile {
@@ -27,11 +28,14 @@ interface Profile {
   website: string;
   board: string;
   establishedYear: string;
+  lateFeeAmount: string;
+  lateFeeGraceDays: string;
 }
 
 const EMPTY: Profile = {
   schoolName: '', address: '', city: '', state: '', country: 'India',
   phone: '', email: '', website: '', board: '', establishedYear: '',
+  lateFeeAmount: '0', lateFeeGraceDays: '0',
 };
 
 export default function SchoolProfilePage() {
@@ -55,6 +59,8 @@ export default function SchoolProfilePage() {
           website: r.data.website ?? '',
           board: r.data.board ?? '',
           establishedYear: r.data.establishedYear ? String(r.data.establishedYear) : '',
+          lateFeeAmount: String(r.data.lateFeeAmount ?? 0),
+          lateFeeGraceDays: String(r.data.lateFeeGraceDays ?? 0),
         });
       }
     }).catch(console.error).finally(() => setLoading(false));
@@ -69,6 +75,8 @@ export default function SchoolProfilePage() {
       await api.put('/schools/profile', {
         ...form,
         establishedYear: form.establishedYear ? parseInt(form.establishedYear) : undefined,
+        lateFeeAmount: parseFloat(form.lateFeeAmount) || 0,
+        lateFeeGraceDays: parseInt(form.lateFeeGraceDays) || 0,
       });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -167,6 +175,49 @@ export default function SchoolProfilePage() {
           {field('Telephone Number', 'phone', 'tel', '+91 98765 43210', <Phone className="w-4 h-4" strokeWidth={1.75} />)}
           {field('Official Email Address', 'email', 'email', 'principal@school.com', <Mail className="w-4 h-4" strokeWidth={1.75} />)}
           {field('Public Website URL', 'website', 'url', 'https://school.edu.in', <Globe className="w-4 h-4" strokeWidth={1.75} />)}
+        </div>
+
+        {/* Section 3: Late Fee Policy */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[#F3F4F6]">
+            <IndianRupee className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+            <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">Late Fee Policy</h3>
+          </div>
+          <p className="text-xs text-[#6B7280] font-body leading-relaxed">
+            When a student has an outstanding balance past the due date + grace period, a flat late fee charge is automatically shown on their account. Set to 0 to disable.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Late Fee Amount (₹)</label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3 text-[#9CA3AF] pointer-events-none">
+                  <IndianRupee className="w-4 h-4" strokeWidth={1.75} />
+                </div>
+                <input
+                  type="number" min="0" step="1"
+                  value={form.lateFeeAmount}
+                  onChange={(e) => setForm({ ...form, lateFeeAmount: e.target.value })}
+                  placeholder="100"
+                  className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-10 pr-3.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Grace Period (days after due date)</label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3 text-[#9CA3AF] pointer-events-none">
+                  <Calendar className="w-4 h-4" strokeWidth={1.75} />
+                </div>
+                <input
+                  type="number" min="0" step="1"
+                  value={form.lateFeeGraceDays}
+                  onChange={(e) => setForm({ ...form, lateFeeGraceDays: e.target.value })}
+                  placeholder="7"
+                  className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-10 pr-3.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Actions */}

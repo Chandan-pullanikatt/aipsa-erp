@@ -36,7 +36,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       >
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
-          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA ERP</p>
+          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA Digital School</p>
           <p className="text-[11px] font-medium tracking-wide text-white/50 mt-1 uppercase">Global Admin</p>
         </div>
 
@@ -104,7 +104,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           >
             <Menu className="w-5 h-5" strokeWidth={1.75} />
           </button>
-          <span className="font-display font-semibold text-gray-800 text-sm">AIPSA ERP</span>
+          <span className="font-display font-semibold text-gray-800 text-sm">AIPSA Digital School</span>
         </header>
         <main className="flex-1 overflow-auto p-6 max-w-[1280px] w-full mx-auto">{children}</main>
       </div>

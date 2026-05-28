@@ -131,12 +131,134 @@ router.delete('/guardians/:id', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PATCH /api/sis/students/:id/fee-override — admin only
+router.patch('/students/:id/fee-override', adminOnly, async (req, res, next) => {
+  try {
+    const enabled = req.body.enabled === true || req.body.enabled === 'true';
+    res.json(await sis.setFeeAccessOverride(req.tenant.id, req.params.id, enabled));
+  } catch (err) { next(err); }
+});
+
 // GET /api/sis/students/:id/portal-pin — admin only
 router.get('/students/:id/portal-pin', adminOnly, async (req, res, next) => {
   try {
     res.json(await sis.getPortalPin(req.tenant.id, req.params.id));
   } catch (err) { next(err); }
 });
+
+// ─── Class Join Codes ─────────────────────────────────────────────────────────
+
+// POST /api/sis/classes/:classId/join-code — teacher or admin generates/regenerates code
+router.post('/classes/:classId/join-code',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      res.json(await sis.generateClassJoinCode(req.tenant.id, req.params.classId));
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /api/sis/classes/:classId/join-code — teacher or admin views code
+router.get('/classes/:classId/join-code',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      res.json(await sis.getClassJoinCode(req.tenant.id, req.params.classId));
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /api/sis/join-codes — admin views all class codes
+router.get('/join-codes', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.listClassJoinCodes(req.tenant.id));
+  } catch (err) { next(err); }
+});
+
+// ─── Class Join Requests ──────────────────────────────────────────────────────
+
+// GET /api/sis/classes/:classId/join-requests — teacher or admin lists requests
+router.get('/classes/:classId/join-requests',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      const { status, page, limit } = req.query;
+      res.json(await sis.listJoinRequests(req.tenant.id, { classId: req.params.classId, status, page, limit }));
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /api/sis/join-requests — admin or teacher sees all requests across all classes
+router.get('/join-requests',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      const { classId, status, page, limit } = req.query;
+      res.json(await sis.listJoinRequests(req.tenant.id, { classId, status, page, limit }));
+    } catch (err) { next(err); }
+  }
+);
+
+// PATCH /api/sis/join-requests/:id/approve — teacher or admin approves
+router.patch('/join-requests/:id/approve',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      res.json(await sis.approveJoinRequest(req.tenant.id, req.params.id, req.user.id));
+    } catch (err) { next(err); }
+  }
+);
+
+// PATCH /api/sis/join-requests/:id/reject — teacher or admin rejects
+router.patch('/join-requests/:id/reject',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      res.json(await sis.rejectJoinRequest(req.tenant.id, req.params.id, req.user.id));
+    } catch (err) { next(err); }
+  }
+);
+
+// ─── Student Activities ────────────────────────────────────────────────────────
+
+// GET /api/sis/students/:id/activities — teacher + admin
+router.get('/students/:id/activities',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      res.json(await sis.listStudentActivities(req.tenant.id, req.params.id));
+    } catch (err) { next(err); }
+  }
+);
+
+// POST /api/sis/students/:id/activities — teacher + admin
+router.post('/students/:id/activities',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  [
+    body('type').notEmpty().withMessage('type is required'),
+    body('title').trim().notEmpty().withMessage('title is required'),
+    body('date').notEmpty().withMessage('date is required'),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      res.status(201).json(
+        await sis.createStudentActivity(req.tenant.id, req.params.id, req.body, req.user.id)
+      );
+    } catch (err) { next(err); }
+  }
+);
+
+// DELETE /api/sis/activities/:id — creator or admin
+router.delete('/activities/:id',
+  authorize('SCHOOL_ADMIN', 'TEACHER'),
+  async (req, res, next) => {
+    try {
+      await sis.deleteStudentActivity(req.tenant.id, req.params.id, req.user.id, req.user.role);
+      res.json({ message: 'Activity deleted.' });
+    } catch (err) { next(err); }
+  }
+);
 
 // GET /api/sis/parent/students
 router.get('/parent/students', authorize('PARENT'), async (req, res, next) => {

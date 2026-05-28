@@ -7,7 +7,7 @@ import "@fontsource/dm-sans/500.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AIPSA ERP",
+  title: "AIPSA Digital School",
   description: "Multi-Tenant School ERP & LMS by AIPSA",
 };
 

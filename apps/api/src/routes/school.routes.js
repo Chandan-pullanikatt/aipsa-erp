@@ -23,10 +23,15 @@ router.get('/profile', async (req, res, next) => {
 // PUT /api/schools/profile
 router.put('/profile', authorize('SCHOOL_ADMIN'), async (req, res, next) => {
   try {
-    const { schoolName, address, city, state, phone, email, website, board, establishedYear } = req.body;
+    const { schoolName, address, city, state, phone, email, website, board, establishedYear, lateFeeAmount, lateFeeGraceDays } = req.body;
     const profile = await prisma.schoolProfile.update({
       where: { tenantId: req.tenant.id },
-      data: { schoolName, address, city, state, phone, email, website, board, establishedYear: establishedYear ? parseInt(establishedYear) : undefined },
+      data: {
+        schoolName, address, city, state, phone, email, website, board,
+        establishedYear: establishedYear ? parseInt(establishedYear) : undefined,
+        ...(lateFeeAmount    !== undefined && { lateFeeAmount: parseFloat(lateFeeAmount) || 0 }),
+        ...(lateFeeGraceDays !== undefined && { lateFeeGraceDays: parseInt(lateFeeGraceDays) || 0 }),
+      },
     });
     res.json(profile);
   } catch (err) {

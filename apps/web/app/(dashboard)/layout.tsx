@@ -22,7 +22,8 @@ import {
   Menu,
   X,
   LogOut,
-  LayoutDashboard
+  LayoutDashboard,
+  UserPlus,
 } from 'lucide-react';
 
 interface NavItem {
@@ -46,6 +47,7 @@ const ICON_MAP = {
   Staff: UserCog,
   'School Profile': Settings2,
   // Other roles
+  'Join Requests': UserPlus,
   'Marks Entry': ClipboardList,
   Homework: BookOpen,
   Fees: Receipt,
@@ -76,11 +78,13 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
   } else if (role === 'TEACHER') {
     items = [
       { label: 'Dashboard', href: '/teacher', available: true },
+      { label: 'Students', href: '/teacher/students', available: true },
       { label: 'Timetable', href: '/teacher/timetable', available: true },
       { label: 'Attendance', href: '/teacher/attendance', available: true },
       { label: 'Marks Entry', href: '/teacher/marks', available: true },
       { label: 'Homework', href: '/teacher/homework', available: true },
       { label: 'LMS', href: '/teacher/lms', available: true },
+      { label: 'Join Requests', href: '/teacher/join-requests', available: true },
     ];
   } else if (role === 'STUDENT') {
     items = [
@@ -333,7 +337,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className={`fixed inset-y-0 left-0 z-50 w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
-          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA ERP</p>
+          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA Digital School</p>
           <p className="text-[11px] font-medium tracking-wide text-white/50 mt-1 uppercase">{roleLabel[user.role]}</p>
         </div>
 
@@ -385,7 +389,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100" aria-label="Menu">
               <Menu className="w-5 h-5" strokeWidth={1.75} />
             </button>
-            <span className="font-display font-semibold text-gray-800 text-sm">AIPSA ERP</span>
+            <span className="font-display font-semibold text-gray-800 text-sm">AIPSA Digital School</span>
           </div>
         </header>
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/join'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/join', '/student-join', '/change-password'];
 
 const ROLE_HOME: Record<string, string> = {
   SUPER_ADMIN: '/aipsa',

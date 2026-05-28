@@ -3,20 +3,21 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
-import { 
-  ArrowLeft, 
-  User, 
-  Users, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Calendar, 
-  Award, 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Check, 
-  Eye, 
+import {
+  ArrowLeft,
+  User,
+  Users,
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
+  CalendarCheck,
+  Award,
+  Plus,
+  Trash2,
+  Copy,
+  Check,
+  Eye,
   Briefcase,
   AlertTriangle,
   GraduationCap,
@@ -24,7 +25,12 @@ import {
   CheckCircle,
   Sparkles,
   Info,
-  Edit3
+  Edit3,
+  IndianRupee,
+  Flag,
+  Star,
+  MessageSquare,
+  X,
 } from 'lucide-react';
 
 interface Student {
@@ -32,6 +38,7 @@ interface Student {
   dateOfBirth: string | null; gender: string | null; bloodGroup: string | null;
   address: string | null; city: string | null; state: string | null; phone: string | null;
   status: string; admissionDate: string;
+  feeAccessOverride: boolean;
   class: { id: string; name: string } | null;
   section: { id: string; name: string } | null;
   guardians: Guardian[];
@@ -42,6 +49,79 @@ interface Guardian {
 }
 interface ClassItem { id: string; name: string; }
 interface SectionItem { id: string; name: string; }
+
+
+interface AttendanceSummary {
+  summary: { total: number; present: number; absent: number; late: number; percentage: number };
+  records: Array<{ id: string; date: string; status: string; note: string | null }>;
+}
+interface ExamResultRow {
+  id: string;
+  marksObtained: number | null;
+  grade: string | null;
+  isAbsent: boolean;
+  remarks: string | null;
+  subject: { id: string; name: string; code: string | null };
+}
+interface ExamSummary {
+  exam: { id: string; name: string; startDate: string; endDate: string | null; maxMarks: number; passingMarks: number };
+  results: ExamResultRow[];
+  totalMarks: number;
+  maxPossible: number;
+  percentage: number;
+  overallGrade: string | null;
+}
+interface ReportCard {
+  academicYear: string;
+  examSummaries: ExamSummary[];
+}
+interface FeeBreakdownRow {
+  structureId: string;
+  feeCategoryId: string;
+  feeCategoryName: string;
+  structureAmount: number;
+  frequency: string;
+  dueDate: string | null;
+  paid: number;
+  due: number;
+  daysOverdue: number;
+  lateFeeApplicable: boolean;
+  lateFeeWaived: boolean;
+  lateFee: number;
+}
+interface FeePaymentRow {
+  id: string;
+  amount: number;
+  paidAt: string;
+  method: string;
+  referenceNumber: string | null;
+  receiptNumber: string;
+  note: string | null;
+  feeCategory: { id: string; name: string };
+}
+interface FeeAccount {
+  academicYear: string;
+  summary: { totalStructure: number; totalPaid: number; totalDue: number; totalLateFee: number };
+  breakdown: FeeBreakdownRow[];
+  payments: FeePaymentRow[];
+  lateFeePolicy: { lateFeeAmount: number; lateFeeGraceDays: number };
+}
+
+interface Activity {
+  id: string;
+  type: 'DISCIPLINARY' | 'ACHIEVEMENT' | 'REMARK';
+  title: string;
+  description: string | null;
+  date: string;
+  createdAt: string;
+  addedBy: { id: string; firstName: string; lastName: string; role: string };
+}
+
+const ACTIVITY_META: Record<string, { label: string; bg: string; text: string; border: string; Icon: any }> = {
+  DISCIPLINARY: { label: 'Disciplinary', bg: 'bg-[#FEF2F2]', text: 'text-[#DC2626]', border: 'border-[#FCA5A5]/30', Icon: Flag },
+  ACHIEVEMENT:  { label: 'Achievement',  bg: 'bg-[#D6F0E4]', text: 'text-[#0F6E56]', border: 'border-[#26A96B]/15', Icon: Star },
+  REMARK:       { label: 'Remark',       bg: 'bg-[#EEF2FF]', text: 'text-[#4338CA]', border: 'border-[#4338CA]/10', Icon: MessageSquare },
+};
 
 const STATUS_STYLE: Record<string, string> = {
   ACTIVE: 'bg-[#D6F0E4] text-[#0F6E56] border border-[#26A96B]/15',
@@ -69,6 +149,15 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [showInviteParent, setShowInviteParent] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState('');
+  const [feeOverrideLoading, setFeeOverrideLoading] = useState(false);
+  const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
+  const [reportCard, setReportCard] = useState<ReportCard | null>(null);
+  const [feeAccount, setFeeAccount] = useState<FeeAccount | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activitiesLoaded, setActivitiesLoaded] = useState(false);
+  const [addingActivity, setAddingActivity] = useState(false);
+  const [activityForm, setActivityForm] = useState({ type: 'REMARK', title: '', description: '', date: new Date().toISOString().split('T')[0] });
+  const [activitySaving, setActivitySaving] = useState(false);
 
   useEffect(() => { params.then((p) => setId(p.id)); }, [params]);
 
@@ -90,6 +179,23 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
     if (!id) return;
     loadStudent(id).catch(console.error);
     api.get('/sis/classes').then((r) => setClasses(r.data)).catch(console.error);
+
+    // current month range for attendance
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    const fromDate = `${y}-${m}-01`;
+    const toDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
+    api.get(`/attendance/students/report?studentId=${id}&fromDate=${fromDate}&toDate=${toDate}`)
+      .then((r) => setAttendance(r.data)).catch(console.error);
+    api.get(`/exams/report-card/${id}`)
+      .then((r) => setReportCard(r.data)).catch(console.error);
+    api.get(`/fees/students/${id}/account`)
+      .then((r) => setFeeAccount(r.data)).catch(console.error);
+    api.get(`/sis/students/${id}/activities`)
+      .then((r) => { setActivities(r.data); setActivitiesLoaded(true); }).catch(console.error);
   }, [id]);
 
   async function handleSave() {
@@ -120,6 +226,19 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
       await api.delete(`/sis/guardians/${gid}`);
       await loadStudent(id);
     } catch (err: any) { setError(err.response?.data?.error || 'Failed to remove.'); }
+  }
+
+  async function handleFeeOverrideToggle() {
+    if (!id || !student) return;
+    setFeeOverrideLoading(true);
+    try {
+      const { data } = await api.patch(`/sis/students/${id}/fee-override`, { enabled: !student.feeAccessOverride });
+      setStudent(data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update fee override.');
+    } finally {
+      setFeeOverrideLoading(false);
+    }
   }
 
   async function handleShowPin() {
@@ -153,6 +272,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   }
 
   const inf = (v: string | null | undefined) => v || <span className="text-[#9CA3AF] font-medium italic">—</span>;
+  const monthName = new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
   return (
     <div className="max-w-3xl space-y-6 pb-12">
@@ -284,7 +404,15 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+        {/* Fee Access Override banner */}
+        {student.feeAccessOverride && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-[#FAEEDA] border border-[#F59E0B]/20 rounded-lg text-xs font-semibold text-[#854F0B]">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+            Fee access override is active — student can view attendance &amp; exam results despite outstanding dues.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
           {/* PIN Card */}
           <div className="bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between gap-3">
             <div>
@@ -312,6 +440,37 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 Reveal Portal Access PIN
               </button>
             )}
+          </div>
+
+          {/* Fee Access Override Card */}
+          <div className="bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#6B7280]" />
+                Fee Access Override
+              </p>
+              <p className="text-[11px] text-[#6B7280] font-semibold mt-1">
+                When enabled, student can access attendance &amp; exam records even with outstanding dues.
+              </p>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span className={`text-xs font-bold ${student.feeAccessOverride ? 'text-[#854F0B]' : 'text-[#6B7280]'}`}>
+                {student.feeAccessOverride ? 'Override Active' : 'Override Off'}
+              </span>
+              <button
+                onClick={handleFeeOverrideToggle}
+                disabled={feeOverrideLoading}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                  student.feeAccessOverride ? 'bg-[#F59E0B]' : 'bg-[#D1D5DB]'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                    student.feeAccessOverride ? 'translate-x-4' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Email Invite Card */}
@@ -427,6 +586,478 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 className="px-4 py-2 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
             </div>
           </form>
+        )}
+      </div>
+      {/* ── Attendance — Current Month ─────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-[#F3F4F6]">
+          <CalendarCheck className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+          <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">Attendance — {monthName}</h3>
+        </div>
+
+        {attendance ? (
+          <>
+            {/* Summary chips */}
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#D6F0E4] border border-[#26A96B]/15 rounded-lg">
+                <span className="text-[11px] font-bold text-[#0F6E56] uppercase tracking-wider">Present</span>
+                <span className="font-mono font-black text-[#0F6E56] text-base">{attendance.summary.present}</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#FEF2F2] border border-[#FCA5A5]/30 rounded-lg">
+                <span className="text-[11px] font-bold text-[#DC2626] uppercase tracking-wider">Absent</span>
+                <span className="font-mono font-black text-[#DC2626] text-base">{attendance.summary.absent}</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#FAEEDA] border border-[#F59E0B]/15 rounded-lg">
+                <span className="text-[11px] font-bold text-[#854F0B] uppercase tracking-wider">Late</span>
+                <span className="font-mono font-black text-[#854F0B] text-base">{attendance.summary.late}</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg">
+                <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Attendance</span>
+                <span className={`font-mono font-black text-base ${attendance.summary.percentage >= 75 ? 'text-[#0F6E56]' : 'text-[#DC2626]'}`}>
+                  {attendance.summary.percentage}%
+                </span>
+              </div>
+            </div>
+
+            {/* Exception days */}
+            {(() => {
+              const exceptions = attendance.records.filter((r) => r.status === 'ABSENT' || r.status === 'LATE');
+              return exceptions.length > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Exceptions this month</p>
+                  <div className="divide-y divide-[#F3F4F6] border border-[#E5E7EB] rounded-xl overflow-hidden">
+                    {exceptions.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between px-3.5 py-2.5 bg-white hover:bg-[#F9FAFB] transition-colors">
+                        <span className="text-sm font-semibold text-[#1A1D23]">
+                          {new Date(r.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </span>
+                        <div className="flex items-center gap-2.5">
+                          {r.note && <span className="text-xs text-[#6B7280] font-medium italic">{r.note}</span>}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            r.status === 'ABSENT'
+                              ? 'bg-[#FEF2F2] text-[#DC2626] border border-[#FCA5A5]/30'
+                              : 'bg-[#FAEEDA] text-[#854F0B] border border-[#F59E0B]/15'
+                          }`}>
+                            {r.status[0] + r.status.slice(1).toLowerCase()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-[#9CA3AF] font-semibold italic text-center py-4 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+                  No absences or late marks this month.
+                </p>
+              );
+            })()}
+          </>
+        ) : (
+          <p className="text-xs text-[#9CA3AF] animate-pulse font-semibold">Loading attendance…</p>
+        )}
+      </div>
+
+      {/* ── Exam Marks ─────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-[#F3F4F6]">
+          <Award className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+          <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">
+            Exam Marks{reportCard ? ` — ${reportCard.academicYear}` : ''}
+          </h3>
+        </div>
+
+        {reportCard ? (
+          reportCard.examSummaries.length === 0 ? (
+            <p className="text-xs text-[#9CA3AF] font-semibold italic text-center py-4 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+              No completed exams for this academic year.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {[...reportCard.examSummaries].reverse().map(({ exam, results, percentage, overallGrade }) => (
+                <div key={exam.id} className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                  {/* Exam header */}
+                  <div className="bg-[#F9FAFB] px-4 py-3 flex items-center justify-between border-b border-[#E5E7EB]">
+                    <div>
+                      <p className="text-sm font-bold text-[#1A1D23]">{exam.name}</p>
+                      <p className="text-[11px] text-[#6B7280] font-semibold mt-0.5">
+                        {new Date(exam.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {exam.endDate
+                          ? ` – ${new Date(exam.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                          : ''}
+                      </p>
+                    </div>
+                    {overallGrade && (
+                      <div className="text-right shrink-0 ml-4">
+                        <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Overall</p>
+                        <div className="flex items-center gap-2 mt-0.5 justify-end">
+                          <span className="font-mono font-black text-[#1D7A4A] text-lg">{overallGrade}</span>
+                          <span className="text-xs text-[#6B7280] font-semibold">{percentage}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subject rows */}
+                  {results.length === 0 ? (
+                    <p className="text-xs text-[#9CA3AF] font-semibold italic px-4 py-3">No marks entered yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider border-b border-[#F3F4F6]">
+                            <th className="text-left px-4 py-2">Subject</th>
+                            <th className="text-center px-4 py-2">Marks</th>
+                            <th className="text-center px-4 py-2">Grade</th>
+                            <th className="text-center px-4 py-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#F9FAFB]">
+                          {results.map((r) => {
+                            const pass =
+                              !r.isAbsent &&
+                              r.marksObtained !== null &&
+                              (r.marksObtained / exam.maxMarks) * 100 >= exam.passingMarks;
+                            return (
+                              <tr key={r.id} className="hover:bg-[#F9FAFB] transition-colors">
+                                <td className="px-4 py-2.5 font-semibold text-[#1A1D23]">{r.subject.name}</td>
+                                <td className="px-4 py-2.5 text-center font-mono font-bold text-[#4B5563]">
+                                  {r.isAbsent
+                                    ? '—'
+                                    : r.marksObtained !== null
+                                    ? `${r.marksObtained}/${exam.maxMarks}`
+                                    : '—'}
+                                </td>
+                                <td className="px-4 py-2.5 text-center font-bold text-[#4B5563]">
+                                  {r.isAbsent ? '—' : r.grade ?? '—'}
+                                </td>
+                                <td className="px-4 py-2.5 text-center">
+                                  {r.isAbsent ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]">
+                                      Absent
+                                    </span>
+                                  ) : r.marksObtained !== null ? (
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        pass
+                                          ? 'bg-[#D6F0E4] text-[#0F6E56] border border-[#26A96B]/15'
+                                          : 'bg-[#FEF2F2] text-[#DC2626] border border-[#FCA5A5]/30'
+                                      }`}
+                                    >
+                                      {pass ? 'Pass' : 'Fail'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-[#9CA3AF] font-semibold italic">Pending</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <p className="text-xs text-[#9CA3AF] animate-pulse font-semibold">Loading marks…</p>
+        )}
+      </div>
+
+      {/* ── Fee Account ────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-[#F3F4F6]">
+          <IndianRupee className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+          <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">
+            Fee Account{feeAccount ? ` — ${feeAccount.academicYear}` : ''}
+          </h3>
+        </div>
+
+        {feeAccount ? (
+          <>
+            {/* Summary bar */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-3 text-center">
+                <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Total Due</p>
+                <p className="font-mono font-black text-[#1A1D23] text-lg mt-0.5">
+                  ₹{feeAccount.summary.totalStructure.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div className="bg-[#D6F0E4] border border-[#26A96B]/15 rounded-xl p-3 text-center">
+                <p className="text-[11px] font-bold text-[#0F6E56] uppercase tracking-wider">Paid</p>
+                <p className="font-mono font-black text-[#0F6E56] text-lg mt-0.5">
+                  ₹{feeAccount.summary.totalPaid.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div
+                className={`rounded-xl p-3 text-center border ${
+                  feeAccount.summary.totalDue > 0
+                    ? 'bg-[#FEF2F2] border-[#FCA5A5]/30'
+                    : 'bg-[#D6F0E4] border-[#26A96B]/15'
+                }`}
+              >
+                <p className={`text-[11px] font-bold uppercase tracking-wider ${feeAccount.summary.totalDue > 0 ? 'text-[#DC2626]' : 'text-[#0F6E56]'}`}>
+                  Balance
+                </p>
+                <p className={`font-mono font-black text-lg mt-0.5 ${feeAccount.summary.totalDue > 0 ? 'text-[#DC2626]' : 'text-[#0F6E56]'}`}>
+                  {feeAccount.summary.totalDue > 0
+                    ? `₹${feeAccount.summary.totalDue.toLocaleString('en-IN')} due`
+                    : 'Cleared'}
+                </p>
+              </div>
+              {feeAccount.summary.totalLateFee > 0 && (
+                <div className="bg-[#FAEEDA] border border-[#F59E0B]/20 rounded-xl p-3 text-center col-span-3 md:col-span-1">
+                  <p className="text-[11px] font-bold text-[#854F0B] uppercase tracking-wider">Late Fee</p>
+                  <p className="font-mono font-black text-[#854F0B] text-lg mt-0.5">
+                    +₹{feeAccount.summary.totalLateFee.toLocaleString('en-IN')}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Late Fee Charges */}
+            {feeAccount.lateFeePolicy.lateFeeAmount > 0 && feeAccount.breakdown.some(b => b.lateFeeApplicable) && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold text-[#854F0B] uppercase tracking-wider">Late Fee Charges</p>
+                <div className="divide-y divide-[#F3F4F6] border border-[#F59E0B]/20 rounded-xl overflow-hidden">
+                  {feeAccount.breakdown.filter(b => b.lateFeeApplicable).map(b => (
+                    <div key={b.structureId} className="flex items-center justify-between px-4 py-3 bg-[#FAEEDA]/30 hover:bg-[#FAEEDA]/50 transition-colors">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1A1D23]">{b.feeCategoryName}</p>
+                        <p className="text-[11px] text-[#854F0B] font-semibold mt-0.5">
+                          {b.daysOverdue} day{b.daysOverdue !== 1 ? 's' : ''} overdue
+                          {b.lateFeeWaived && <span className="ml-1.5 text-[#0F6E56]">· Waived</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 ml-4 shrink-0">
+                        {!b.lateFeeWaived && (
+                          <span className="font-mono font-bold text-[#854F0B] text-sm">
+                            +₹{feeAccount.lateFeePolicy.lateFeeAmount.toLocaleString('en-IN')}
+                          </span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (!id) return;
+                            if (b.lateFeeWaived) {
+                              await api.delete(`/fees/students/${id}/late-fee-waiver`, { data: { feeStructureId: b.structureId, academicYear: feeAccount.academicYear } });
+                            } else {
+                              await api.post(`/fees/students/${id}/late-fee-waiver`, { feeStructureId: b.structureId, academicYear: feeAccount.academicYear });
+                            }
+                            api.get(`/fees/students/${id}/account`).then(r => setFeeAccount(r.data)).catch(console.error);
+                          }}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
+                            b.lateFeeWaived
+                              ? 'bg-[#FEF2F2] text-[#DC2626] border-[#FCA5A5]/30 hover:bg-[#FEF2F2]/80'
+                              : 'bg-[#D6F0E4] text-[#0F6E56] border-[#26A96B]/15 hover:bg-[#D6F0E4]/80'
+                          }`}
+                        >
+                          {b.lateFeeWaived ? 'Remove Waiver' : 'Waive'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Payment history */}
+            {feeAccount.payments.length === 0 ? (
+              <p className="text-xs text-[#9CA3AF] font-semibold italic text-center py-4 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+                No payments recorded yet.
+              </p>
+            ) : (
+              <div>
+                <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Payment History</p>
+                <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                          <th className="text-left px-4 py-2.5">Date</th>
+                          <th className="text-left px-4 py-2.5">Category</th>
+                          <th className="text-right px-4 py-2.5">Amount</th>
+                          <th className="text-center px-4 py-2.5">Method</th>
+                          <th className="text-left px-4 py-2.5">Receipt</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#F9FAFB]">
+                        {feeAccount.payments.map((p) => (
+                          <tr key={p.id} className="hover:bg-[#F9FAFB] transition-colors">
+                            <td className="px-4 py-2.5 text-[#4B5563] font-semibold whitespace-nowrap">
+                              {new Date(p.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="px-4 py-2.5 font-semibold text-[#1A1D23]">{p.feeCategory.name}</td>
+                            <td className="px-4 py-2.5 text-right font-mono font-bold text-[#0F6E56]">
+                              ₹{p.amount.toLocaleString('en-IN')}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF2FF] text-[#4338CA] border border-[#4338CA]/10">
+                                {p.method[0] + p.method.slice(1).toLowerCase().replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-xs text-[#6B7280] font-semibold">
+                              {p.receiptNumber}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-[#9CA3AF] animate-pulse font-semibold">Loading fees…</p>
+        )}
+      </div>
+
+      {/* ── Miscellaneous Activities ───────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-[#F3F4F6]">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+            <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">Miscellaneous Activities</h3>
+          </div>
+          {!addingActivity && (
+            <button
+              onClick={() => setAddingActivity(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Add Activity
+            </button>
+          )}
+        </div>
+
+        {/* Add Activity Form */}
+        {addingActivity && (
+          <div className="border border-[#E5E7EB] rounded-xl p-4 bg-[#F9FAFB] space-y-3">
+            <p className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">New Activity Record</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Type</label>
+                <select
+                  value={activityForm.type}
+                  onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value })}
+                  className="w-full border border-[#E5E7EB] rounded-lg py-2.5 px-3 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]"
+                >
+                  <option value="REMARK">Remark</option>
+                  <option value="ACHIEVEMENT">Achievement</option>
+                  <option value="DISCIPLINARY">Disciplinary</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Date</label>
+                <input
+                  type="date"
+                  value={activityForm.date}
+                  onChange={(e) => setActivityForm({ ...activityForm, date: e.target.value })}
+                  className="w-full border border-[#E5E7EB] rounded-lg py-2.5 px-3 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Title</label>
+              <input
+                type="text"
+                value={activityForm.title}
+                onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
+                placeholder="Brief title for this activity"
+                className="w-full border border-[#E5E7EB] rounded-lg py-2.5 px-3 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Description <span className="normal-case font-medium text-[#9CA3AF]">(optional)</span></label>
+              <textarea
+                value={activityForm.description}
+                onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })}
+                placeholder="Additional details…"
+                rows={3}
+                className="w-full border border-[#E5E7EB] rounded-lg py-2.5 px-3 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] resize-none"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setAddingActivity(false); setActivityForm({ type: 'REMARK', title: '', description: '', date: new Date().toISOString().split('T')[0] }); }}
+                className="px-3.5 py-1.5 border border-[#E5E7EB] rounded-lg text-xs font-semibold text-[#4B5563] hover:bg-white transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={activitySaving || !activityForm.title.trim() || !activityForm.date}
+                onClick={async () => {
+                  if (!id) return;
+                  setActivitySaving(true);
+                  try {
+                    const { data } = await api.post(`/sis/students/${id}/activities`, activityForm);
+                    setActivities([data, ...activities]);
+                    setAddingActivity(false);
+                    setActivityForm({ type: 'REMARK', title: '', description: '', date: new Date().toISOString().split('T')[0] });
+                  } catch (err: any) {
+                    setError(err.response?.data?.error || 'Failed to save activity.');
+                  } finally { setActivitySaving(false); }
+                }}
+                className="px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm disabled:opacity-60"
+              >
+                {activitySaving ? 'Saving…' : 'Save Activity'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Activities List */}
+        {!activitiesLoaded ? (
+          <p className="text-xs text-[#9CA3AF] animate-pulse font-semibold">Loading activities…</p>
+        ) : activities.length === 0 ? (
+          <p className="text-xs text-[#9CA3AF] font-semibold italic text-center py-4 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+            No activity records yet.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {activities.map((act) => {
+              const meta = ACTIVITY_META[act.type];
+              const Icon = meta.Icon;
+              return (
+                <div key={act.id} className="flex items-start gap-3 p-3.5 border border-[#E5E7EB] rounded-xl hover:bg-[#F9FAFB] transition-colors">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${meta.bg} ${meta.border} border`}>
+                    <Icon className={`w-4 h-4 ${meta.text}`} strokeWidth={1.75} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.bg} ${meta.text} ${meta.border}`}>
+                        {meta.label}
+                      </span>
+                      <p className="text-sm font-semibold text-[#1A1D23]">{act.title}</p>
+                    </div>
+                    {act.description && (
+                      <p className="text-xs text-[#4B5563] mt-1 leading-relaxed">{act.description}</p>
+                    )}
+                    <p className="text-[11px] text-[#9CA3AF] font-semibold mt-1.5">
+                      {new Date(act.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {' · '}Added by {act.addedBy.firstName} {act.addedBy.lastName}
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Delete this activity record?')) return;
+                      try {
+                        await api.delete(`/sis/activities/${act.id}`);
+                        setActivities(activities.filter((a) => a.id !== act.id));
+                      } catch (err: any) {
+                        setError(err.response?.data?.error || 'Failed to delete.');
+                      }
+                    }}
+                    className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#DC2626] hover:bg-[#FEF2F2] transition-colors shrink-0"
+                    title="Delete activity"
+                  >
+                    <X className="w-3.5 h-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

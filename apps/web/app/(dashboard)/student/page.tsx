@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
@@ -39,6 +39,7 @@ interface StudentItem {
   bloodGroup: string | null;
   classId: string | null;
   sectionId: string | null;
+  feeAccessOverride: boolean;
   class: { id: string; name: string } | null;
   section: { id: string; name: string } | null;
 }
@@ -63,12 +64,18 @@ interface AttendanceReport {
 }
 
 interface FeeBreakdownItem {
+  structureId: string;
   feeCategoryId: string;
   feeCategoryName: string;
   structureAmount: number;
   frequency: string;
+  dueDate: string | null;
   paid: number;
   due: number;
+  daysOverdue: number;
+  lateFeeApplicable: boolean;
+  lateFeeWaived: boolean;
+  lateFee: number;
 }
 
 interface FeePaymentItem {
@@ -96,10 +103,12 @@ interface FeeAccount {
   academicYear: string;
   breakdown: FeeBreakdownItem[];
   payments: FeePaymentItem[];
+  lateFeePolicy: { lateFeeAmount: number; lateFeeGraceDays: number };
   summary: {
     totalStructure: number;
     totalPaid: number;
     totalDue: number;
+    totalLateFee: number;
   };
 }
 
@@ -202,6 +211,10 @@ function StudentPortalContent() {
       try {
         const { data } = await api.get('/sis/student/profile');
         setStudent(data);
+        // Eagerly fetch fees so isFeeLocked is accurate from the start
+        api.get(`/fees/students/${data.id}/account`)
+          .then((r) => setFees(r.data))
+          .catch(console.error);
       } catch (err: any) {
         console.error(err);
         setError(err.response?.data?.error || 'No student profile linked to your user account.');
@@ -380,6 +393,35 @@ function StudentPortalContent() {
     });
   };
 
+  // Block attendance + exams tabs when there are outstanding dues and no admin override
+  const isFeeLocked =
+    student?.feeAccessOverride !== true &&
+    fees !== null &&
+    fees.summary.totalDue > 0;
+
+  const DuesWall = () => (
+    <div className="flex flex-col items-center justify-center py-20 px-6 text-center border border-[#FCA5A5]/40 bg-[#FEF2F2] rounded-xl">
+      <div className="w-14 h-14 rounded-full bg-[#FEF2F2] border-2 border-[#FCA5A5]/50 flex items-center justify-center mb-4">
+        <AlertCircle className="w-7 h-7 text-[#DC2626]" strokeWidth={1.75} />
+      </div>
+      <h3 className="font-bold text-[#DC2626] text-base font-display mb-1">Access Restricted</h3>
+      <p className="text-sm text-[#6B7280] font-body max-w-sm leading-relaxed">
+        Your account has outstanding dues of{' '}
+        <span className="font-bold text-[#DC2626]">₹{fees!.summary.totalDue.toLocaleString('en-IN')}</span>.
+        Please clear your fees to access this section.
+      </p>
+      <p className="text-xs text-[#9CA3AF] font-body mt-3">
+        Contact your school administrator if you need temporary access.
+      </p>
+      <button
+        onClick={() => setActiveTab('fees')}
+        className="mt-5 px-5 py-2 bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-bold rounded-lg transition-all shadow-sm font-display"
+      >
+        View Fee Details
+      </button>
+    </div>
+  );
+
   const ATTENDANCE_BADGES = {
     PRESENT: 'bg-[#E5F6EE] text-[#1D7A4A] border-[#1D7A4A]/10',
     ABSENT: 'bg-rose-50 text-rose-700 border-rose-100',
@@ -541,6 +583,9 @@ function StudentPortalContent() {
                 <div className="space-y-1">
                   <h3 className="font-semibold text-[#1A1D23] text-base font-display">Outstanding Fee</h3>
                   <p className="text-xs text-gray-450">₹{(fees?.summary?.totalDue || 0).toLocaleString('en-IN')} outstanding</p>
+                  {(fees?.summary?.totalLateFee ?? 0) > 0 && (
+                    <p className="text-[10px] text-[#854F0B] font-bold mt-0.5">+₹{fees!.summary.totalLateFee.toLocaleString('en-IN')} late fee</p>
+                  )}
                 </div>
               </div>
 
@@ -650,6 +695,7 @@ function StudentPortalContent() {
         {/* TAB 2: ATTENDANCE */}
         {activeTab === 'attendance' && (
           <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-6 animate-fadeIn no-print">
+          {isFeeLocked ? <DuesWall /> : (<>
             {/* Header widgets */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
               <div>
@@ -725,6 +771,8 @@ function StudentPortalContent() {
                 No attendance logs found in the selected date range.
               </div>
             )}
+          {/* end isFeeLocked gate */}
+          </>)}
           </div>
         )}
 
@@ -776,6 +824,7 @@ function StudentPortalContent() {
                       <tr>
                         <th className="px-5 py-3">Category</th>
                         <th className="px-5 py-3">Installment schedule</th>
+                        <th className="px-5 py-3">Due Date</th>
                         <th className="px-5 py-3 text-right">Structure amount</th>
                         <th className="px-5 py-3 text-right">Net paid</th>
                         <th className="px-5 py-3 text-right">Net due</th>
@@ -783,13 +832,41 @@ function StudentPortalContent() {
                     </thead>
                     <tbody className="divide-y divide-[#E5E7EB] text-slate-850 font-body">
                       {fees.breakdown.map((item) => (
-                        <tr key={item.feeCategoryId} className="hover:bg-gray-50/50">
-                          <td className="px-5 py-3.5 font-bold text-[#1A1D23] font-display">{item.feeCategoryName}</td>
-                          <td className="px-5 py-3.5 text-gray-400 capitalize">{item.frequency.toLowerCase()}</td>
-                          <td className="px-5 py-3.5 text-right font-semibold">₹{item.structureAmount.toLocaleString('en-IN')}</td>
-                          <td className="px-5 py-3.5 text-right font-semibold text-emerald-600">₹{item.paid.toLocaleString('en-IN')}</td>
-                          <td className="px-5 py-3.5 text-right font-bold text-rose-600">₹{item.due.toLocaleString('en-IN')}</td>
-                        </tr>
+                        <React.Fragment key={item.structureId}>
+                          <tr className="hover:bg-gray-50/50">
+                            <td className="px-5 py-3.5 font-bold text-[#1A1D23] font-display">{item.feeCategoryName}</td>
+                            <td className="px-5 py-3.5 text-gray-400 capitalize">{item.frequency.toLowerCase()}</td>
+                            <td className="px-5 py-3.5 font-body">
+                              {item.dueDate ? (
+                                <span className={`text-xs font-semibold ${item.due > 0 && new Date(item.dueDate) < new Date() ? 'text-rose-600 font-bold' : 'text-gray-700'}`}>
+                                  {new Date(item.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  {item.due > 0 && new Date(item.dueDate) < new Date() && <span className="ml-1 text-rose-500">⚠</span>}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-xs italic">—</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-semibold">₹{item.structureAmount.toLocaleString('en-IN')}</td>
+                            <td className="px-5 py-3.5 text-right font-semibold text-emerald-600">₹{item.paid.toLocaleString('en-IN')}</td>
+                            <td className="px-5 py-3.5 text-right font-bold text-rose-600">₹{item.due.toLocaleString('en-IN')}</td>
+                          </tr>
+                          {item.lateFeeApplicable && (
+                            <tr className="bg-[#FAEEDA]/30">
+                              <td className="px-5 py-2.5 text-[#854F0B] font-semibold text-xs pl-8 font-body">
+                                ↳ Late Fee {item.lateFeeWaived
+                                  ? <span className="text-[#0F6E56] font-bold">(Waived by admin)</span>
+                                  : `(${item.daysOverdue}d overdue)`}
+                              </td>
+                              <td className="px-5 py-2.5 text-[11px] text-[#854F0B] font-body">—</td>
+                              <td colSpan={2} />
+                              <td className="px-5 py-2.5 text-right font-bold text-[#854F0B] font-mono text-xs">
+                                {item.lateFeeWaived
+                                  ? <span className="line-through text-gray-400">₹{(fees.lateFeePolicy.lateFeeAmount).toLocaleString('en-IN')}</span>
+                                  : `+₹${(fees.lateFeePolicy.lateFeeAmount).toLocaleString('en-IN')}`}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -846,6 +923,7 @@ function StudentPortalContent() {
         {/* TAB 4: EXAMS */}
         {activeTab === 'exams' && (
           <div className="space-y-6 animate-fadeIn">
+          {isFeeLocked ? <DuesWall /> : (<>
             {exams?.examSummaries && exams.examSummaries.length > 0 ? (
               <div className="space-y-8">
                 {exams.examSummaries.map((summary) => (
@@ -977,6 +1055,8 @@ function StudentPortalContent() {
                 No finalized exam report cards published for your academic class.
               </div>
             )}
+          {/* end isFeeLocked gate */}
+          </>)}
           </div>
         )}
 

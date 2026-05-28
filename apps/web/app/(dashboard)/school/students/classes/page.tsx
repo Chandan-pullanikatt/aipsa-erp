@@ -2,23 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { 
-  GraduationCap, 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  ChevronDown, 
-  ChevronUp, 
-  Layers, 
-  Users, 
-  Check, 
-  X, 
-  Activity
+import {
+  GraduationCap,
+  Plus,
+  Edit2,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Users,
+  Check,
+  X,
+  Activity,
+  RefreshCw,
+  Copy,
+  Link2,
 } from 'lucide-react';
 
 interface ClassItem {
   id: string;
   name: string;
+  joinCode: string | null;
   _count: { sections: number; students: number };
 }
 
@@ -38,6 +42,8 @@ export default function ClassesPage() {
   const [editingClass, setEditingClass] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [generatingCodeFor, setGeneratingCodeFor] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   async function fetchClasses() {
     const { data } = await api.get('/sis/classes');
@@ -107,6 +113,22 @@ export default function ClassesPage() {
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create section.');
     }
+  }
+
+  async function handleGenerateJoinCode(classId: string) {
+    setGeneratingCodeFor(classId);
+    try {
+      const { data } = await api.post(`/sis/classes/${classId}/join-code`);
+      setClasses(prev => prev.map(c => c.id === classId ? { ...c, joinCode: data.joinCode } : c));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to generate join code.');
+    } finally { setGeneratingCodeFor(null); }
+  }
+
+  function handleCopyCode(code: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
   }
 
   async function handleDeleteSection(sectionId: string, classId: string) {
@@ -208,7 +230,50 @@ export default function ClassesPage() {
               )}
 
               {expandedClass === cls.id && (
-                <div className="border-t border-[#F3F4F6] px-4 py-4 bg-[#F9FAFB]/60 space-y-3">
+                <div className="border-t border-[#F3F4F6] px-4 py-4 bg-[#F9FAFB]/60 space-y-4">
+                  {/* Class Join Code */}
+                  <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Link2 className="w-3.5 h-3.5 text-[#1D7A4A]" strokeWidth={1.75} />
+                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Student Self-Registration Code</span>
+                    </div>
+                    {cls.joinCode ? (
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 font-mono text-sm font-bold text-[#1A1D23] bg-gray-50 border border-gray-200 rounded px-3 py-1.5 tracking-widest">
+                          {cls.joinCode}
+                        </code>
+                        <button
+                          onClick={() => handleCopyCode(cls.joinCode!)}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1.5 bg-white hover:bg-gray-50 transition-colors"
+                        >
+                          {copiedCode === cls.joinCode ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedCode === cls.joinCode ? 'Copied!' : 'Copy'}
+                        </button>
+                        <button
+                          onClick={() => handleGenerateJoinCode(cls.id)}
+                          disabled={generatingCodeFor === cls.id}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1.5 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+                          title="Regenerate code (old code will stop working)"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${generatingCodeFor === cls.id ? 'animate-spin' : ''}`} />
+                          Regenerate
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerateJoinCode(cls.id)}
+                        disabled={generatingCodeFor === cls.id}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-[#1D7A4A] hover:text-[#155B37] border border-[#26A96B]/30 rounded-lg px-3 py-1.5 bg-[#E5F6EE] hover:bg-[#D0EEE0] transition-colors disabled:opacity-50"
+                      >
+                        <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        {generatingCodeFor === cls.id ? 'Generating...' : 'Generate Join Code'}
+                      </button>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-1.5">
+                      Share this code with students. They go to <strong>/student-join</strong> to register.
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     {(sections[cls.id] ?? []).map((sec) => (
                       <div key={sec.id} className="flex items-center justify-between text-sm bg-white border border-[#E5E7EB] p-2.5 rounded-lg shadow-sm">

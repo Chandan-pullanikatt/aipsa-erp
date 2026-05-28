@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
+const { sendStudentApproval } = require('./email.service');
 
 function generatePortalPin() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -295,6 +296,16 @@ async function getPortalPin(tenantId, studentId) {
   return { ...student, portalPin: plainPin };
 }
 
+async function setFeeAccessOverride(tenantId, studentId, enabled) {
+  const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+  return prisma.student.update({
+    where: { id: studentId },
+    data: { feeAccessOverride: !!enabled },
+    include: { class: true, section: true, guardians: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] } },
+  });
+}
+
 async function getStudentByUserId(tenantId, userId) {
   const student = await prisma.student.findFirst({
     where: { tenantId, userId },
@@ -322,10 +333,304 @@ async function getParentStudents(tenantId, userId) {
   return students.map(({ portalPin: _pin, ...s }) => s);
 }
 
+// ─── Class Join Codes ─────────────────────────────────────────────────────────
+
+const CLASS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function generateClassCode(className) {
+  const prefix = className.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase().padEnd(4, 'X');
+  const suffix = Array.from({ length: 4 }, () =>
+    CLASS_CODE_CHARS[Math.floor(Math.random() * CLASS_CODE_CHARS.length)]
+  ).join('');
+  return `${prefix}-${suffix}`;
+}
+
+async function generateClassJoinCode(tenantId, classId) {
+  const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
+  if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
+
+  let code;
+  let attempts = 0;
+  do {
+    code = generateClassCode(cls.name);
+    const existing = await prisma.class.findUnique({ where: { joinCode: code } });
+    if (!existing) break;
+    attempts++;
+  } while (attempts < 10);
+
+  return prisma.class.update({
+    where: { id: classId },
+    data: { joinCode: code },
+    select: { id: true, name: true, joinCode: true },
+  });
+}
+
+async function getClassJoinCode(tenantId, classId) {
+  const cls = await prisma.class.findFirst({
+    where: { id: classId, tenantId },
+    select: { id: true, name: true, joinCode: true },
+  });
+  if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
+  return cls;
+}
+
+async function listClassJoinCodes(tenantId) {
+  return prisma.class.findMany({
+    where: { tenantId },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true, name: true, joinCode: true,
+      _count: { select: { students: true, joinRequests: true } },
+    },
+  });
+}
+
+// ─── Public: Lookup class by join code (for confirmation UI) ──────────────────
+
+async function lookupClassByJoinCode(joinCode) {
+  const cls = await prisma.class.findUnique({
+    where: { joinCode },
+    include: {
+      tenant: {
+        select: { status: true, profile: { select: { schoolName: true } } },
+      },
+    },
+  });
+  if (!cls) throw Object.assign(new Error('Invalid class code'), { status: 404 });
+  if (cls.tenant.status !== 'ACTIVE') {
+    throw Object.assign(new Error('This school is not currently accepting registrations'), { status: 403 });
+  }
+  return {
+    classId: cls.id,
+    className: cls.name,
+    schoolName: cls.tenant.profile?.schoolName || 'Unknown School',
+  };
+}
+
+// ─── Class Join Requests ──────────────────────────────────────────────────────
+
+async function createStudentJoinRequest(joinCode, { firstName, lastName, dateOfBirth, parentPhone, email }) {
+  const cls = await prisma.class.findUnique({
+    where: { joinCode },
+    include: { tenant: { select: { id: true, status: true } } },
+  });
+  if (!cls) throw Object.assign(new Error('Invalid class code'), { status: 404 });
+  if (cls.tenant.status !== 'ACTIVE') {
+    throw Object.assign(new Error('School is not currently accepting registrations'), { status: 403 });
+  }
+
+  // Prevent duplicate pending request from the same email for the same class
+  const existing = await prisma.classJoinRequest.findFirst({
+    where: { classId: cls.id, email: email.toLowerCase(), status: 'PENDING' },
+  });
+  if (existing) {
+    throw Object.assign(new Error('A pending request already exists for this email in this class'), { status: 409 });
+  }
+
+  return prisma.classJoinRequest.create({
+    data: {
+      tenantId: cls.tenant.id,
+      classId: cls.id,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      parentPhone: parentPhone.trim(),
+      email: email.trim().toLowerCase(),
+    },
+    select: {
+      id: true, firstName: true, lastName: true, email: true, status: true, createdAt: true,
+      class: { select: { name: true } },
+    },
+  });
+}
+
+async function listJoinRequests(tenantId, { classId, status = 'PENDING', page = 1, limit = 50 }) {
+  const where = {
+    tenantId,
+    ...(classId && { classId }),
+    ...(status && { status }),
+  };
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const [requests, total] = await prisma.$transaction([
+    prisma.classJoinRequest.findMany({
+      where,
+      skip,
+      take: parseInt(limit),
+      orderBy: { createdAt: 'desc' },
+      include: {
+        class: { select: { id: true, name: true } },
+        reviewedBy: { select: { firstName: true, lastName: true } },
+      },
+    }),
+    prisma.classJoinRequest.count({ where }),
+  ]);
+
+  return { requests, total, page: parseInt(page), limit: parseInt(limit) };
+}
+
+function buildDefaultPassword(tenantSlug, className, admissionNumber) {
+  const localId = tenantSlug.replace(/-/g, '').slice(0, 8).toLowerCase();
+  const cls = className.replace(/\s+/g, '').toLowerCase();
+  const admNo = admissionNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return `globalaipsa${localId}${cls}${admNo}`;
+}
+
+async function approveJoinRequest(tenantId, requestId, reviewerId) {
+  const req = await prisma.classJoinRequest.findFirst({
+    where: { id: requestId, tenantId },
+    include: {
+      class: { select: { id: true, name: true } },
+      tenant: { select: { slug: true, name: true } },
+    },
+  });
+  if (!req) throw Object.assign(new Error('Request not found'), { status: 404 });
+  if (req.status !== 'PENDING') {
+    throw Object.assign(new Error(`Request is already ${req.status.toLowerCase()}`), { status: 409 });
+  }
+
+  // Check email not already used
+  const existingUser = await prisma.user.findUnique({ where: { email: req.email } });
+  if (existingUser) {
+    throw Object.assign(new Error('An account with this email already exists'), { status: 409 });
+  }
+
+  const admissionNumber = await generateAdmissionNumber(tenantId);
+  const plainPin = generatePortalPin();
+  const hashedPin = await bcrypt.hash(plainPin, 10);
+  const defaultPassword = buildDefaultPassword(req.tenant.slug, req.class.name, admissionNumber);
+  const hashedPassword = await bcrypt.hash(defaultPassword, 12);
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Create User account
+    const user = await tx.user.create({
+      data: {
+        tenantId,
+        email: req.email,
+        password: hashedPassword,
+        role: 'STUDENT',
+        firstName: req.firstName,
+        lastName: req.lastName,
+        isActive: true,
+        mustChangePassword: true,
+      },
+    });
+
+    // Create Student record
+    const student = await tx.student.create({
+      data: {
+        tenantId,
+        admissionNumber,
+        portalPin: hashedPin,
+        firstName: req.firstName,
+        lastName: req.lastName,
+        dateOfBirth: req.dateOfBirth || undefined,
+        phone: req.parentPhone,
+        classId: req.classId,
+        userId: user.id,
+        status: 'ACTIVE',
+      },
+    });
+
+    // Mark request approved
+    await tx.classJoinRequest.update({
+      where: { id: requestId },
+      data: { status: 'APPROVED', reviewedAt: new Date(), reviewedById: reviewerId },
+    });
+
+    return { user, student, defaultPassword };
+  });
+
+  const loginUrl = `${process.env.WEB_URL || 'http://localhost:3000'}/login`;
+  sendStudentApproval(req.email, {
+    firstName: req.firstName,
+    schoolName: req.tenant.name,
+    admissionNumber,
+    tempPassword: result.defaultPassword,
+    loginUrl,
+  }).catch(() => {}); // fire-and-forget — don't block or fail the response
+
+  return {
+    message: 'Student approved and account created.',
+    admissionNumber,
+    defaultPassword: result.defaultPassword,
+    studentId: result.student.id,
+  };
+}
+
+async function rejectJoinRequest(tenantId, requestId, reviewerId) {
+  const req = await prisma.classJoinRequest.findFirst({
+    where: { id: requestId, tenantId },
+  });
+  if (!req) throw Object.assign(new Error('Request not found'), { status: 404 });
+  if (req.status !== 'PENDING') {
+    throw Object.assign(new Error(`Request is already ${req.status.toLowerCase()}`), { status: 409 });
+  }
+
+  return prisma.classJoinRequest.update({
+    where: { id: requestId },
+    data: { status: 'REJECTED', reviewedAt: new Date(), reviewedById: reviewerId },
+    select: { id: true, firstName: true, lastName: true, status: true },
+  });
+}
+
+// ─── Student Activities ────────────────────────────────────────────────────────
+
+async function listStudentActivities(tenantId, studentId) {
+  const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+  return prisma.studentActivity.findMany({
+    where: { tenantId, studentId },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    include: {
+      addedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
+    },
+  });
+}
+
+async function createStudentActivity(tenantId, studentId, { type, title, description, date }, addedById) {
+  const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+  const validTypes = ['DISCIPLINARY', 'ACHIEVEMENT', 'REMARK'];
+  if (!validTypes.includes(type)) throw Object.assign(new Error('Invalid activity type'), { status: 422 });
+  return prisma.studentActivity.create({
+    data: {
+      tenantId,
+      studentId,
+      type,
+      title: title.trim(),
+      description: description?.trim() || undefined,
+      date: new Date(date),
+      addedById,
+    },
+    include: {
+      addedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
+    },
+  });
+}
+
+async function deleteStudentActivity(tenantId, activityId, requesterId, requesterRole) {
+  const activity = await prisma.studentActivity.findFirst({ where: { id: activityId, tenantId } });
+  if (!activity) throw Object.assign(new Error('Activity not found'), { status: 404 });
+  const isAdmin = requesterRole === 'SCHOOL_ADMIN';
+  const isCreator = activity.addedById === requesterId;
+  if (!isAdmin && !isCreator) {
+    throw Object.assign(new Error('You can only delete your own activity records'), { status: 403 });
+  }
+  await prisma.studentActivity.delete({ where: { id: activityId } });
+}
+
 module.exports = {
   listClasses, createClass, updateClass, deleteClass,
   listSections, createSection, updateSection, deleteSection,
   listStudents, getStudent, createStudent, updateStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
-  getPortalPin, getParentStudents, getStudentByUserId,
+  getPortalPin, getParentStudents, getStudentByUserId, setFeeAccessOverride,
+  // Class join codes
+  generateClassJoinCode, getClassJoinCode, listClassJoinCodes,
+  lookupClassByJoinCode,
+  // Join requests
+  createStudentJoinRequest, listJoinRequests, approveJoinRequest, rejectJoinRequest,
+  // Student activities
+  listStudentActivities, createStudentActivity, deleteStudentActivity,
 };

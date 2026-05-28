@@ -66,6 +66,20 @@ router.get('/payments/:id', async (req, res, next) => {
   try { res.json(await fee.getPayment(req.tenant.id, req.params.id)); } catch (e) { next(e); }
 });
 
+// ─── Late Fee Waivers ─────────────────────────────────────────────────────────
+router.post('/students/:studentId/late-fee-waiver', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await fee.createLateFeeWaiver(req.tenant.id, req.params.studentId, req.body, req.user.id));
+  } catch (err) { next(err); }
+});
+
+router.delete('/students/:studentId/late-fee-waiver', adminOnly, async (req, res, next) => {
+  try {
+    await fee.deleteLateFeeWaiver(req.tenant.id, req.params.studentId, req.body);
+    res.json({ message: 'Waiver removed.' });
+  } catch (err) { next(err); }
+});
+
 // ─── Due Report ───────────────────────────────────────────────────────────────
 router.get('/due-report', adminOnly, async (req, res, next) => {
   try { res.json(await fee.getDueReport(req.tenant.id, req.query)); } catch (e) { next(e); }

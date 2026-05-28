@@ -40,6 +40,9 @@ model Tenant {
   lmsMaterials         LmsMaterial[]
   lmsMaterialProgress  LmsMaterialProgress[]
   homeworkSubmissions  HomeworkSubmission[]
+  classJoinRequests    ClassJoinRequest[]
+  lateFeeWaivers       LateFeeWaiver[]
+  studentActivities    StudentActivity[]
 
   @@map("tenants")
 }
@@ -63,11 +66,13 @@ model SchoolProfile {
   phone           String?
   email           String?
   website         String?
-  logo            String?
-  board           String?
-  establishedYear Int?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  logo              String?
+  board             String?
+  establishedYear   Int?
+  lateFeeAmount     Float    @default(0)
+  lateFeeGraceDays  Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -77,33 +82,37 @@ model SchoolProfile {
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id              String    @id @default(cuid())
-  tenantId        String?
-  email           String    @unique
-  password        String
-  role            Role
-  firstName       String
-  lastName        String
-  phone           String?
-  isActive        Boolean   @default(true)
-  emailVerified   Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  tenantId            String?
+  email               String    @unique
+  password            String
+  role                Role
+  firstName           String
+  lastName            String
+  phone               String?
+  isActive            Boolean   @default(true)
+  emailVerified       Boolean   @default(false)
+  mustChangePassword  Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  tenant                Tenant?        @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  tenant                Tenant?           @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   passwordResets        PasswordReset[]
   student               Student?
   guardian              Guardian?
-  teacherAttendance     Attendance[]   @relation("TeacherAttendance")
-  userLeaves            Leave[]        @relation("UserLeaves")
-  collectedPayments     FeePayment[]   @relation("FeeCollector")
-  createdAnnouncements  Announcement[] @relation("AnnouncementCreator")
-  notifications         Notification[] @relation("UserNotifications")
-  taughtSubjects        Subject[]             @relation("SubjectTeacher")
-  taughtPeriods         Period[]              @relation("PeriodTeacher")
-  postedHomeworks       Homework[]            @relation("HomeworkTeacher")
+  teacherAttendance     Attendance[]      @relation("TeacherAttendance")
+  userLeaves            Leave[]           @relation("UserLeaves")
+  collectedPayments     FeePayment[]      @relation("FeeCollector")
+  createdAnnouncements  Announcement[]    @relation("AnnouncementCreator")
+  notifications         Notification[]    @relation("UserNotifications")
+  taughtSubjects        Subject[]         @relation("SubjectTeacher")
+  taughtPeriods         Period[]          @relation("PeriodTeacher")
+  postedHomeworks       Homework[]        @relation("HomeworkTeacher")
   lmsProgress           LmsMaterialProgress[] @relation("LmsProgress")
   gradedSubmissions     HomeworkSubmission[]  @relation("HomeworkGrader")
+  reviewedJoinRequests  ClassJoinRequest[] @relation("JoinRequestReviewer")
+  lateFeeWaivers        LateFeeWaiver[]    @relation("LateFeeWaivedBy")
+  addedActivities       StudentActivity[]  @relation("ActivityAddedBy")
 
   @@map("users")
 }
@@ -158,6 +167,8 @@ model Class {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  joinCode      String?        @unique
+
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sections      Section[]
   students      Student[]
@@ -167,6 +178,7 @@ model Class {
   exams         Exam[]
   periods       Period[]
   homeworks     Homework[]
+  joinRequests  ClassJoinRequest[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -225,7 +237,8 @@ model Student {
   sectionId       String?
   admissionDate   DateTime      @default(now())
   status          StudentStatus @default(ACTIVE)
-  portalPin       String?
+  portalPin           String?
+  feeAccessOverride   Boolean       @default(false)
   userId          String?       @unique
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -240,6 +253,8 @@ model Student {
   feePayments         FeePayment[]
   examResults         ExamResult[]
   homeworkSubmissions HomeworkSubmission[]
+  lateFeeWaivers      LateFeeWaiver[]
+  activities          StudentActivity[]
 
   @@unique([tenantId, admissionNumber])
   @@index([tenantId])
@@ -400,14 +415,16 @@ model FeeStructure {
   classId       String?
   amount        Float
   frequency     FeeFrequency
+  dueDate       DateTime?    @db.Date
   academicYear  String
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  feeCategory FeeCategory @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
-  class       Class?      @relation(fields: [classId], references: [id])
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feeCategory    FeeCategory     @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
+  class          Class?          @relation(fields: [classId], references: [id])
+  lateFeeWaivers LateFeeWaiver[]
 
   @@index([tenantId, academicYear])
   @@map("fee_structures")
@@ -702,4 +719,85 @@ model HomeworkSubmission {
   @@index([tenantId, homeworkId])
   @@index([tenantId, studentId])
   @@map("homework_submissions")
+}
+
+// ─── Late Fee Waivers ─────────────────────────────────────────────────────────
+
+model LateFeeWaiver {
+  id             String   @id @default(cuid())
+  tenantId       String
+  studentId      String
+  feeStructureId String
+  academicYear   String
+  waivedById     String
+  createdAt      DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeStructure FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  waivedBy     User         @relation("LateFeeWaivedBy", fields: [waivedById], references: [id])
+
+  @@unique([tenantId, studentId, feeStructureId, academicYear])
+  @@index([tenantId, studentId])
+  @@map("late_fee_waivers")
+}
+
+// ─── Class Join Requests (Student Self-Registration) ─────────────────────────
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ClassJoinRequest {
+  id           String            @id @default(cuid())
+  tenantId     String
+  classId      String
+  firstName    String
+  lastName     String
+  dateOfBirth  DateTime?         @db.Date
+  parentPhone  String
+  email        String
+  status       JoinRequestStatus @default(PENDING)
+  reviewedAt   DateTime?
+  reviewedById String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  reviewedBy User?    @relation("JoinRequestReviewer", fields: [reviewedById], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, classId, status])
+  @@map("class_join_requests")
+}
+
+// ─── Student Activities ───────────────────────────────────────────────────────
+
+enum ActivityType {
+  DISCIPLINARY
+  ACHIEVEMENT
+  REMARK
+}
+
+model StudentActivity {
+  id          String       @id @default(cuid())
+  tenantId    String
+  studentId   String
+  type        ActivityType
+  title       String
+  description String?
+  date        DateTime     @db.Date
+  addedById   String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  addedBy   User    @relation("ActivityAddedBy", fields: [addedById], references: [id])
+
+  @@index([tenantId, studentId])
+  @@map("student_activities")
 }

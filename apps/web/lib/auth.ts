@@ -9,6 +9,7 @@ export interface AuthUser {
   tenantId: string | null;
   tenantStatus: string | null;
   tenantSlug: string | null;
+  mustChangePassword?: boolean;
 }
 
 export function getUser(): AuthUser | null {

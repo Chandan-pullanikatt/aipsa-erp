@@ -21,7 +21,11 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', form);
       setAuth(data.user);
-      router.push(getDashboardPath(data.user.role));
+      if (data.user.mustChangePassword) {
+        router.push('/change-password');
+      } else {
+        router.push(getDashboardPath(data.user.role));
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {
@@ -33,7 +37,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">AIPSA ERP</h1>
+          <h1 className="text-3xl font-bold text-gray-900">AIPSA Digital School</h1>
           <p className="text-gray-500 mt-1">Sign in to your account</p>
         </div>
 
@@ -104,6 +108,10 @@ export default function LoginPage() {
           <p className="text-center text-sm text-gray-500 mt-2">
             Teacher or Parent?{' '}
             <Link href="/join" className="text-blue-600 hover:underline font-medium">Join with school code</Link>
+          </p>
+          <p className="text-center text-sm text-gray-500 mt-2">
+            New Student?{' '}
+            <Link href="/student-join" className="text-blue-600 hover:underline font-medium">Register with class code</Link>
           </p>
         </div>
       </div>

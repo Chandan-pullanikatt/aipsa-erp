@@ -7,7 +7,7 @@ import { Plus, Pencil, Trash2, X, Search, DollarSign, Calendar, FileText, CheckC
 type Tab = 'structure' | 'collect' | 'history' | 'dues';
 
 interface FeeCategory { id: string; name: string; description: string | null; _count: { structures: number; payments: number }; }
-interface FeeStructure { id: string; feeCategoryId: string; feeCategory: { name: string }; class: { name: string } | null; amount: number; frequency: string; }
+interface FeeStructure { id: string; feeCategoryId: string; feeCategory: { name: string }; class: { name: string } | null; amount: number; frequency: string; dueDate: string | null; }
 interface ClassItem { id: string; name: string; }
 interface StudentSummary { id: string; firstName: string; lastName: string; admissionNumber: string; }
 interface Payment { id: string; receiptNumber: string; amount: number; method: string; paidAt: string; month: string | null; feeCategory: { name: string }; student: { firstName: string; lastName: string; admissionNumber: string }; }
@@ -58,7 +58,7 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
   const [categories, setCategories] = useState<FeeCategory[]>([]);
   const [structures, setStructures] = useState<FeeStructure[]>([]);
   const [newCat, setNewCat] = useState({ name: '', description: '' });
-  const [newStruct, setNewStruct] = useState({ feeCategoryId: '', classId: '', amount: '', frequency: 'MONTHLY' });
+  const [newStruct, setNewStruct] = useState({ feeCategoryId: '', classId: '', amount: '', frequency: 'MONTHLY', dueDate: '' });
   const [editCat, setEditCat] = useState<{ id: string; name: string } | null>(null);
   const [showAddStruct, setShowAddStruct] = useState(false);
   const [error, setError] = useState('');
@@ -78,7 +78,7 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
 
   async function addStructure(e: React.FormEvent) {
     e.preventDefault(); setError('');
-    try { await api.post('/fees/structures', newStruct); setNewStruct({ feeCategoryId: '', classId: '', amount: '', frequency: 'MONTHLY' }); setShowAddStruct(false); load(); }
+    try { await api.post('/fees/structures', newStruct); setNewStruct({ feeCategoryId: '', classId: '', amount: '', frequency: 'MONTHLY', dueDate: '' }); setShowAddStruct(false); load(); }
     catch (err: any) { setError(err.response?.data?.error || 'Error'); }
   }
 
@@ -175,6 +175,13 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
                   {Object.entries(FREQ_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1 font-body">
+                  Due Date <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                </label>
+                <input type="date" value={newStruct.dueDate} onChange={e => setNewStruct({ ...newStruct, dueDate: e.target.value })}
+                  className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all font-body" />
+              </div>
             </div>
             <div className="flex gap-3 pt-2 border-t border-[#E5E7EB]">
               <button type="submit" className="px-4 py-2 bg-[#1D7A4A] hover:bg-[#155D37] text-white rounded-lg text-sm font-semibold transition-colors">Save Structure</button>
@@ -191,6 +198,7 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Class</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Amount</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Frequency</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Due Date</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -205,8 +213,17 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
                       {FREQ_LABEL[s.frequency]}
                     </span>
                   </td>
+                  <td className="px-4 py-3.5 text-sm font-body">
+                    {s.dueDate ? (
+                      <span className="font-semibold text-[#1A1D23]">
+                        {new Date(s.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 italic text-xs">Not set</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3.5 text-right">
-                    <button onClick={() => api.delete(`/fees/structures/${s.id}`).then(() => load()).catch(e => setError(e.response?.data?.error || 'Error'))} 
+                    <button onClick={() => api.delete(`/fees/structures/${s.id}`).then(() => load()).catch(e => setError(e.response?.data?.error || 'Error'))}
                       className="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition-colors" title="Remove Structure">
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                     </button>
@@ -215,7 +232,7 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
               ))}
               {structures.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-gray-400 py-10 font-body">
+                  <td colSpan={6} className="text-center text-gray-400 py-10 font-body">
                     No fee structures yet. Add a class-specific or global fee structure above.
                   </td>
                 </tr>

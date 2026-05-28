@@ -18,7 +18,9 @@ api.interceptors.response.use(
       '/auth/join',
       '/auth/forgot-password',
       '/auth/reset-password',
-      '/auth/accept-invite'
+      '/auth/accept-invite',
+      '/auth/student-join',
+      '/auth/class-code',
     ];
     const isPublicAuthRoute = publicAuthEndpoints.some(route => err.config?.url?.includes(route));
 

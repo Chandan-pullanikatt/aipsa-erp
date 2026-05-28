@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
-import { ClipboardCheck, FileText, BarChart3, CalendarDays, ArrowRight, Clock } from 'lucide-react';
+import { ClipboardCheck, FileText, BarChart3, CalendarDays, ArrowRight, Clock, UserPlus } from 'lucide-react';
 
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 
@@ -47,6 +47,7 @@ export default function TeacherDashboard() {
   const [user, setUser] = useState<any>(null);
   const [todayPeriods, setTodayPeriods] = useState<any[]>([]);
   const [recentHW, setRecentHW] = useState<any[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     const u = getUser();
@@ -62,6 +63,11 @@ export default function TeacherDashboard() {
     // Recent homework
     api.get('/homework', { params: { limit: 4 } })
       .then(r => setRecentHW(r.data.items))
+      .catch(console.error);
+
+    // Pending join requests count
+    api.get('/sis/join-requests', { params: { status: 'PENDING', limit: 1 } })
+      .then(r => setPendingCount(r.data.total))
       .catch(console.error);
   }, []);
 
@@ -128,6 +134,25 @@ export default function TeacherDashboard() {
           })}
         </div>
       </div>
+
+      {/* Pending join requests alert */}
+      {pendingCount > 0 && (
+        <Link
+          href="/teacher/join-requests"
+          className="flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-xl p-4 hover:bg-amber-100 transition-colors group"
+        >
+          <div className="p-2.5 rounded-lg bg-amber-100 shrink-0">
+            <UserPlus className="w-5 h-5 text-amber-700" strokeWidth={1.75} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-800 text-sm font-display">
+              {pendingCount} Student Registration Request{pendingCount !== 1 ? 's' : ''} Pending
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5 font-body">Review and approve students who registered with your class code.</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-amber-400 group-hover:text-amber-600 transition-colors shrink-0" strokeWidth={1.75} />
+        </Link>
+      )}
 
       {/* Recent homework */}
       {recentHW.length > 0 && (

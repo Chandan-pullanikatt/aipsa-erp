@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { body, validationResult } = require('express-validator');
 const authService = require('../services/auth.service');
+const sisService = require('../services/sis.service');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
 
@@ -125,5 +126,43 @@ router.post('/link-student',
     } catch (err) { next(err); }
   }
 );
+
+// POST /api/auth/change-password — authenticated, used on forced first-login change
+router.post('/change-password',
+  authenticate,
+  [
+    body('currentPassword').notEmpty(),
+    body('newPassword').isLength({ min: 8 }),
+  ], validate,
+  async (req, res, next) => {
+    try {
+      const result = await authService.changePassword(req.user.id, req.body);
+      res.json(result);
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /api/auth/class-code/:code — public, lookup class info for confirmation step
+router.get('/class-code/:code', async (req, res, next) => {
+  try {
+    const result = await sisService.lookupClassByJoinCode(req.params.code.toUpperCase());
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/student-join — public, submit self-registration request
+router.post('/student-join', [
+  body('joinCode').trim().notEmpty(),
+  body('firstName').trim().notEmpty(),
+  body('lastName').trim().notEmpty(),
+  body('parentPhone').trim().notEmpty(),
+  body('email').isEmail().normalizeEmail(),
+], validate, async (req, res, next) => {
+  try {
+    const { joinCode, ...data } = req.body;
+    const result = await sisService.createStudentJoinRequest(joinCode.toUpperCase(), data);
+    res.status(201).json({ message: 'Registration request submitted. Your class teacher will review it shortly.', request: result });
+  } catch (err) { next(err); }
+});
 
 module.exports = router;
