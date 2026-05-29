@@ -290,7 +290,7 @@ function ParentDashboardContent() {
     setLoadingData(true);
     try {
       const { data } = await api.get('/communication/announcements');
-      setAnnouncements(data);
+      setAnnouncements(data.items || []);
     } catch (err) {
       console.error(err);
       setAnnouncements([]);

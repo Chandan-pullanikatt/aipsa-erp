@@ -291,7 +291,7 @@ function StudentPortalContent() {
     setLoadingData(true);
     try {
       const { data } = await api.get('/communication/announcements');
-      setAnnouncements(data);
+      setAnnouncements(data.items || []);
     } catch (err) {
       console.error(err);
       setAnnouncements([]);
@@ -319,7 +319,7 @@ function StudentPortalContent() {
       if (attRes.status === 'fulfilled') setAttendance(attRes.value.data);
       if (feeRes.status === 'fulfilled') setFees(feeRes.value.data);
       if (hwRes.status === 'fulfilled') setHomeworks(hwRes.value.data.items);
-      if (annRes.status === 'fulfilled') setAnnouncements(annRes.value.data);
+      if (annRes.status === 'fulfilled') setAnnouncements(annRes.value.data.items || []);
     } catch (err) {
       console.error(err);
     } finally {
