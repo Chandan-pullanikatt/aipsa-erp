@@ -109,6 +109,9 @@ async function verifyPayment(tenantId, userId, { razorpay_order_id, razorpay_pay
 }
 
 async function getStatus(tenantId, userId) {
+  if (!prisma.premiumLmsSubscription) {
+    return { isPremium: false, academicYear: currentAcademicYear() };
+  }
   const student = await prisma.student.findFirst({
     where: { tenantId, userId },
     select: { id: true },

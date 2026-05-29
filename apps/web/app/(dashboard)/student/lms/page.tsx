@@ -80,15 +80,19 @@ export default function StudentLmsPage() {
   useEffect(() => {
     async function loadSubjects() {
       try {
-        const [subjectsRes, premiumRes] = await Promise.all([
+        const [subjectsRes, premiumRes] = await Promise.allSettled([
           api.get('/lms/subjects'),
           api.get('/lms/premium/status'),
         ]);
-        setSubjects(subjectsRes.data);
-        setIsPremium(premiumRes.data.isPremium);
-        if (subjectsRes.data.length > 0) setSelectedSubject(subjectsRes.data[0]);
-      } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to fetch subjects.');
+        if (subjectsRes.status === 'fulfilled') {
+          setSubjects(subjectsRes.value.data);
+          if (subjectsRes.value.data.length > 0) setSelectedSubject(subjectsRes.value.data[0]);
+        } else {
+          setError(subjectsRes.reason?.response?.data?.error || 'Failed to fetch subjects.');
+        }
+        if (premiumRes.status === 'fulfilled') {
+          setIsPremium(premiumRes.value.data.isPremium);
+        }
       } finally {
         setLoadingSubjects(false);
       }
