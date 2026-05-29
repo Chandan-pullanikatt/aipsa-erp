@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Activity,
   IndianRupee,
+  GraduationCap,
 } from 'lucide-react';
 
 interface Profile {
@@ -30,12 +31,13 @@ interface Profile {
   establishedYear: string;
   lateFeeAmount: string;
   lateFeeGraceDays: string;
+  premiumLmsPrice: string;
 }
 
 const EMPTY: Profile = {
   schoolName: '', address: '', city: '', state: '', country: 'India',
   phone: '', email: '', website: '', board: '', establishedYear: '',
-  lateFeeAmount: '0', lateFeeGraceDays: '0',
+  lateFeeAmount: '0', lateFeeGraceDays: '0', premiumLmsPrice: '',
 };
 
 export default function SchoolProfilePage() {
@@ -61,6 +63,7 @@ export default function SchoolProfilePage() {
           establishedYear: r.data.establishedYear ? String(r.data.establishedYear) : '',
           lateFeeAmount: String(r.data.lateFeeAmount ?? 0),
           lateFeeGraceDays: String(r.data.lateFeeGraceDays ?? 0),
+          premiumLmsPrice: r.data.premiumLmsPrice != null ? String(r.data.premiumLmsPrice) : '',
         });
       }
     }).catch(console.error).finally(() => setLoading(false));
@@ -77,6 +80,7 @@ export default function SchoolProfilePage() {
         establishedYear: form.establishedYear ? parseInt(form.establishedYear) : undefined,
         lateFeeAmount: parseFloat(form.lateFeeAmount) || 0,
         lateFeeGraceDays: parseInt(form.lateFeeGraceDays) || 0,
+        premiumLmsPrice: form.premiumLmsPrice !== '' ? parseFloat(form.premiumLmsPrice) : null,
       });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -216,6 +220,32 @@ export default function SchoolProfilePage() {
                   className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-10 pr-3.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Premium LMS */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-[#F3F4F6]">
+            <GraduationCap className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+            <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">Premium LMS Pricing</h3>
+          </div>
+          <p className="text-xs text-[#6B7280] font-body leading-relaxed">
+            Set the annual fee students pay to unlock premium recorded class videos. Leave blank to disable premium LMS for this school.
+          </p>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Annual Premium LMS Price (₹)</label>
+            <div className="relative flex items-center">
+              <div className="absolute left-3 text-[#9CA3AF] pointer-events-none">
+                <IndianRupee className="w-4 h-4" strokeWidth={1.75} />
+              </div>
+              <input
+                type="number" min="0" step="1"
+                value={form.premiumLmsPrice}
+                onChange={(e) => setForm({ ...form, premiumLmsPrice: e.target.value })}
+                placeholder="e.g. 999 — leave blank to disable"
+                className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-10 pr-3.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
+              />
             </div>
           </div>
         </div>

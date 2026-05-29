@@ -23,15 +23,29 @@ async function listLmsSubjects(tenantId, filters = {}) {
   });
 }
 
-async function getSubjectMaterials(tenantId, subjectId, userId) {
+async function getSubjectMaterials(tenantId, subjectId, userId, isPremiumStudent = false) {
   const subject = await prisma.subject.findFirst({
     where: { id: subjectId, tenantId },
   });
   if (!subject) throw Object.assign(new Error('Subject not found'), { status: 404 });
 
-  const materials = await prisma.lmsMaterial.findMany({
+  const allMaterials = await prisma.lmsMaterial.findMany({
     where: { tenantId, subjectId },
     orderBy: { sequence: 'asc' },
+  });
+
+  // For students/parents: hide premium video content unless they've paid
+  const materials = allMaterials.map(m => {
+    if (m.isPremium && !isPremiumStudent) {
+      // Return stub — title/description visible to entice upgrade, url hidden
+      return {
+        ...m,
+        attachmentUrl: null,
+        educationalLinks: null,
+        locked: true,
+      };
+    }
+    return { ...m, locked: false };
   });
 
   if (!userId) return materials;
@@ -84,7 +98,7 @@ async function createMaterial(tenantId, subjectId, data) {
   });
   if (!subject) throw Object.assign(new Error('Subject not found'), { status: 404 });
 
-  const { title, description, sequence, attachmentUrl, educationalLinks } = data;
+  const { title, description, sequence, attachmentUrl, educationalLinks, isPremium, isFreePreview } = data;
 
   return prisma.lmsMaterial.create({
     data: {
@@ -95,6 +109,8 @@ async function createMaterial(tenantId, subjectId, data) {
       sequence: sequence !== undefined ? parseInt(sequence) : 0,
       attachmentUrl: attachmentUrl ? attachmentUrl.trim() : null,
       educationalLinks: educationalLinks || null,
+      isPremium: isPremium === true || isPremium === 'true',
+      isFreePreview: isFreePreview === true || isFreePreview === 'true',
     },
   });
 }
@@ -105,7 +121,7 @@ async function updateMaterial(tenantId, id, data) {
   });
   if (!material) throw Object.assign(new Error('Material not found'), { status: 404 });
 
-  const { title, description, sequence, attachmentUrl, educationalLinks } = data;
+  const { title, description, sequence, attachmentUrl, educationalLinks, isPremium, isFreePreview } = data;
 
   return prisma.lmsMaterial.update({
     where: { id },
@@ -115,6 +131,8 @@ async function updateMaterial(tenantId, id, data) {
       ...(sequence !== undefined && { sequence: parseInt(sequence) }),
       ...(attachmentUrl !== undefined && { attachmentUrl: attachmentUrl ? attachmentUrl.trim() : null }),
       ...(educationalLinks !== undefined && { educationalLinks: educationalLinks || null }),
+      ...(isPremium !== undefined && { isPremium: isPremium === true || isPremium === 'true' }),
+      ...(isFreePreview !== undefined && { isFreePreview: isFreePreview === true || isFreePreview === 'true' }),
     },
   });
 }

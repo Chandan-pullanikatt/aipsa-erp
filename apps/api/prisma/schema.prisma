@@ -43,6 +43,7 @@ model Tenant {
   classJoinRequests    ClassJoinRequest[]
   lateFeeWaivers       LateFeeWaiver[]
   studentActivities    StudentActivity[]
+  premiumLmsSubscriptions PremiumLmsSubscription[]
 
   @@map("tenants")
 }
@@ -71,6 +72,7 @@ model SchoolProfile {
   establishedYear   Int?
   lateFeeAmount     Float    @default(0)
   lateFeeGraceDays  Int      @default(0)
+  premiumLmsPrice   Float?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -255,6 +257,7 @@ model Student {
   homeworkSubmissions HomeworkSubmission[]
   lateFeeWaivers      LateFeeWaiver[]
   activities          StudentActivity[]
+  premiumLmsSubscriptions PremiumLmsSubscription[]
 
   @@unique([tenantId, admissionNumber])
   @@index([tenantId])
@@ -668,6 +671,8 @@ model LmsMaterial {
   sequence         Int      @default(0)
   attachmentUrl    String?
   educationalLinks Json?    // Array of { title: string, url: string }
+  isPremium        Boolean  @default(false)
+  isFreePreview    Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -677,6 +682,28 @@ model LmsMaterial {
 
   @@index([tenantId, subjectId])
   @@map("lms_materials")
+}
+
+// ─── Premium LMS Subscriptions ───────────────────────────────────────────────
+
+model PremiumLmsSubscription {
+  id                String    @id @default(cuid())
+  tenantId          String
+  studentId         String
+  academicYear      String
+  amount            Float
+  razorpayOrderId   String    @unique
+  razorpayPaymentId String?
+  status            String    @default("PENDING")
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, studentId, academicYear])
+  @@index([tenantId, studentId])
+  @@map("premium_lms_subscriptions")
 }
 
 model LmsMaterialProgress {

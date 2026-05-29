@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
 const lms = require('../services/lms.service');
+const premiumLms = require('../services/premiumLms.service');
 const prisma = require('../lib/prisma');
 
 const router = Router();
@@ -69,7 +70,14 @@ router.get('/subjects', async (req, res, next) => {
 router.get('/subjects/:subjectId/materials', async (req, res, next) => {
   try {
     const userId = ['STUDENT', 'PARENT'].includes(req.user.role) ? req.user.id : null;
-    const materials = await lms.getSubjectMaterials(req.tenant.id, req.params.subjectId, userId);
+    let isPremiumStudent = false;
+    if (req.user.role === 'STUDENT') {
+      const status = await premiumLms.getStatus(req.tenant.id, req.user.id);
+      isPremiumStudent = status.isPremium;
+    } else if (req.user.role === 'SCHOOL_ADMIN' || req.user.role === 'TEACHER') {
+      isPremiumStudent = true; // admins/teachers see everything
+    }
+    const materials = await lms.getSubjectMaterials(req.tenant.id, req.params.subjectId, userId, isPremiumStudent);
     res.json(materials);
   } catch (err) { next(err); }
 });
@@ -116,6 +124,34 @@ router.put('/materials/:id', adminOrTeacher, [
 router.delete('/materials/:id', adminOrTeacher, async (req, res, next) => {
   try {
     const result = await lms.deleteMaterial(req.tenant.id, req.params.id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// GET /api/lms/premium/status  (student only)
+router.get('/premium/status', authorize('STUDENT'), async (req, res, next) => {
+  try {
+    const status = await premiumLms.getStatus(req.tenant.id, req.user.id);
+    res.json(status);
+  } catch (err) { next(err); }
+});
+
+// POST /api/lms/premium/initiate  (student only)
+router.post('/premium/initiate', authorize('STUDENT'), async (req, res, next) => {
+  try {
+    const order = await premiumLms.initiatePayment(req.tenant.id, req.user.id);
+    res.json(order);
+  } catch (err) { next(err); }
+});
+
+// POST /api/lms/premium/verify  (student only)
+router.post('/premium/verify', authorize('STUDENT'), [
+  body('razorpay_order_id').notEmpty(),
+  body('razorpay_payment_id').notEmpty(),
+  body('razorpay_signature').notEmpty(),
+], validate, async (req, res, next) => {
+  try {
+    const result = await premiumLms.verifyPayment(req.tenant.id, req.user.id, req.body);
     res.json(result);
   } catch (err) { next(err); }
 });

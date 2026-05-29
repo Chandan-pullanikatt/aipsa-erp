@@ -19,6 +19,8 @@ interface LmsMaterial {
   sequence: number;
   attachmentUrl: string | null;
   educationalLinks: { title: string; url: string }[] | null;
+  isPremium: boolean;
+  isFreePreview: boolean;
   createdAt: string;
 }
 
@@ -40,6 +42,8 @@ export default function TeacherLmsPage() {
   const [sequence, setSequence] = useState('0');
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [educationalLinks, setEducationalLinks] = useState<{ title: string; url: string }[]>([]);
+  const [isPremium, setIsPremium] = useState(false);
+  const [isFreePreview, setIsFreePreview] = useState(false);
 
   // Temp Inputs
   const [tempLinkTitle, setTempLinkTitle] = useState('');
@@ -93,6 +97,8 @@ export default function TeacherLmsPage() {
     setSequence(String(materials.length * 10)); // Auto-suggest sequence by 10s
     setAttachmentUrl('');
     setEducationalLinks([]);
+    setIsPremium(false);
+    setIsFreePreview(false);
     setTempLinkTitle('');
     setTempLinkLabel('');
     setModalOpen(true);
@@ -105,6 +111,8 @@ export default function TeacherLmsPage() {
     setSequence(String(mat.sequence));
     setAttachmentUrl(mat.attachmentUrl || '');
     setEducationalLinks(mat.educationalLinks || []);
+    setIsPremium(mat.isPremium);
+    setIsFreePreview(mat.isFreePreview);
     setTempLinkTitle('');
     setTempLinkLabel('');
     setModalOpen(true);
@@ -134,6 +142,8 @@ export default function TeacherLmsPage() {
         sequence: parseInt(sequence) || 0,
         attachmentUrl: attachmentUrl || null,
         educationalLinks: educationalLinks.length > 0 ? educationalLinks : null,
+        isPremium,
+        isFreePreview: isPremium ? isFreePreview : false,
       };
 
       if (editingMaterial) {
@@ -292,6 +302,16 @@ export default function TeacherLmsPage() {
                             SEQ {mat.sequence}
                           </span>
                           <h4 className="font-semibold text-gray-800 text-base leading-snug font-display">{mat.title}</h4>
+                          {mat.isPremium && (
+                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                              Premium
+                            </span>
+                          )}
+                          {mat.isFreePreview && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                              Free Preview
+                            </span>
+                          )}
                         </div>
 
                         {mat.description && (
@@ -429,6 +449,30 @@ export default function TeacherLmsPage() {
                   onChange={(e) => setAttachmentUrl(e.target.value)}
                   className="w-full border border-[#E5E7EB] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] bg-white text-[#1A1D23]"
                 />
+              </div>
+
+              <div className="border border-amber-100 bg-amber-50/60 rounded-xl p-4 space-y-3">
+                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider font-display">Premium Video Settings</p>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPremium}
+                    onChange={(e) => { setIsPremium(e.target.checked); if (!e.target.checked) setIsFreePreview(false); }}
+                    className="w-4 h-4 accent-amber-600"
+                  />
+                  <span className="text-xs font-semibold text-gray-700 font-body">Mark as Premium (students must pay to see links)</span>
+                </label>
+                {isPremium && (
+                  <label className="flex items-center gap-3 cursor-pointer ml-6">
+                    <input
+                      type="checkbox"
+                      checked={isFreePreview}
+                      onChange={(e) => setIsFreePreview(e.target.checked)}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    <span className="text-xs font-semibold text-gray-700 font-body">Also show as Free Preview (visible to non-paying students)</span>
+                  </label>
+                )}
               </div>
 
               <div className="border-t border-gray-100 pt-4 space-y-3">
