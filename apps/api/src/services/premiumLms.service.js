@@ -2,10 +2,16 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+let _razorpay = null;
+function getRazorpay() {
+  if (!_razorpay) {
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      throw Object.assign(new Error('Razorpay credentials not configured'), { status: 503 });
+    }
+    _razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+  }
+  return _razorpay;
+}
 
 function currentAcademicYear() {
   const now = new Date();
@@ -40,7 +46,7 @@ async function initiatePayment(tenantId, userId) {
   }
 
   const amountPaise = Math.round(price * 100);
-  const order = await razorpay.orders.create({
+  const order = await getRazorpay().orders.create({
     amount: amountPaise,
     currency: 'INR',
     receipt: `lms_${student.id}_${academicYear}`.slice(0, 40),
