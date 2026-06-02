@@ -41,14 +41,22 @@ export default function ClassesPage() {
   const [addingSectionFor, setAddingSectionFor] = useState<string | null>(null);
   const [editingClass, setEditingClass] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [generatingCodeFor, setGeneratingCodeFor] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   async function fetchClasses() {
-    const { data } = await api.get('/sis/classes');
-    setClasses(data);
-    setLoading(false);
+    try {
+      const { data } = await api.get('/sis/classes');
+      setClasses(data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load classes.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function fetchSections(classId: string) {
@@ -69,13 +77,23 @@ export default function ClassesPage() {
 
   async function handleAddClass(e: React.FormEvent) {
     e.preventDefault();
-    if (!newClassName.trim()) return;
+    setFormError('');
+    setSuccessMsg('');
+    if (!newClassName.trim()) {
+      setFormError('Please enter a class name.');
+      return;
+    }
+    setSubmitting(true);
     try {
       await api.post('/sis/classes', { name: newClassName.trim() });
       setNewClassName('');
-      fetchClasses();
+      setSuccessMsg(`Class added successfully.`);
+      setTimeout(() => setSuccessMsg(''), 3000);
+      await fetchClasses();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create class.');
+      setFormError(err.response?.data?.error || `Failed to create class. (${err.message})`);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -164,18 +182,28 @@ export default function ClassesPage() {
       )}
 
       {/* Add class Form */}
-      <form onSubmit={handleAddClass} className="flex gap-2.5 bg-[#F9FAFB] p-3 border border-[#E5E7EB] rounded-xl shadow-sm">
-        <input
-          value={newClassName}
-          onChange={(e) => setNewClassName(e.target.value)}
-          placeholder="New class name (e.g. Class 1)"
-          className="flex-1 border border-[#E5E7EB] rounded-lg px-3.5 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
-        />
-        <button type="submit" className="px-4 py-2 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-sm font-bold transition-all inline-flex items-center gap-1.5 shadow-sm">
-          <Plus className="w-4 h-4" strokeWidth={2.25} />
-          Add Class
-        </button>
-      </form>
+      <div className="space-y-2">
+        <form onSubmit={handleAddClass} className={`flex gap-2.5 bg-[#F9FAFB] p-3 border rounded-xl shadow-sm ${formError ? 'border-[#FCA5A5]' : 'border-[#E5E7EB]'}`}>
+          <input
+            type="text"
+            autoFocus
+            value={newClassName}
+            onChange={(e) => { setNewClassName(e.target.value); setFormError(''); }}
+            placeholder="New class name (e.g. Class 1)"
+            className={`flex-1 border rounded-lg px-3.5 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 transition-all ${formError ? 'border-[#FCA5A5] focus:ring-red-200 focus:border-red-400' : 'border-[#E5E7EB] focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]'}`}
+          />
+          <button type="submit" disabled={submitting} className="cursor-pointer px-4 py-2 bg-[#1D7A4A] hover:bg-[#155B37] disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold transition-all inline-flex items-center gap-1.5 shadow-sm">
+            <Plus className="w-4 h-4" strokeWidth={2.25} />
+            {submitting ? 'Adding...' : 'Add Class'}
+          </button>
+        </form>
+        {formError && (
+          <p className="text-xs text-[#DC2626] font-semibold px-1">{formError}</p>
+        )}
+        {successMsg && (
+          <p className="text-xs text-[#1D7A4A] font-semibold px-1">{successMsg}</p>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm font-semibold text-[#1D7A4A] bg-[#E5F6EE] px-4 py-3 rounded-lg border border-[#26A96B]/10 animate-pulse w-fit">
@@ -208,10 +236,10 @@ export default function ClassesPage() {
                   </span>
                 </button>
                 <div className="flex items-center border-l border-[#E5E7EB] pl-3 gap-1">
-                  <button onClick={() => setEditingClass({ id: cls.id, name: cls.name })} className="p-1.5 rounded-md hover:bg-[#F3F4F6] text-[#4B5563] hover:text-[#1D7A4A] transition-all">
+                  <button onClick={() => setEditingClass({ id: cls.id, name: cls.name })} className="cursor-pointer p-1.5 rounded-md hover:bg-[#F3F4F6] text-[#4B5563] hover:text-[#1D7A4A] transition-all">
                     <Edit2 className="w-3.5 h-3.5" strokeWidth={2} />
                   </button>
-                  <button onClick={() => handleDeleteClass(cls.id)} className="p-1.5 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
+                  <button onClick={() => handleDeleteClass(cls.id)} className="cursor-pointer p-1.5 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
                     <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
                   </button>
                 </div>
@@ -220,12 +248,13 @@ export default function ClassesPage() {
               {editingClass?.id === cls.id && (
                 <form onSubmit={handleUpdateClass} className="px-4 pb-3.5 flex gap-2 border-t border-[#F3F4F6] pt-3 bg-[#F9FAFB]/50">
                   <input
+                    type="text"
                     value={editingClass.name}
                     onChange={(e) => setEditingClass({ ...editingClass, name: e.target.value })}
                     className="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
                   />
-                  <button type="submit" className="px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm">Save</button>
-                  <button type="button" onClick={() => setEditingClass(null)} className="px-3.5 py-1.5 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
+                  <button type="submit" className="cursor-pointer px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm">Save</button>
+                  <button type="button" onClick={() => setEditingClass(null)} className="cursor-pointer px-3.5 py-1.5 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
                 </form>
               )}
 
@@ -244,7 +273,7 @@ export default function ClassesPage() {
                         </code>
                         <button
                           onClick={() => handleCopyCode(cls.joinCode!)}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1.5 bg-white hover:bg-gray-50 transition-colors"
+                          className="cursor-pointer flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1.5 bg-white hover:bg-gray-50 transition-colors"
                         >
                           {copiedCode === cls.joinCode ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                           {copiedCode === cls.joinCode ? 'Copied!' : 'Copy'}
@@ -295,14 +324,15 @@ export default function ClassesPage() {
                   {addingSectionFor === cls.id ? (
                     <form onSubmit={(e) => handleAddSection(e, cls.id)} className="flex gap-2.5 pt-1">
                       <input
+                        type="text"
                         value={newSectionName}
                         onChange={(e) => setNewSectionName(e.target.value)}
                         placeholder="Section name (e.g. A)"
                         className="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all"
                         autoFocus
                       />
-                      <button type="submit" className="px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm">Add</button>
-                      <button type="button" onClick={() => setAddingSectionFor(null)} className="px-3.5 py-1.5 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
+                      <button type="submit" className="cursor-pointer px-3.5 py-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-lg text-xs font-bold transition-all shadow-sm">Add</button>
+                      <button type="button" onClick={() => setAddingSectionFor(null)} className="cursor-pointer px-3.5 py-1.5 border border-[#E5E7EB] hover:bg-white bg-gray-50 rounded-lg text-xs font-semibold text-[#4B5563] transition-all">Cancel</button>
                     </form>
                   ) : (
                     <button onClick={() => { setAddingSectionFor(cls.id); setNewSectionName(''); }} className="inline-flex items-center gap-1 text-xs font-bold text-[#1D7A4A] hover:text-[#155B37] transition-all">

@@ -24,6 +24,7 @@ import {
   LogOut,
   LayoutDashboard,
   UserPlus,
+  Layers,
 } from 'lucide-react';
 
 interface NavItem {
@@ -46,6 +47,7 @@ const ICON_MAP = {
   'LMS / Curriculum': BookOpen,
   Staff: UserCog,
   'School Profile': Settings2,
+  'Manage Classes': Layers,
   // Other roles
   'Join Requests': UserPlus,
   'Marks Entry': ClipboardList,
@@ -66,6 +68,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
     items = [
       { label: 'Dashboard', href: '/school', available: true },
       { label: 'Students', href: '/school/students', available: true },
+      { label: 'Manage Classes', href: '/school/students/classes', available: true },
       { label: 'Attendance', href: '/school/attendance', available: true },
       { label: 'Fee Management', href: '/school/fees', available: true },
       { label: 'Examinations', href: '/school/exams', available: true },
@@ -130,7 +133,7 @@ function groupNavItems(items: NavItem[], role: AuthUser['role']): { standalone: 
 
   const dashboard = items.find(i => i.label === 'Dashboard');
 
-  const academicsList = ['Students', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Timetable'];
+  const academicsList = ['Students', 'Manage Classes', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Timetable'];
   const financeList = ['Fee Management'];
   const operationsList = ['Staff'];
   const managementList = ['Communication', 'School Profile'];
