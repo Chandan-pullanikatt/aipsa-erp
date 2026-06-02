@@ -8,20 +8,23 @@ function generatePortalPin() {
 
 // ─── Classes ─────────────────────────────────────────────────────────────────
 
+const CLASS_INCLUDE = {
+  _count: { select: { sections: true, students: true } },
+  inchargeTeacher: { select: { id: true, firstName: true, lastName: true } },
+};
+
 async function listClasses(tenantId) {
   return prisma.class.findMany({
     where: { tenantId },
     orderBy: { name: 'asc' },
-    include: {
-      _count: { select: { sections: true, students: true } },
-    },
+    include: CLASS_INCLUDE,
   });
 }
 
 async function createClass(tenantId, { name }) {
   return prisma.class.create({
     data: { tenantId, name: name.trim() },
-    include: { _count: { select: { sections: true, students: true } } },
+    include: CLASS_INCLUDE,
   });
 }
 
@@ -31,8 +34,17 @@ async function updateClass(tenantId, id, { name }) {
   return prisma.class.update({
     where: { id },
     data: { name: name.trim() },
-    include: { _count: { select: { sections: true, students: true } } },
+    include: CLASS_INCLUDE,
   });
+}
+
+async function patchClass(tenantId, classId, { name, inchargeTeacherId }) {
+  const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
+  if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
+  const data = {};
+  if (name !== undefined) data.name = name.trim();
+  if (inchargeTeacherId !== undefined) data.inchargeTeacherId = inchargeTeacherId || null;
+  return prisma.class.update({ where: { id: classId }, data, include: CLASS_INCLUDE });
 }
 
 async function deleteClass(tenantId, id) {
@@ -621,7 +633,7 @@ async function deleteStudentActivity(tenantId, activityId, requesterId, requeste
 }
 
 module.exports = {
-  listClasses, createClass, updateClass, deleteClass,
+  listClasses, createClass, updateClass, deleteClass, patchClass,
   listSections, createSection, updateSection, deleteSection,
   listStudents, getStudent, createStudent, updateStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,

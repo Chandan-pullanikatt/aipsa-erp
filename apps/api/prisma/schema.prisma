@@ -115,6 +115,7 @@ model User {
   gradedSubmissions     HomeworkSubmission[]  @relation("HomeworkGrader")
   reviewedJoinRequests  ClassJoinRequest[] @relation("JoinRequestReviewer")
   lateFeeWaivers        LateFeeWaiver[]    @relation("LateFeeWaivedBy")
+  inchargeClasses       Class[]           @relation("ClassIncharge")
   addedActivities       StudentActivity[]  @relation("ActivityAddedBy")
 
   @@map("users")
@@ -170,10 +171,12 @@ model Class {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  joinCode      String?        @unique
+  joinCode              String?   @unique
+  inchargeTeacherId     String?
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sections      Section[]
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inchargeTeacher User?     @relation("ClassIncharge", fields: [inchargeTeacherId], references: [id], onDelete: SetNull)
+  sections        Section[]
   students      Student[]
   attendance    Attendance[]
   feeStructures FeeStructure[]

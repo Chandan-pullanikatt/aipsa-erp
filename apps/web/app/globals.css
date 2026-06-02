@@ -182,6 +182,16 @@ input.pl-10 {
   padding-left: 2.5rem !important;
 }
 
+input[type].pl-9,
+input.pl-9 {
+  padding-left: 2.25rem !important;
+}
+
+input[type].pl-8,
+input.pl-8 {
+  padding-left: 2rem !important;
+}
+
 /* Label styling */
 label {
   font-family: 'DM Sans', sans-serif !important;

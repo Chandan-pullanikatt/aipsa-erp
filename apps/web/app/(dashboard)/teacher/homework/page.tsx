@@ -71,7 +71,7 @@ export default function TeacherHomeworkPage() {
     setLoadingClasses(true);
     api.get('/homework/my-classes')
       .then((r) => setClasses(r.data))
-      .catch(() => setError('Failed to load assigned classes.'))
+      .catch((err) => setError(err.response?.data?.error || `Failed to load assigned classes. (${err.message})`))
       .finally(() => setLoadingClasses(false));
   }, []);
 
@@ -87,8 +87,8 @@ export default function TeacherHomeworkPage() {
   const loadHomeworks = useCallback(() => {
     setLoadingList(true);
     api.get('/homework')
-      .then((r) => setHomeworks(r.data.items))
-      .catch(() => setError('Failed to load homework assignments.'))
+      .then((r) => setHomeworks(Array.isArray(r.data) ? r.data : (r.data.items ?? [])))
+      .catch((err) => setError(err.response?.data?.error || `Failed to load homework assignments. (${err.message})`))
       .finally(() => setLoadingList(false));
   }, []);
 

@@ -17,12 +17,20 @@ import {
   RefreshCw,
   Copy,
   Link2,
+  UserCheck,
 } from 'lucide-react';
+
+interface Teacher {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
 
 interface ClassItem {
   id: string;
   name: string;
   joinCode: string | null;
+  inchargeTeacher: Teacher | null;
   _count: { sections: number; students: number };
 }
 
@@ -34,6 +42,7 @@ interface Section {
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [sections, setSections] = useState<Record<string, Section[]>>({});
   const [expandedClass, setExpandedClass] = useState<string | null>(null);
   const [newClassName, setNewClassName] = useState('');
@@ -42,6 +51,7 @@ export default function ClassesPage() {
   const [editingClass, setEditingClass] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingInchargeFor, setSavingInchargeFor] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -59,12 +69,34 @@ export default function ClassesPage() {
     }
   }
 
+  async function fetchTeachers() {
+    try {
+      const { data } = await api.get('/schools/users', { params: { role: 'TEACHER', limit: 200 } });
+      setTeachers(data.users ?? []);
+    } catch { /* non-critical, fail silently */ }
+  }
+
+  useEffect(() => {
+    fetchClasses().catch(console.error);
+    fetchTeachers();
+  }, []);
+
+  async function handleSetIncharge(classId: string, teacherId: string) {
+    setSavingInchargeFor(classId);
+    try {
+      const { data } = await api.patch(`/sis/classes/${classId}`, { inchargeTeacherId: teacherId || null });
+      setClasses(prev => prev.map(c => c.id === classId ? { ...c, inchargeTeacher: data.inchargeTeacher } : c));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update class incharge.');
+    } finally {
+      setSavingInchargeFor(null);
+    }
+  }
+
   async function fetchSections(classId: string) {
     const { data } = await api.get(`/sis/classes/${classId}/sections`);
     setSections((prev) => ({ ...prev, [classId]: data }));
   }
-
-  useEffect(() => { fetchClasses().catch(console.error); }, []);
 
   async function handleToggleClass(classId: string) {
     if (expandedClass === classId) {
@@ -225,6 +257,15 @@ export default function ClassesPage() {
                       <span className="inline-flex items-center gap-0.5"><Layers className="w-3.5 h-3.5" strokeWidth={1.75} />{cls._count.sections} Section{cls._count.sections !== 1 ? 's' : ''}</span>
                       <span>•</span>
                       <span className="inline-flex items-center gap-0.5"><Users className="w-3.5 h-3.5" strokeWidth={1.75} />{cls._count.students} Student{cls._count.students !== 1 ? 's' : ''}</span>
+                      {cls.inchargeTeacher && (
+                        <>
+                          <span>•</span>
+                          <span className="inline-flex items-center gap-0.5 text-[#1D7A4A] font-semibold">
+                            <UserCheck className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            {cls.inchargeTeacher.firstName} {cls.inchargeTeacher.lastName}
+                          </span>
+                        </>
+                      )}
                     </span>
                   </div>
                   <span className="ml-auto text-[#9CA3AF] hover:text-[#1A1D23] transition-colors">
@@ -260,6 +301,34 @@ export default function ClassesPage() {
 
               {expandedClass === cls.id && (
                 <div className="border-t border-[#F3F4F6] px-4 py-4 bg-[#F9FAFB]/60 space-y-4">
+
+                  {/* Class Incharge Assignment */}
+                  <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <UserCheck className="w-3.5 h-3.5 text-[#1D7A4A]" strokeWidth={1.75} />
+                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Class Incharge Teacher</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={cls.inchargeTeacher?.id ?? ''}
+                        onChange={(e) => handleSetIncharge(cls.id, e.target.value)}
+                        disabled={savingInchargeFor === cls.id}
+                        className="flex-1 text-sm border border-[#E5E7EB] rounded-lg bg-white text-[#1A1D23] disabled:opacity-60"
+                      >
+                        <option value="">— No incharge assigned —</option>
+                        {teachers.map((t) => (
+                          <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                        ))}
+                      </select>
+                      {savingInchargeFor === cls.id && (
+                        <span className="text-xs text-[#1D7A4A] font-semibold animate-pulse">Saving...</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1.5">
+                      The incharge teacher is responsible for this class's overall administration.
+                    </p>
+                  </div>
+
                   {/* Class Join Code */}
                   <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
