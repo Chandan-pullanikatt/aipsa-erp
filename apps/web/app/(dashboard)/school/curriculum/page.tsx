@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
-import { Plus, Pencil, Trash2, X, Search, FileText, Link as LinkIcon, BookOpen, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, FileText, Link as LinkIcon, BookOpen, AlertCircle, Play } from 'lucide-react';
+import { getVideoEmbedUrl, isVideoUrl } from '@/lib/videoUtils';
 
 interface ClassItem {
   id: string;
@@ -618,14 +619,33 @@ export default function AdminCurriculumPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="font-semibold text-gray-500 uppercase tracking-wide">PDF syllabus attachment URL</label>
+                <label className="font-semibold text-gray-500 uppercase tracking-wide">
+                  Video URL or Attachment
+                </label>
+                <p className="text-[11px] text-gray-400">Paste a YouTube link to embed a video player. Or paste any other URL (Google Drive PDF, etc.).</p>
                 <input
                   type="url"
-                  placeholder="https://drive.google.com/file/d/..."
+                  placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/..."
                   value={attachmentUrl}
                   onChange={(e) => setAttachmentUrl(e.target.value)}
                   className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all text-gray-700"
                 />
+                {attachmentUrl && isVideoUrl(attachmentUrl) && (
+                  <div className="mt-2 rounded-xl overflow-hidden border border-[#E5E7EB] bg-black shadow-sm">
+                    <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                      <iframe
+                        src={getVideoEmbedUrl(attachmentUrl)!}
+                        title="Video preview"
+                        className="absolute inset-0 w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-400 px-3 py-1.5 flex items-center gap-1">
+                      <Play className="w-3 h-3" strokeWidth={1.75} /> Video preview — this is what students will see.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-[#E5E7EB] pt-4 space-y-3">

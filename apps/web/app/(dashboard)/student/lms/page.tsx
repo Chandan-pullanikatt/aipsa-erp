@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
+import { getVideoEmbedUrl, isVideoUrl } from '@/lib/videoUtils';
 import {
   GraduationCap,
   Search,
@@ -488,9 +489,23 @@ export default function StudentLmsPage() {
                           )}
                         </div>
 
+                        {!mat.locked && mat.attachmentUrl && getVideoEmbedUrl(mat.attachmentUrl) && (
+                          <div className="mt-3 w-full rounded-xl overflow-hidden border border-[#E5E7EB] bg-black shadow-sm">
+                            <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                              <iframe
+                                src={getVideoEmbedUrl(mat.attachmentUrl)!}
+                                title={mat.title}
+                                className="absolute inset-0 w-full h-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         {!mat.locked && (mat.attachmentUrl || (mat.educationalLinks && mat.educationalLinks.length > 0)) && (
                           <div className="bg-gray-50 border border-[#E5E7EB] rounded-lg p-3 mt-3 flex flex-wrap gap-4 text-xs w-full">
-                            {mat.attachmentUrl && (
+                            {mat.attachmentUrl && !isVideoUrl(mat.attachmentUrl) && (
                               <div className="flex flex-col gap-1 w-full sm:w-auto">
                                 <span className="font-bold text-[10px] text-gray-400 uppercase tracking-wider font-display">Attachment</span>
                                 <a
@@ -500,7 +515,22 @@ export default function StudentLmsPage() {
                                   className="text-[#1D7A4A] hover:text-[#155B37] hover:underline font-semibold inline-flex items-center gap-1.5"
                                 >
                                   <FileText className="w-4 h-4" strokeWidth={1.75} />
-                                  Download attachment
+                                  Open attachment
+                                </a>
+                              </div>
+                            )}
+
+                            {mat.attachmentUrl && isVideoUrl(mat.attachmentUrl) && (
+                              <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <span className="font-bold text-[10px] text-gray-400 uppercase tracking-wider font-display">Video</span>
+                                <a
+                                  href={mat.attachmentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[#1D7A4A] hover:text-[#155B37] hover:underline font-semibold inline-flex items-center gap-1.5"
+                                >
+                                  <Play className="w-4 h-4" strokeWidth={1.75} />
+                                  Open in YouTube
                                 </a>
                               </div>
                             )}
