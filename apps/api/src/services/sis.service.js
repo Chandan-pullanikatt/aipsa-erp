@@ -481,11 +481,16 @@ async function listJoinRequests(tenantId, { classId, status = 'PENDING', page = 
   return { requests, total, page: parseInt(page), limit: parseInt(limit) };
 }
 
-function buildDefaultPassword(tenantSlug, className, admissionNumber) {
-  const localId = tenantSlug.replace(/-/g, '').slice(0, 8).toLowerCase();
-  const cls = className.replace(/\s+/g, '').toLowerCase();
-  const admNo = admissionNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-  return `globalaipsa${localId}${cls}${admNo}`;
+function buildDefaultPassword(schoolName, dateOfBirth) {
+  const firstWord = schoolName.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '').toLowerCase();
+  if (dateOfBirth) {
+    const d = new Date(dateOfBirth);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `aipsa${firstWord}${dd}${mm}${yyyy}`;
+  }
+  return `aipsa${firstWord}`;
 }
 
 async function approveJoinRequest(tenantId, requestId, reviewerId) {
@@ -510,7 +515,7 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
   const admissionNumber = await generateAdmissionNumber(tenantId);
   const plainPin = generatePortalPin();
   const hashedPin = await bcrypt.hash(plainPin, 10);
-  const defaultPassword = buildDefaultPassword(req.tenant.slug, req.class.name, admissionNumber);
+  const defaultPassword = buildDefaultPassword(req.tenant.name, req.dateOfBirth);
   const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
   const result = await prisma.$transaction(async (tx) => {
@@ -568,6 +573,26 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
     defaultPassword: result.defaultPassword,
     studentId: result.student.id,
   };
+}
+
+async function resetStudentPassword(tenantId, studentId) {
+  const student = await prisma.student.findFirst({
+    where: { id: studentId, tenantId },
+    select: { id: true, dateOfBirth: true, firstName: true, lastName: true, user: { select: { id: true } } },
+  });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+  if (!student.user) throw Object.assign(new Error('Student has no login account yet'), { status: 400 });
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+  const defaultPassword = buildDefaultPassword(tenant.name, student.dateOfBirth);
+  const hashed = await bcrypt.hash(defaultPassword, 12);
+
+  await prisma.user.update({
+    where: { id: student.user.id },
+    data: { password: hashed, mustChangePassword: true },
+  });
+
+  return { defaultPassword };
 }
 
 async function rejectJoinRequest(tenantId, requestId, reviewerId) {
@@ -642,7 +667,7 @@ module.exports = {
   generateClassJoinCode, getClassJoinCode, listClassJoinCodes,
   lookupClassByJoinCode,
   // Join requests
-  createStudentJoinRequest, listJoinRequests, approveJoinRequest, rejectJoinRequest,
+  createStudentJoinRequest, listJoinRequests, approveJoinRequest, rejectJoinRequest, resetStudentPassword,
   // Student activities
   listStudentActivities, createStudentActivity, deleteStudentActivity,
 };

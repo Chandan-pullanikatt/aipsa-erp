@@ -144,6 +144,9 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [portalPin, setPortalPin] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
   const [pinCopied, setPinCopied] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetCopied, setResetCopied] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState({ firstName: '', lastName: '' });
   const [showInviteParent, setShowInviteParent] = useState(false);
@@ -246,6 +249,19 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
     const { data } = await api.get(`/sis/students/${id}/portal-pin`);
     setPortalPin(data.portalPin);
     setShowPin(true);
+  }
+
+  async function handleResetPassword() {
+    if (!id) return;
+    if (!confirm('Reset this student\'s password to the default pattern? They will be required to change it on next login.')) return;
+    setResettingPassword(true);
+    setResetResult(null);
+    try {
+      const { data } = await api.post(`/sis/students/${id}/reset-password`);
+      setResetResult(data.defaultPassword);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to reset password.');
+    } finally { setResettingPassword(false); }
   }
 
   async function handleInviteParent(e: React.FormEvent) {
@@ -509,6 +525,46 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 className="w-fit inline-flex items-center gap-1.5 text-xs font-bold text-[#1D7A4A] hover:text-[#155B37] bg-white border border-[#26A96B]/25 hover:border-[#1D7A4A] px-4 py-2 rounded-lg transition-all shadow-sm mt-1">
                 <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
                 Send Parent Invitation
+              </button>
+            )}
+          </div>
+
+          {/* Reset Password Card */}
+          <div className="bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#6B7280]" />
+                Reset Login Password
+              </p>
+              <p className="text-[11px] text-[#6B7280] font-semibold mt-1">
+                Resets the student's password to the default pattern (school name + date of birth). Student must change it on next login.
+              </p>
+            </div>
+
+            {resetResult ? (
+              <div className="space-y-2 mt-1">
+                <p className="text-[10px] text-[#6B7280] font-semibold uppercase tracking-wide">New temporary password:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 font-mono text-sm font-bold text-[#1A1D23] bg-white border border-[#E5E7EB] rounded-lg px-3 py-1.5 tracking-wide break-all">
+                    {resetResult}
+                  </code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(resetResult); setResetCopied(true); setTimeout(() => setResetCopied(false), 2000); }}
+                    className="shrink-0 inline-flex items-center gap-1 text-xs border border-[#E5E7EB] bg-white font-bold px-3 py-2 rounded-lg hover:bg-gray-50 transition-all shadow-sm"
+                  >
+                    {resetCopied ? <Check className="w-3.5 h-3.5 text-[#0F6E56]" strokeWidth={2.5} /> : <Copy className="w-3.5 h-3.5 text-[#6B7280]" strokeWidth={1.75} />}
+                    {resetCopied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <button onClick={() => setResetResult(null)} className="text-[10px] text-[#6B7280] hover:text-[#1A1D23] underline">Dismiss</button>
+              </div>
+            ) : (
+              <button
+                onClick={handleResetPassword}
+                disabled={resettingPassword}
+                className="w-fit inline-flex items-center gap-1.5 text-xs font-bold text-[#DC2626] hover:text-[#B91C1C] bg-white border border-[#FCA5A5] hover:border-[#DC2626] px-4 py-2 rounded-lg transition-all shadow-sm mt-1 disabled:opacity-50"
+              >
+                {resettingPassword ? 'Resetting...' : 'Reset to Default Password'}
               </button>
             )}
           </div>

@@ -152,6 +152,13 @@ router.get('/students/:id/portal-pin', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/sis/students/:id/reset-password — admin resets to default pattern
+router.post('/students/:id/reset-password', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.resetStudentPassword(req.tenant.id, req.params.id));
+  } catch (err) { next(err); }
+});
+
 // ─── Class Join Codes ─────────────────────────────────────────────────────────
 
 // POST /api/sis/classes/:classId/join-code — teacher or admin generates/regenerates code

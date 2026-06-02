@@ -25,6 +25,7 @@ import {
   LayoutDashboard,
   UserPlus,
   Layers,
+  KeyRound,
 } from 'lucide-react';
 
 interface NavItem {
@@ -48,6 +49,7 @@ const ICON_MAP = {
   Staff: UserCog,
   'School Profile': Settings2,
   'Manage Classes': Layers,
+  'Change Password': KeyRound,
   // Other roles
   'Join Requests': UserPlus,
   'Marks Entry': ClipboardList,
@@ -97,6 +99,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Exams & Results', href: '/student?tab=exams', available: true },
       { label: 'Homework', href: '/student?tab=homework', available: true },
       { label: 'LMS', href: '/student/lms', available: true },
+      { label: 'Change Password', href: '/change-password', available: true },
     ];
   } else if (role === 'PARENT') {
     items = [

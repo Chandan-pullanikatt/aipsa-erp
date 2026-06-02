@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { getUser, setAuth, getDashboardPath } from '@/lib/auth';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, KeyRound } from 'lucide-react';
 
 export default function ChangePasswordPage() {
   const router = useRouter();
+  const user = getUser();
+  const isForced = user?.mustChangePassword === true;
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -53,12 +55,16 @@ export default function ChangePasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">🔑</span>
+          <div className={`w-14 h-14 ${isForced ? 'bg-amber-100' : 'bg-[#E5F6EE]'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+            <KeyRound className={`w-6 h-6 ${isForced ? 'text-amber-600' : 'text-[#1D7A4A]'}`} strokeWidth={1.75} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Set Your Password</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isForced ? 'Set Your Password' : 'Change Password'}
+          </h1>
           <p className="text-gray-500 mt-1 text-sm">
-            You're using a temporary password. Please set a new one before continuing.
+            {isForced
+              ? "You're using a temporary password. Please set a new one before continuing."
+              : 'Enter your current password, then choose a new one.'}
           </p>
         </div>
 
