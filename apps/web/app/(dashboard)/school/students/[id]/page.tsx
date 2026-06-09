@@ -31,6 +31,7 @@ import {
   Star,
   MessageSquare,
   X,
+  IdCard,
 } from 'lucide-react';
 
 interface Student {
@@ -38,6 +39,7 @@ interface Student {
   dateOfBirth: string | null; gender: string | null; bloodGroup: string | null;
   address: string | null; city: string | null; state: string | null; phone: string | null;
   status: string; admissionDate: string;
+  photoUrl: string | null; boardingType: string | null; needsBus: boolean;
   feeAccessOverride: boolean;
   class: { id: string; name: string } | null;
   section: { id: string; name: string } | null;
@@ -298,8 +300,10 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2.5} /> Back to Directory
         </Link>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-[#E5F6EE] text-[#1D7A4A] flex items-center justify-center font-bold text-lg border border-[#26A96B]/15">
-            {student.firstName[0]}{student.lastName[0]}
+          <div className="w-12 h-12 rounded-full bg-[#E5F6EE] text-[#1D7A4A] flex items-center justify-center font-bold text-lg border border-[#26A96B]/15 overflow-hidden">
+            {student.photoUrl
+              ? <img src={student.photoUrl} alt={`${student.firstName} ${student.lastName}`} className="w-full h-full object-cover" />
+              : <>{student.firstName[0]}{student.lastName[0]}</>}
           </div>
           <div>
             <h1 className="font-display text-[26px] sm:text-[32px] font-bold leading-tight text-[#1A1D23]">{student.firstName} {student.lastName}</h1>
@@ -308,6 +312,12 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${STATUS_STYLE[student.status]}`}>{student.status}</span>
             </div>
           </div>
+          <Link
+            href={`/school/students/id-cards?studentId=${student.id}`}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#E5E7EB] rounded-lg text-xs font-bold text-[#4B5563] bg-white hover:bg-[#F9FAFB] transition-all shadow-sm font-display"
+          >
+            <IdCard className="w-3.5 h-3.5" strokeWidth={1.75} /> ID Card
+          </Link>
         </div>
       </div>
 
@@ -537,7 +547,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 Reset Login Password
               </p>
               <p className="text-[11px] text-[#6B7280] font-semibold mt-1">
-                Resets the student's password to the default pattern (school name + date of birth). Student must change it on next login.
+                Resets the student's password to the default pattern (aipsa + school name + admission number). Student must change it on next login.
               </p>
             </div>
 

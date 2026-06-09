@@ -14,6 +14,12 @@ const examRoutes = require('./routes/exam.routes');
 const timetableRoutes = require('./routes/timetable.routes');
 const homeworkRoutes = require('./routes/homework.routes');
 const lmsRoutes = require('./routes/lms.routes');
+const uploadRoutes = require('./routes/upload.routes');
+const transportRoutes = require('./routes/transport.routes');
+const hostelRoutes = require('./routes/hostel.routes');
+const purchaseRoutes = require('./routes/purchase.routes');
+const libraryRoutes = require('./routes/library.routes');
+const eventRoutes = require('./routes/event.routes');
 
 const app = express();
 
@@ -27,14 +33,16 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
+  skip: () => process.env.NODE_ENV !== 'production',
   message: { error: 'Too many requests, please try again later.' },
 });
 app.use('/api/', limiter);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 20,
+  skip: () => process.env.NODE_ENV !== 'production',
   message: { error: 'Too many auth attempts, please try again later.' },
 });
 
@@ -58,6 +66,12 @@ app.use('/api/exams', examRoutes);
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/homework', homeworkRoutes);
 app.use('/api/lms', lmsRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/hostel', hostelRoutes);
+app.use('/api/purchases', purchaseRoutes);
+app.use('/api/library', libraryRoutes);
+app.use('/api/events', eventRoutes);
 
 // 404
 app.use((req, res) => {

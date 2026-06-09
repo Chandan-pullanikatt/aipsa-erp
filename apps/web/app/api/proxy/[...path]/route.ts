@@ -35,8 +35,11 @@ async function handler(
     if (contentType) headers['content-type'] = contentType;
     if (token) headers['authorization'] = `Bearer ${token}`;
 
+    // Forward the raw bytes (not text) so binary uploads — multipart file uploads
+    // for photos, event media, book covers — aren't corrupted by UTF-8 decoding.
+    // JSON bodies pass through unchanged; the original content-type header is kept.
     const body = !['GET', 'HEAD'].includes(request.method)
-      ? await request.text()
+      ? Buffer.from(await request.arrayBuffer())
       : undefined;
 
     let apiRes: Response;

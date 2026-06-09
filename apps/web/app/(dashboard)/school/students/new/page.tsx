@@ -16,7 +16,10 @@ import {
   Phone,
   AlertTriangle,
   Heart,
-  ShieldAlert
+  ShieldAlert,
+  Camera,
+  Bus,
+  Hotel
 } from 'lucide-react';
 
 interface ClassItem { id: string; name: string; }
@@ -33,7 +36,9 @@ export default function NewStudentPage() {
     firstName: '', lastName: '', dateOfBirth: '', gender: '',
     bloodGroup: '', address: '', city: '', state: '', phone: '',
     classId: '', sectionId: '', admissionDate: new Date().toISOString().split('T')[0],
+    photoUrl: '', boardingType: 'DAY_SCHOLAR', needsBus: false,
   });
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [guardian, setGuardian] = useState({
     firstName: '', lastName: '', relation: 'FATHER', phone: '', email: '', occupation: '',
   });
@@ -54,6 +59,26 @@ export default function NewStudentPage() {
 
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'students');
+      // Override the instance's default JSON content-type so the browser sets the
+      // multipart boundary itself.
+      const { data } = await api.post('/uploads', fd, { headers: { 'Content-Type': undefined } as any });
+      setForm((f) => ({ ...f, photoUrl: data.url }));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Photo upload failed.');
+    } finally {
+      setUploadingPhoto(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -126,6 +151,26 @@ export default function NewStudentPage() {
             <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">Personal Details</h3>
           </div>
           
+          {/* Student photo — used on the ID card */}
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-24 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] overflow-hidden flex items-center justify-center shrink-0">
+              {form.photoUrl
+                ? <img src={form.photoUrl} alt="Student" className="w-full h-full object-cover" />
+                : <Camera className="w-6 h-6 text-[#9CA3AF]" strokeWidth={1.5} />}
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                Passport Photo
+              </label>
+              <label className="inline-flex items-center gap-2 px-3.5 py-2 border border-[#E5E7EB] rounded-lg text-sm font-semibold text-[#4B5563] bg-white hover:bg-gray-50 cursor-pointer transition-all">
+                <Camera className="w-4 h-4" strokeWidth={1.75} />
+                {uploadingPhoto ? 'Uploading…' : form.photoUrl ? 'Change photo' : 'Upload photo'}
+                <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} disabled={uploadingPhoto} />
+              </label>
+              <p className="text-[11px] text-[#9CA3AF]">JPG/PNG, used on the student ID card.</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {field('First Name', 'firstName', 'text', 'E.g. Rahul', true, <User className="w-4 h-4" strokeWidth={1.75} />)}
             {field('Last Name', 'lastName', 'text', 'E.g. Sharma', true, <User className="w-4 h-4" strokeWidth={1.75} />)}
@@ -190,6 +235,30 @@ export default function NewStudentPage() {
             </div>
           </div>
           {field('Official Admission Date', 'admissionDate', 'date', '', false, <Calendar className="w-4 h-4" strokeWidth={1.75} />)}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Boarding Type</label>
+              <div className="relative flex items-center">
+                <Hotel className="absolute left-3 w-4 h-4 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+                <select value={form.boardingType} onChange={(e) => set('boardingType', e.target.value)}
+                  className="w-full border border-[#E5E7EB] rounded-lg pl-10 pr-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all">
+                  <option value="DAY_SCHOLAR">Day Scholar</option>
+                  <option value="HOSTELER">Hosteler</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">School Transport</label>
+              <label className="flex items-center gap-2.5 border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm font-semibold text-[#4B5563] bg-white cursor-pointer hover:bg-gray-50 transition-all">
+                <input type="checkbox" checked={form.needsBus}
+                  onChange={(e) => setForm((f) => ({ ...f, needsBus: e.target.checked }))}
+                  className="rounded border-[#E5E7EB] text-[#1D7A4A] focus:ring-[#1D7A4A]/20" />
+                <Bus className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+                Student needs the school bus
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* Section 3: Guardian */}

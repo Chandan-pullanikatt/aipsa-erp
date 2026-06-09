@@ -87,6 +87,7 @@ router.get('/students', async (req, res, next) => {
 router.post('/students', adminOnly, [
   body('firstName').trim().notEmpty(),
   body('lastName').trim().notEmpty(),
+  body('boardingType').optional({ checkFalsy: true }).isIn(['DAY_SCHOLAR', 'HOSTELER']),
 ], validate, async (req, res, next) => {
   try {
     res.status(201).json(await sis.createStudent(req.tenant.id, req.body));

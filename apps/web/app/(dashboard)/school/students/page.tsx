@@ -9,7 +9,8 @@ import {
   Search,
   Eye,
   Plus,
-  ChevronLeft
+  ChevronLeft,
+  IdCard
 } from 'lucide-react';
 
 interface Student {
@@ -74,6 +75,13 @@ export default function StudentsPage() {
           <p className="font-body text-[14px] text-text-muted mt-2">{total} total student{total !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex gap-4">
+          <Link
+            href="/school/students/id-cards"
+            className="h-[38px] px-4 rounded-lg bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] transition-colors inline-flex items-center justify-center font-medium text-[14px]"
+          >
+            <IdCard className="w-4 h-4 mr-2" strokeWidth={1.75} />
+            ID Cards
+          </Link>
           <Link
             href="/school/students/classes"
             className="h-[38px] px-4 rounded-lg bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] transition-colors inline-flex items-center justify-center font-medium text-[14px]"

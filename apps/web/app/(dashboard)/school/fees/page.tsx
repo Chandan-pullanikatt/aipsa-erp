@@ -4,15 +4,16 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 import { Plus, Pencil, Trash2, X, Search, DollarSign, Calendar, FileText, CheckCircle, User } from 'lucide-react';
 
-type Tab = 'structure' | 'collect' | 'history' | 'dues';
+type Tab = 'structure' | 'collect' | 'history' | 'dues' | 'defaulters';
 
-interface FeeCategory { id: string; name: string; description: string | null; _count: { structures: number; payments: number }; }
+interface FeeCategory { id: string; name: string; description: string | null; serviceType?: string; _count: { structures: number; payments: number }; }
 interface FeeStructure { id: string; feeCategoryId: string; feeCategory: { name: string }; class: { name: string } | null; amount: number; frequency: string; dueDate: string | null; }
 interface ClassItem { id: string; name: string; }
 interface StudentSummary { id: string; firstName: string; lastName: string; admissionNumber: string; }
 interface Payment { id: string; receiptNumber: string; amount: number; method: string; paidAt: string; month: string | null; feeCategory: { name: string }; student: { firstName: string; lastName: string; admissionNumber: string }; }
 
 const FREQ_LABEL: Record<string, string> = { MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', ANNUALLY: 'Annual', ONE_TIME: 'One-Time' };
+const SERVICE_LABEL: Record<string, string> = { NONE: 'Class-wide', TRANSPORT: 'Transport (bus users)', HOSTEL: 'Hostel (hostelers)' };
 const METHOD_LABEL: Record<string, string> = { CASH: 'Cash', UPI: 'UPI', BANK_TRANSFER: 'Bank Transfer', CHEQUE: 'Cheque', ONLINE: 'Online' };
 const rupees = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
@@ -36,7 +37,7 @@ export default function FeesPage() {
       </div>
 
       <div className="flex gap-1 bg-[#F3F4F6] p-1.5 rounded-xl w-fit border border-[#E5E7EB]">
-        {([['structure','Fee Structure'],['collect','Collect Fee'],['history','Payment History'],['dues','Due Report']] as [Tab,string][]).map(([t,l]) => (
+        {([['structure','Fee Structure'],['collect','Collect Fee'],['history','Payment History'],['dues','Due Report'],['defaulters','Defaulter Report']] as [Tab,string][]).map(([t,l]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? 'bg-white text-[#1A1D23] shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>
             {l}
@@ -48,6 +49,7 @@ export default function FeesPage() {
       {tab === 'collect' && <CollectFeeTab classes={classes} academicYear={academicYear} />}
       {tab === 'history' && <PaymentHistoryTab />}
       {tab === 'dues' && <DueReportTab classes={classes} />}
+      {tab === 'defaulters' && <DefaulterReportTab classes={classes} />}
     </div>
   );
 }
@@ -57,9 +59,9 @@ export default function FeesPage() {
 function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; academicYear: string }) {
   const [categories, setCategories] = useState<FeeCategory[]>([]);
   const [structures, setStructures] = useState<FeeStructure[]>([]);
-  const [newCat, setNewCat] = useState({ name: '', description: '' });
+  const [newCat, setNewCat] = useState({ name: '', description: '', serviceType: 'NONE' });
   const [newStruct, setNewStruct] = useState({ feeCategoryId: '', classId: '', amount: '', frequency: 'MONTHLY', dueDate: '' });
-  const [editCat, setEditCat] = useState<{ id: string; name: string } | null>(null);
+  const [editCat, setEditCat] = useState<{ id: string; name: string; serviceType: string } | null>(null);
   const [showAddStruct, setShowAddStruct] = useState(false);
   const [error, setError] = useState('');
 
@@ -72,7 +74,7 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
 
   async function addCategory(e: React.FormEvent) {
     e.preventDefault(); setError('');
-    try { await api.post('/fees/categories', newCat); setNewCat({ name: '', description: '' }); load(); }
+    try { await api.post('/fees/categories', newCat); setNewCat({ name: '', description: '', serviceType: 'NONE' }); load(); }
     catch (err: any) { setError(err.response?.data?.error || 'Error'); }
   }
 
@@ -100,6 +102,12 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
             className="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] font-body" />
           <input value={newCat.description} onChange={e => setNewCat({ ...newCat, description: e.target.value })} placeholder="Description (optional)"
             className="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] font-body" />
+          <select value={newCat.serviceType} onChange={e => setNewCat({ ...newCat, serviceType: e.target.value })} title="Who is billed for this fee?"
+            className="border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] font-body shrink-0">
+            <option value="NONE">Class-wide</option>
+            <option value="TRANSPORT">Transport (bus users)</option>
+            <option value="HOSTEL">Hostel (hostelers)</option>
+          </select>
           <button type="submit" className="px-4 py-2 bg-[#1D7A4A] hover:bg-[#155D37] text-white rounded-lg text-sm font-semibold transition-all shrink-0">Add Category</button>
         </form>
         <div className="space-y-2">
@@ -108,6 +116,11 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
               {editCat?.id === cat.id ? (
                 <form className="flex gap-2 flex-1" onSubmit={async e => { e.preventDefault(); await api.put(`/fees/categories/${cat.id}`, editCat); setEditCat(null); load(); }}>
                   <input value={editCat.name} onChange={e => setEditCat({ ...editCat, name: e.target.value })} className="flex-1 border border-[#E5E7EB] rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 font-body" />
+                  <select value={editCat.serviceType} onChange={e => setEditCat({ ...editCat, serviceType: e.target.value })} className="border border-[#E5E7EB] rounded px-2 py-1.5 text-xs font-body">
+                    <option value="NONE">Class-wide</option>
+                    <option value="TRANSPORT">Transport</option>
+                    <option value="HOSTEL">Hostel</option>
+                  </select>
                   <button type="submit" className="px-3 py-1.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white rounded text-xs font-semibold transition-all">Save</button>
                   <button type="button" onClick={() => setEditCat(null)} className="px-3 py-1.5 border border-[#E5E7EB] rounded text-xs font-semibold text-gray-600 hover:bg-white transition-all">Cancel</button>
                 </form>
@@ -115,10 +128,13 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
                 <>
                   <div>
                     <span className="text-sm font-semibold text-gray-800 font-display">{cat.name}</span>
+                    {cat.serviceType && cat.serviceType !== 'NONE' && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide ml-2 px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8] align-middle">{cat.serviceType}</span>
+                    )}
                     {cat.description && <span className="text-xs text-gray-500 ml-2 font-body">({cat.description})</span>}
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => setEditCat({ id: cat.id, name: cat.name })} className="p-1 text-gray-400 hover:text-[#1D7A4A] hover:bg-gray-100 rounded transition-colors" title="Edit Category">
+                    <button onClick={() => setEditCat({ id: cat.id, name: cat.name, serviceType: cat.serviceType || 'NONE' })} className="p-1 text-gray-400 hover:text-[#1D7A4A] hover:bg-gray-100 rounded transition-colors" title="Edit Category">
                       <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
                     </button>
                     <button onClick={() => api.delete(`/fees/categories/${cat.id}`).then(() => load()).catch(e => setError(e.response?.data?.error || 'Error'))} className="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition-colors" title="Delete Category">
@@ -622,6 +638,150 @@ function DueReportTab({ classes }: { classes: ClassItem[] }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Defaulter Report Tab (class + category, service-aware) ───────────────────
+function DefaulterReportTab({ classes }: { classes: ClassItem[] }) {
+  const [categories, setCategories] = useState<FeeCategory[]>([]);
+  const [classId, setClassId] = useState('');
+  const [feeCategoryId, setFeeCategoryId] = useState('');
+  const [defaultersOnly, setDefaultersOnly] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { api.get('/fees/categories').then(r => setCategories(r.data)).catch(() => {}); }, []);
+
+  async function generate() {
+    setLoading(true);
+    try {
+      const params: any = { defaultersOnly: String(defaultersOnly) };
+      if (classId) params.classId = classId;
+      if (feeCategoryId) params.feeCategoryId = feeCategoryId;
+      const { data } = await api.get('/fees/defaulter-report', { params });
+      setData(data);
+    } finally { setLoading(false); }
+  }
+
+  const s = data?.summary;
+
+  return (
+    <div className="space-y-6">
+      {/* filters */}
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm flex flex-col sm:flex-row gap-4 items-end">
+        <div className="flex-1 w-full">
+          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1 font-body">Class</label>
+          <select value={classId} onChange={e => setClassId(e.target.value)}
+            className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white font-body focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20">
+            <option value="">All Classes</option>
+            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 w-full">
+          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1 font-body">Fee Category</label>
+          <select value={feeCategoryId} onChange={e => setFeeCategoryId(e.target.value)}
+            className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white font-body focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20">
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}{c.serviceType && c.serviceType !== 'NONE' ? ` (${c.serviceType})` : ''}</option>)}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-600 font-body pb-2 shrink-0">
+          <input type="checkbox" checked={defaultersOnly} onChange={e => setDefaultersOnly(e.target.checked)} className="accent-[#1D7A4A]" />
+          Defaulters only
+        </label>
+        <button onClick={generate} disabled={loading}
+          className="w-full sm:w-auto px-5 py-2 bg-[#1D7A4A] hover:bg-[#155D37] text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50 shrink-0">
+          {loading ? 'Generating...' : 'Generate'}
+        </button>
+      </div>
+
+      {data && (
+        <>
+          {/* summary cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Stat label="Students" value={s.totalStudents} />
+            <Stat label="Defaulters" value={s.defaulters} tone="red" />
+            <Stat label="Collected" value={rupees(s.totalCollected)} tone="green" />
+            <Stat label="Outstanding" value={rupees(s.totalOutstanding)} tone="red" />
+          </div>
+
+          {/* per-category headline (e.g. transport fee defaulters) */}
+          {data.categoryTotals?.length > 0 && (
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 font-body">Outstanding by Category</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {data.categoryTotals.map((c: any) => (
+                  <div key={c.feeCategoryId} className="border border-[#E5E7EB] rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-800 font-display">{c.name}</span>
+                      {c.serviceType !== 'NONE' && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8]">{c.serviceType}</span>}
+                    </div>
+                    <div className="flex items-center justify-between mt-1 text-xs font-body">
+                      <span className="text-red-600 font-bold">{c.defaulters} unpaid</span>
+                      <span className="font-mono font-bold text-red-600">{rupees(c.outstanding)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* detailed table */}
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Student</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Class</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Unpaid Categories</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Billed</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Paid</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB]">
+                {data.rows.map((r: any) => (
+                  <tr key={r.student.id} className="hover:bg-gray-50/50 align-top">
+                    <td className="px-4 py-3.5">
+                      <p className="font-semibold text-gray-900 font-display">{r.student.firstName} {r.student.lastName}</p>
+                      <p className="text-xs text-gray-400 font-mono mt-0.5">{r.student.admissionNumber}</p>
+                      <span className="text-[10px] font-bold uppercase text-gray-400">{r.student.boardingType === 'HOSTELER' ? 'Hosteler' : 'Day Scholar'}{r.student.hasBus ? ' · Bus' : ''}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-600 font-body">{r.student.class?.name || '—'}{r.student.section?.name ? ` · ${r.student.section.name}` : ''}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-wrap gap-1">
+                        {r.categories.filter((c: any) => c.due > 0).map((c: any) => (
+                          <span key={c.feeCategoryId} className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#FEF2F2] text-[#B91C1C] font-body" title={`Billed ${rupees(c.billed)}, paid ${rupees(c.paid)}`}>
+                            {c.name}: {rupees(c.due)}
+                          </span>
+                        ))}
+                        {r.categories.filter((c: any) => c.due > 0).length === 0 && <span className="text-xs text-[#0F6E56] font-semibold">Fully paid</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-gray-600">{rupees(r.billed)}</td>
+                    <td className="px-4 py-3.5 text-right font-mono text-[#0F6E56] font-semibold">{rupees(r.paid)}</td>
+                    <td className="px-4 py-3.5 text-right font-mono font-bold text-red-600">{rupees(r.outstanding)}</td>
+                  </tr>
+                ))}
+                {data.rows.length === 0 && (
+                  <tr><td colSpan={6} className="text-center text-[#0F6E56] font-bold py-10 text-sm font-body">No defaulters for this selection. 🎉</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: 'red' | 'green' }) {
+  const color = tone === 'red' ? 'text-[#B91C1C]' : tone === 'green' ? 'text-[#0F6E56]' : 'text-[#1A1D23]';
+  return (
+    <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-wider text-gray-400 font-body">{label}</p>
+      <p className={`text-xl font-bold font-mono mt-1 ${color}`}>{value}</p>
     </div>
   );
 }

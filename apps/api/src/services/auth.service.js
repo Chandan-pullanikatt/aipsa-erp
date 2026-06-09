@@ -54,10 +54,9 @@ async function registerSchool({ schoolName, adminEmail, adminPassword, adminFirs
 async function login({ email, password }) {
   // Failsafe: if database is completely empty, auto-seed the super admin
   const userCount = await prisma.user.count();
-  if (userCount === 0) {
+  if (userCount === 0 && process.env.SUPER_ADMIN_PASSWORD) {
     try {
-      const rawPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
-      const seedPassword = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
+      const seedPassword = process.env.SUPER_ADMIN_PASSWORD.trim();
       const hashed = await bcrypt.hash(seedPassword, 12);
       await prisma.user.create({
         data: {

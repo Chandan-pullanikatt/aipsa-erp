@@ -17,6 +17,10 @@ import {
   BarChart3,
   Bell,
   ClipboardList,
+  Building2,
+  ShoppingBag,
+  Library,
+  CalendarDays,
   Package,
   Settings2,
   Menu,
@@ -49,6 +53,12 @@ const ICON_MAP = {
   Staff: UserCog,
   'School Profile': Settings2,
   'Manage Classes': Layers,
+  Transport: Bus,
+  Hostel: Building2,
+  Store: ShoppingBag,
+  Purchases: ShoppingBag,
+  Library: Library,
+  Events: CalendarDays,
   'Change Password': KeyRound,
   // Other roles
   'Join Requests': UserPlus,
@@ -75,6 +85,11 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Fee Management', href: '/school/fees', available: true },
       { label: 'Examinations', href: '/school/exams', available: true },
       { label: 'Timetable', href: '/school/timetable', available: true },
+      { label: 'Transport', href: '/school/transport', available: true },
+      { label: 'Hostel', href: '/school/hostel', available: true },
+      { label: 'Store', href: '/school/store', available: true },
+      { label: 'Library', href: '/school/library', available: true },
+      { label: 'Events', href: '/school/events', available: true },
       { label: 'Communication', href: '/school/communication', available: true },
       { label: 'LMS / Curriculum', href: '/school/curriculum', available: true },
       { label: 'Staff', href: '/school/staff', available: true },
@@ -89,6 +104,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Marks Entry', href: '/teacher/marks', available: true },
       { label: 'Homework', href: '/teacher/homework', available: true },
       { label: 'LMS', href: '/teacher/lms', available: true },
+      { label: 'Events', href: '/school/events', available: true },
       { label: 'Join Requests', href: '/teacher/join-requests', available: true },
     ];
   } else if (role === 'STUDENT') {
@@ -99,6 +115,11 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Exams & Results', href: '/student?tab=exams', available: true },
       { label: 'Homework', href: '/student?tab=homework', available: true },
       { label: 'LMS', href: '/student/lms', available: true },
+      { label: 'Transport', href: '/student/transport', available: true },
+      { label: 'Hostel', href: '/student/hostel', available: true },
+      { label: 'Purchases', href: '/student/purchases', available: true },
+      { label: 'Library', href: '/student/library', available: true },
+      { label: 'Events', href: '/student/events', available: true },
       { label: 'Change Password', href: '/change-password', available: true },
     ];
   } else if (role === 'PARENT') {
@@ -108,6 +129,11 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Fees', href: '/parent?tab=fees', available: true },
       { label: 'Results', href: '/parent?tab=exams', available: true },
       { label: 'Homework', href: '/parent?tab=homework', available: true },
+      { label: 'Transport', href: '/parent/transport', available: true },
+      { label: 'Hostel', href: '/parent/hostel', available: true },
+      { label: 'Purchases', href: '/parent/purchases', available: true },
+      { label: 'Library', href: '/parent/library', available: true },
+      { label: 'Events', href: '/parent/events', available: true },
       { label: 'Announcements', href: '/parent?tab=announcements', available: true },
     ];
   }

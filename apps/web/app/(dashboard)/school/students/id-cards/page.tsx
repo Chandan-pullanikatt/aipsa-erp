@@ -1,0 +1,131 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import api from '@/lib/api';
+import { StudentIdCard, type IdCardStudent, type IdCardSchool } from '@/components/StudentIdCard';
+import { ArrowLeft, Printer, IdCard, Loader2 } from 'lucide-react';
+
+interface ClassItem { id: string; name: string; }
+
+export default function IdCardsPage() {
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [school, setSchool] = useState<IdCardSchool>({});
+  const [classId, setClassId] = useState('');
+  const [students, setStudents] = useState<IdCardStudent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [singleMode, setSingleMode] = useState(false);
+
+  // Load classes + school profile once.
+  useEffect(() => {
+    api.get('/sis/classes').then((r) => setClasses(r.data)).catch(() => {});
+    api.get('/schools/profile').then((r) => setSchool(r.data || {})).catch(() => {});
+  }, []);
+
+  // Support deep-link from a student page: /id-cards?studentId=xxx shows one card.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('studentId');
+    if (!sid) return;
+    setSingleMode(true);
+    setLoading(true);
+    api.get(`/sis/students/${sid}`)
+      .then((r) => setStudents([r.data]))
+      .catch(() => setError('Could not load that student.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function loadClass(id: string) {
+    setClassId(id);
+    setStudents([]);
+    setError('');
+    if (!id) return;
+    setLoading(true);
+    try {
+      const { data } = await api.get('/sis/students', { params: { classId: id, limit: 500, status: 'ACTIVE' } });
+      const list: IdCardStudent[] = data.students || data || [];
+      if (!list.length) setError('No active students in this class.');
+      setStudents(list);
+    } catch {
+      setError('Could not load students.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* print rules — hide everything except the card area, render cards true-to-size */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #id-card-print-area, #id-card-print-area * { visibility: visible !important; }
+          #id-card-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+          .idcard-pair { break-inside: avoid; page-break-inside: avoid; margin-bottom: 6mm; }
+          @page { size: A4; margin: 10mm; }
+        }
+      `}</style>
+
+      {/* toolbar (not printed) */}
+      <div className="no-print">
+        <Link href="/school/students" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#6B7280] hover:text-[#1A1D23] mb-4">
+          <ArrowLeft className="w-4 h-4" /> Back to Students
+        </Link>
+
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-[#1A1D23] flex items-center gap-2">
+              <IdCard className="w-6 h-6 text-[#1D7A4A]" /> Student ID Cards
+            </h1>
+            <p className="text-sm text-[#6B7280] font-medium mt-1">
+              {singleMode ? 'Preview and print this student’s card.' : 'Pick a class to generate printable ID cards for every student.'}
+            </p>
+          </div>
+
+          <div className="flex items-end gap-3">
+            {!singleMode && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-1">Class</label>
+                <select
+                  value={classId}
+                  onChange={(e) => loadClass(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm font-medium bg-white min-w-[180px] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/30"
+                >
+                  <option value="">Select a class…</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+            <button
+              onClick={() => window.print()}
+              disabled={!students.length}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1D7A4A] text-white text-sm font-semibold hover:bg-[#166038] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-4 h-4" /> Print {students.length > 1 ? `(${students.length})` : ''}
+            </button>
+          </div>
+        </div>
+
+        {error && <p className="text-sm font-semibold text-[#B91C1C] bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-4 py-3 mb-4">{error}</p>}
+        {loading && (
+          <p className="text-sm font-semibold text-[#6B7280] flex items-center gap-2 py-8 justify-center">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+          </p>
+        )}
+        {!loading && !students.length && !error && (
+          <p className="text-sm text-[#9CA3AF] font-semibold italic text-center py-16 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+            {singleMode ? 'Loading student…' : 'Select a class above to see ID cards.'}
+          </p>
+        )}
+      </div>
+
+      {/* printable area */}
+      <div id="id-card-print-area" className="flex flex-col gap-6 items-center sm:items-start">
+        {students.map((s) => (
+          <StudentIdCard key={s.admissionNumber} student={s} school={school} />
+        ))}
+      </div>
+    </div>
+  );
+}

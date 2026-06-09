@@ -22,16 +22,23 @@ async function listCategories(tenantId) {
   });
 }
 
-async function createCategory(tenantId, { name, description }) {
+async function createCategory(tenantId, { name, description, serviceType }) {
   return prisma.feeCategory.create({
-    data: { tenantId, name: name.trim(), description: description || null },
+    data: { tenantId, name: name.trim(), description: description || null, serviceType: serviceType || 'NONE' },
   });
 }
 
-async function updateCategory(tenantId, id, { name, description }) {
+async function updateCategory(tenantId, id, { name, description, serviceType }) {
   const cat = await prisma.feeCategory.findFirst({ where: { id, tenantId } });
   if (!cat) throw Object.assign(new Error('Fee category not found'), { status: 404 });
-  return prisma.feeCategory.update({ where: { id }, data: { name: name.trim(), description: description || null } });
+  return prisma.feeCategory.update({
+    where: { id },
+    data: {
+      name: name.trim(),
+      description: description || null,
+      ...(serviceType !== undefined && { serviceType: serviceType || 'NONE' }),
+    },
+  });
 }
 
 async function deleteCategory(tenantId, id) {
@@ -303,10 +310,104 @@ async function getDueReport(tenantId, { classId, academicYear } = {}) {
   }).filter(r => r.balance > 0);
 }
 
+// ─── Defaulter Report (class + category, service-aware) ───────────────────────
+// Detailed view of who owes what. Honors service fees: a TRANSPORT category is
+// only billed to students on a bus route, a HOSTEL category only to hostelers;
+// NONE categories apply class-wide. Filter by class and/or a single category
+// (e.g. "who hasn't paid the transport fee, class-wise").
+async function getDefaulterReport(tenantId, { classId, feeCategoryId, academicYear, defaultersOnly = true } = {}) {
+  const year = academicYear || currentAcademicYear();
+
+  const [students, structures, payments, classes] = await Promise.all([
+    prisma.student.findMany({
+      where: { tenantId, status: 'ACTIVE', ...(classId && { classId }) },
+      select: {
+        id: true, firstName: true, lastName: true, admissionNumber: true, classId: true,
+        boardingType: true, busRouteId: true,
+        class: { select: { id: true, name: true } },
+        section: { select: { id: true, name: true } },
+      },
+      orderBy: [{ class: { name: 'asc' } }, { firstName: 'asc' }],
+    }),
+    prisma.feeStructure.findMany({
+      where: { tenantId, academicYear: year, isActive: true, ...(feeCategoryId && { feeCategoryId }) },
+      include: { feeCategory: { select: { id: true, name: true, serviceType: true } } },
+    }),
+    prisma.feePayment.findMany({
+      where: { tenantId, academicYear: year, ...(feeCategoryId && { feeCategoryId }) },
+      select: { studentId: true, feeCategoryId: true, amount: true },
+    }),
+    prisma.class.findMany({ where: { tenantId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+  ]);
+
+  // paid[studentId][categoryId] = amount
+  const paid = {};
+  for (const p of payments) {
+    (paid[p.studentId] ||= {})[p.feeCategoryId] = (paid[p.studentId]?.[p.feeCategoryId] || 0) + p.amount;
+  }
+
+  // Is a service category billable to this student?
+  const eligible = (svc, s) =>
+    svc === 'TRANSPORT' ? !!s.busRouteId
+    : svc === 'HOSTEL' ? s.boardingType === 'HOSTELER'
+    : true;
+
+  let totalBilled = 0, totalCollected = 0, totalOutstanding = 0, defaulters = 0;
+  const categoryTotals = {}; // categoryId -> { name, serviceType, billed, paid, outstanding, defaulters }
+
+  const rows = [];
+  for (const s of students) {
+    const applicable = structures.filter(
+      (st) => (!st.classId || st.classId === s.classId) && eligible(st.feeCategory.serviceType, s),
+    );
+
+    // sum billed per category (a category may have multiple structures)
+    const billedByCat = {};
+    for (const st of applicable) billedByCat[st.feeCategoryId] = (billedByCat[st.feeCategoryId] || 0) + st.amount;
+
+    const cats = Object.entries(billedByCat).map(([cid, billed]) => {
+      const catPaid = paid[s.id]?.[cid] || 0;
+      const due = Math.max(0, billed - catPaid);
+      const meta = applicable.find((st) => st.feeCategoryId === cid).feeCategory;
+      const t = (categoryTotals[cid] ||= { feeCategoryId: cid, name: meta.name, serviceType: meta.serviceType, billed: 0, paid: 0, outstanding: 0, defaulters: 0 });
+      t.billed += billed; t.paid += catPaid; t.outstanding += due; if (due > 0) t.defaulters += 1;
+      return { feeCategoryId: cid, name: meta.name, serviceType: meta.serviceType, billed, paid: catPaid, due };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    const billed = cats.reduce((a, c) => a + c.billed, 0);
+    const paidTotal = cats.reduce((a, c) => a + c.paid, 0);
+    const outstanding = cats.reduce((a, c) => a + c.due, 0);
+
+    totalBilled += billed; totalCollected += paidTotal; totalOutstanding += outstanding;
+    if (outstanding > 0) defaulters += 1;
+
+    if (!defaultersOnly || outstanding > 0) {
+      rows.push({
+        student: { id: s.id, firstName: s.firstName, lastName: s.lastName, admissionNumber: s.admissionNumber, class: s.class, section: s.section, boardingType: s.boardingType, hasBus: !!s.busRouteId },
+        billed, paid: paidTotal, outstanding, categories: cats,
+      });
+    }
+  }
+
+  return {
+    academicYear: year,
+    filters: { classId: classId || null, feeCategoryId: feeCategoryId || null, defaultersOnly },
+    classes,
+    summary: {
+      totalStudents: students.length,
+      defaulters,
+      totalBilled, totalCollected, totalOutstanding,
+    },
+    categoryTotals: Object.values(categoryTotals).sort((a, b) => a.name.localeCompare(b.name)),
+    rows,
+  };
+}
+
 module.exports = {
   currentAcademicYear,
   listCategories, createCategory, updateCategory, deleteCategory,
   listStructures, createStructure, updateStructure, deleteStructure,
   getStudentFeeAccount, recordPayment, listPayments, getPayment, getDueReport,
+  getDefaulterReport,
   createLateFeeWaiver, deleteLateFeeWaiver,
 };

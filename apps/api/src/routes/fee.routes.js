@@ -85,6 +85,17 @@ router.get('/due-report', adminOnly, async (req, res, next) => {
   try { res.json(await fee.getDueReport(req.tenant.id, req.query)); } catch (e) { next(e); }
 });
 
+// ─── Defaulter Report (class + category, service-aware) ───────────────────────
+router.get('/defaulter-report', adminOnly, async (req, res, next) => {
+  try {
+    const { classId, feeCategoryId, academicYear, defaultersOnly } = req.query;
+    res.json(await fee.getDefaulterReport(req.tenant.id, {
+      classId, feeCategoryId, academicYear,
+      defaultersOnly: defaultersOnly === undefined ? true : defaultersOnly !== 'false',
+    }));
+  } catch (e) { next(e); }
+});
+
 // ─── Academic Year ────────────────────────────────────────────────────────────
 router.get('/academic-year', (req, res) => {
   res.json({ academicYear: fee.currentAcademicYear() });

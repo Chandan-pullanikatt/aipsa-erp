@@ -8,10 +8,12 @@ const prisma = new PrismaClient();
 async function autoSeed() {
   try {
     const email = 'admin@aipsa.org';
-    const rawPassword = process.env.SUPER_ADMIN_PASSWORD || 'AipsaAdmin@2024';
-    const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
-    console.log('[Auto-Seed] Password source:', process.env.SUPER_ADMIN_PASSWORD ? 'Environment Variable' : 'Default Fallback');
-    console.log('[Auto-Seed] Hashing password of length:', password.length);
+    const rawPassword = process.env.SUPER_ADMIN_PASSWORD;
+    if (!rawPassword || !rawPassword.trim()) {
+      console.warn('[Auto-Seed] SUPER_ADMIN_PASSWORD is not set — skipping super admin seed.');
+      return;
+    }
+    const password = rawPassword.trim();
     const hashed = await bcrypt.hash(password, 12);
     
     const existing = await prisma.user.findUnique({ where: { email } });

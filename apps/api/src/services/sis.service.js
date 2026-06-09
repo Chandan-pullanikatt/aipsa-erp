@@ -153,6 +153,7 @@ async function createStudent(tenantId, data) {
   const {
     firstName, lastName, dateOfBirth, gender, bloodGroup,
     address, city, state, phone, classId, sectionId, admissionDate,
+    photoUrl, boardingType, needsBus,
   } = data;
 
   if (classId) {
@@ -184,6 +185,9 @@ async function createStudent(tenantId, data) {
       classId: classId || undefined,
       sectionId: sectionId || undefined,
       admissionDate: admissionDate ? new Date(admissionDate) : undefined,
+      photoUrl: photoUrl || undefined,
+      boardingType: boardingType || undefined,
+      needsBus: needsBus !== undefined ? !!needsBus : undefined,
     },
     include: {
       class: { select: { id: true, name: true } },
@@ -202,6 +206,7 @@ async function updateStudent(tenantId, id, data) {
   const {
     firstName, lastName, dateOfBirth, gender, bloodGroup,
     address, city, state, phone, classId, sectionId, status,
+    photoUrl, boardingType, needsBus,
   } = data;
 
   return prisma.student.update({
@@ -219,6 +224,9 @@ async function updateStudent(tenantId, id, data) {
       ...(classId !== undefined && { classId: classId || null }),
       ...(sectionId !== undefined && { sectionId: sectionId || null }),
       ...(status && { status }),
+      ...(photoUrl !== undefined && { photoUrl: photoUrl || null }),
+      ...(boardingType !== undefined && { boardingType: boardingType || 'DAY_SCHOLAR' }),
+      ...(needsBus !== undefined && { needsBus: !!needsBus }),
     },
     include: {
       class: { select: { id: true, name: true } },
@@ -481,16 +489,14 @@ async function listJoinRequests(tenantId, { classId, status = 'PENDING', page = 
   return { requests, total, page: parseInt(page), limit: parseInt(limit) };
 }
 
-function buildDefaultPassword(schoolName, dateOfBirth) {
-  const firstWord = schoolName.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '').toLowerCase();
-  if (dateOfBirth) {
-    const d = new Date(dateOfBirth);
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `aipsa${firstWord}${dd}${mm}${yyyy}`;
-  }
-  return `aipsa${firstWord}`;
+// Default password pattern: aipsa{firstWordOfSchool}{admissionNumber}, sanitized.
+// Uses the admission number (unique per student) instead of DOB, which is not
+// unique. Example: school "AIPSA Public School" + "ADM-2026-0001" -> "aipsaaipsaadm20260001".
+// Deterministic so the school can recite it; students change it on first login.
+function buildDefaultPassword(schoolName, admissionNumber) {
+  const firstWord = (schoolName || '').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const adm = String(admissionNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return `aipsa${firstWord}${adm}`;
 }
 
 async function approveJoinRequest(tenantId, requestId, reviewerId) {
@@ -515,7 +521,7 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
   const admissionNumber = await generateAdmissionNumber(tenantId);
   const plainPin = generatePortalPin();
   const hashedPin = await bcrypt.hash(plainPin, 10);
-  const defaultPassword = buildDefaultPassword(req.tenant.name, req.dateOfBirth);
+  const defaultPassword = buildDefaultPassword(req.tenant.name, admissionNumber);
   const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
   const result = await prisma.$transaction(async (tx) => {
@@ -578,13 +584,13 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
 async function resetStudentPassword(tenantId, studentId) {
   const student = await prisma.student.findFirst({
     where: { id: studentId, tenantId },
-    select: { id: true, dateOfBirth: true, firstName: true, lastName: true, user: { select: { id: true } } },
+    select: { id: true, admissionNumber: true, firstName: true, lastName: true, user: { select: { id: true } } },
   });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
   if (!student.user) throw Object.assign(new Error('Student has no login account yet'), { status: 400 });
 
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
-  const defaultPassword = buildDefaultPassword(tenant.name, student.dateOfBirth);
+  const defaultPassword = buildDefaultPassword(tenant.name, student.admissionNumber);
   const hashed = await bcrypt.hash(defaultPassword, 12);
 
   await prisma.user.update({

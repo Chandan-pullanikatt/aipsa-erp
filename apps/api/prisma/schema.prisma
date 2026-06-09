@@ -45,6 +45,20 @@ model Tenant {
   lateFeeWaivers       LateFeeWaiver[]
   studentActivities    StudentActivity[]
   premiumLmsSubscriptions PremiumLmsSubscription[]
+  busRoutes            BusRoute[]
+  routeStops           RouteStop[]
+  hostels              Hostel[]
+  hostelRooms          HostelRoom[]
+  hostelAllotments     HostelAllotment[]
+  messMenus            MessMenu[]
+  gatePasses           GatePass[]
+  hostelComplaints     HostelComplaint[]
+  storeItems           StoreItem[]
+  purchases            Purchase[]
+  libraryBooks         LibraryBook[]
+  bookIssues           BookIssue[]
+  schoolEvents         SchoolEvent[]
+  eventMedia           EventMedia[]
 
   @@map("tenants")
 }
@@ -73,6 +87,7 @@ model SchoolProfile {
   establishedYear   Int?
   lateFeeAmount     Float    @default(0)
   lateFeeGraceDays  Int      @default(0)
+  libraryFinePerDay Float    @default(0)
   premiumLmsPrice   Float?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -117,6 +132,10 @@ model User {
   lateFeeWaivers        LateFeeWaiver[]    @relation("LateFeeWaivedBy")
   inchargeClasses       Class[]           @relation("ClassIncharge")
   addedActivities       StudentActivity[]  @relation("ActivityAddedBy")
+  reviewedGatePasses    GatePass[]         @relation("GatePassReviewer")
+  recordedPurchases     Purchase[]         @relation("PurchaseRecordedBy")
+  issuedBooks           BookIssue[]        @relation("BookIssuedBy")
+  createdEvents         SchoolEvent[]      @relation("EventCreatedBy")
 
   @@map("users")
 }
@@ -185,6 +204,7 @@ model Class {
   periods       Period[]
   homeworks     Homework[]
   joinRequests  ClassJoinRequest[]
+  schoolEvents  SchoolEvent[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -226,6 +246,11 @@ enum StudentStatus {
   GRADUATED
 }
 
+enum BoardingType {
+  DAY_SCHOLAR
+  HOSTELER
+}
+
 model Student {
   id              String        @id @default(cuid())
   tenantId        String
@@ -243,6 +268,11 @@ model Student {
   sectionId       String?
   admissionDate   DateTime      @default(now())
   status          StudentStatus @default(ACTIVE)
+  photoUrl            String?
+  boardingType        BoardingType  @default(DAY_SCHOLAR)
+  needsBus            Boolean       @default(false)
+  busRouteId          String?
+  boardingPoint       String?
   portalPin           String?
   feeAccessOverride   Boolean       @default(false)
   userId          String?       @unique
@@ -262,6 +292,12 @@ model Student {
   lateFeeWaivers      LateFeeWaiver[]
   activities          StudentActivity[]
   premiumLmsSubscriptions PremiumLmsSubscription[]
+  busRoute            BusRoute?            @relation(fields: [busRouteId], references: [id])
+  hostelAllotment     HostelAllotment?
+  gatePasses          GatePass[]
+  hostelComplaints    HostelComplaint[]
+  purchases           Purchase[]
+  bookIssues          BookIssue[]
 
   @@unique([tenantId, admissionNumber])
   @@index([tenantId])
@@ -398,11 +434,21 @@ enum FeeFrequency {
   ONE_TIME
 }
 
+// Ties a fee category to an opt-in service so the defaulter report only bills
+// students who actually use it: TRANSPORT → students on a bus route, HOSTEL →
+// hostelers. NONE (default) = applies to the whole class (e.g. tuition).
+enum FeeServiceType {
+  NONE
+  TRANSPORT
+  HOSTEL
+}
+
 model FeeCategory {
   id          String   @id @default(cuid())
   tenantId    String
   name        String
   description String?
+  serviceType FeeServiceType @default(NONE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -831,4 +877,344 @@ model StudentActivity {
 
   @@index([tenantId, studentId])
   @@map("student_activities")
+}
+
+// ─── Transport ────────────────────────────────────────────────────────────────
+
+model BusRoute {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  routeNumber String?
+  busNumber   String?
+  driverName  String?
+  driverPhone String?
+  capacity    Int?
+  notes       String?
+  // Live tracking (demo): driver opens the magic-link page (trackToken) which
+  // posts the bus GPS into last* fields; parents poll them. Production = hardware.
+  trackToken     String?   @unique @default(cuid())
+  lastLat        Float?
+  lastLng        Float?
+  lastLocationAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stops    RouteStop[]
+  students Student[]
+
+  @@index([tenantId])
+  @@map("bus_routes")
+}
+
+model RouteStop {
+  id         String   @id @default(cuid())
+  tenantId   String
+  routeId    String
+  name       String
+  sequence   Int      @default(0)
+  pickupTime String?
+  dropTime   String?
+  lat        Float?
+  lng        Float?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  route  BusRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([routeId])
+  @@map("route_stops")
+}
+
+// ─── Hostel ───────────────────────────────────────────────────────────────────
+
+enum HostelType {
+  BOYS
+  GIRLS
+  MIXED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  SNACKS
+  DINNER
+}
+
+enum GatePassStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model Hostel {
+  id          String      @id @default(cuid())
+  tenantId    String
+  name        String
+  type        HostelType?
+  wardenName  String?
+  wardenPhone String?
+  address     String?
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rooms      HostelRoom[]
+  allotments HostelAllotment[]
+  messMenus  MessMenu[]
+
+  @@index([tenantId])
+  @@map("hostels")
+}
+
+model HostelRoom {
+  id         String   @id @default(cuid())
+  tenantId   String
+  hostelId   String
+  roomNumber String
+  floor      String?
+  capacity   Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hostel     Hostel            @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  allotments HostelAllotment[]
+
+  @@index([tenantId])
+  @@index([hostelId])
+  @@map("hostel_rooms")
+}
+
+model HostelAllotment {
+  id         String    @id @default(cuid())
+  tenantId   String
+  hostelId   String
+  roomId     String
+  studentId  String    @unique
+  bedLabel   String?
+  allottedAt DateTime  @default(now())
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hostel  Hostel     @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  room    HostelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  student Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([roomId])
+  @@map("hostel_allotments")
+}
+
+model MessMenu {
+  id        String   @id @default(cuid())
+  tenantId  String
+  hostelId  String?
+  dayOfWeek Int // 0 = Sunday … 6 = Saturday
+  meal      MealType
+  items     String
+  time      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hostel Hostel? @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("mess_menus")
+}
+
+model GatePass {
+  id           String         @id @default(cuid())
+  tenantId     String
+  studentId    String
+  reason       String
+  destination  String?
+  fromDate     DateTime
+  toDate       DateTime
+  status       GatePassStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime       @default(now())
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reviewedBy User?   @relation("GatePassReviewer", fields: [reviewedById], references: [id])
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@map("gate_passes")
+}
+
+model HostelComplaint {
+  id          String          @id @default(cuid())
+  tenantId    String
+  studentId   String
+  category    String?
+  title       String
+  description String?
+  status      ComplaintStatus @default(OPEN)
+  resolution  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@map("hostel_complaints")
+}
+
+// ─── Store / Purchases ────────────────────────────────────────────────────────
+
+enum PurchaseCategory {
+  UNIFORM
+  BOOKS
+  MATERIALS
+  OTHER
+}
+
+model StoreItem {
+  id          String           @id @default(cuid())
+  tenantId    String
+  name        String
+  category    PurchaseCategory @default(OTHER)
+  price       Float
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+
+  @@index([tenantId])
+  @@map("store_items")
+}
+
+model Purchase {
+  id           String           @id @default(cuid())
+  tenantId     String
+  studentId    String
+  storeItemId  String?
+  itemName     String
+  category     PurchaseCategory @default(OTHER)
+  quantity     Int              @default(1)
+  amount       Float
+  purchasedAt  DateTime         @default(now())
+  note         String?
+  recordedById String
+  createdAt    DateTime         @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  storeItem  StoreItem? @relation(fields: [storeItemId], references: [id])
+  recordedBy User       @relation("PurchaseRecordedBy", fields: [recordedById], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, studentId])
+  @@map("purchases")
+}
+
+// ─── Library ──────────────────────────────────────────────────────────────────
+
+model LibraryBook {
+  id             String   @id @default(cuid())
+  tenantId       String
+  title          String
+  author         String?
+  isbn           String?
+  category       String?
+  readingLevel   String?
+  coverUrl       String?
+  totalCopies    Int      @default(1)
+  availableCopies Int     @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  issues BookIssue[]
+
+  @@index([tenantId])
+  @@map("library_books")
+}
+
+model BookIssue {
+  id            String    @id @default(cuid())
+  tenantId      String
+  bookId        String
+  studentId     String
+  issuedAt      DateTime  @default(now())
+  dueDate       DateTime
+  returnedAt    DateTime?
+  fineAmount    Float     @default(0)
+  fineCollected Boolean   @default(false)
+  issuedById    String
+  createdAt     DateTime  @default(now())
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  book     LibraryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  student  Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  issuedBy User        @relation("BookIssuedBy", fields: [issuedById], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, studentId])
+  @@index([bookId])
+  @@map("book_issues")
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+enum EventMediaType {
+  PHOTO
+  YOUTUBE
+}
+
+model SchoolEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  description String?
+  eventDate   DateTime
+  endDate     DateTime?
+  location    String?
+  classId     String? // null = whole school
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class     Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  createdBy User         @relation("EventCreatedBy", fields: [createdById], references: [id])
+  media     EventMedia[]
+
+  @@index([tenantId])
+  @@index([tenantId, eventDate])
+  @@map("school_events")
+}
+
+model EventMedia {
+  id        String         @id @default(cuid())
+  tenantId  String
+  eventId   String
+  type      EventMediaType
+  url       String
+  key       String? // storage key for uploaded photos (for deletion)
+  caption   String?
+  createdAt DateTime       @default(now())
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  event  SchoolEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_media")
 }
