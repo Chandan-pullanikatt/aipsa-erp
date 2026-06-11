@@ -507,6 +507,141 @@ async function main() {
 
   console.log('✅  Notifications created');
 
+  // ── 21. Transport (bus routes, stops & student assignment) ───────────────────
+  const route1 = await prisma.busRoute.create({
+    data: {
+      tenantId: tenant.id, name: 'Route 1 — City Centre', routeNumber: 'R1', busNumber: 'KL-07-AX-1234',
+      driverName: 'Ramesh Pillai', driverPhone: '+91-98470-22001', capacity: 40,
+      notes: 'Covers the central and east residential zones.',
+      lastLat: 9.9312, lastLng: 76.2673, lastLocationAt: new Date('2026-05-20T08:05:00'),
+    },
+  });
+  const route2 = await prisma.busRoute.create({
+    data: {
+      tenantId: tenant.id, name: 'Route 2 — North Suburb', routeNumber: 'R2', busNumber: 'KL-07-AX-5678',
+      driverName: 'Joseph Kurian', driverPhone: '+91-98470-22002', capacity: 35,
+      notes: 'Covers the northern suburbs and the highway stops.',
+      lastLat: 10.0159, lastLng: 76.3419, lastLocationAt: new Date('2026-05-20T07:55:00'),
+    },
+  });
+  await prisma.routeStop.createMany({
+    data: [
+      { tenantId: tenant.id, routeId: route1.id, name: 'MG Road Junction',   sequence: 1, pickupTime: '07:30', dropTime: '15:45', lat: 9.9816, lng: 76.2999 },
+      { tenantId: tenant.id, routeId: route1.id, name: 'Marine Drive',        sequence: 2, pickupTime: '07:45', dropTime: '15:30', lat: 9.9780, lng: 76.2760 },
+      { tenantId: tenant.id, routeId: route1.id, name: 'St. Mary\'s Academy', sequence: 3, pickupTime: '08:15', dropTime: '15:10', lat: 9.9312, lng: 76.2673 },
+      { tenantId: tenant.id, routeId: route2.id, name: 'Edappally Toll',      sequence: 1, pickupTime: '07:20', dropTime: '15:50', lat: 10.0250, lng: 76.3080 },
+      { tenantId: tenant.id, routeId: route2.id, name: 'Palarivattom',        sequence: 2, pickupTime: '07:40', dropTime: '15:35', lat: 10.0064, lng: 76.3060 },
+      { tenantId: tenant.id, routeId: route2.id, name: 'St. Mary\'s Academy', sequence: 3, pickupTime: '08:15', dropTime: '15:10', lat: 9.9312, lng: 76.2673 },
+    ],
+  });
+  await prisma.student.update({ where: { id: st1.id },  data: { needsBus: true, busRouteId: route1.id, boardingPoint: 'MG Road Junction' } });
+  await prisma.student.update({ where: { id: st4.id },  data: { needsBus: true, busRouteId: route1.id, boardingPoint: 'Marine Drive' } });
+  await prisma.student.update({ where: { id: st7.id },  data: { needsBus: true, busRouteId: route2.id, boardingPoint: 'Edappally Toll' } });
+  await prisma.student.update({ where: { id: st9.id },  data: { needsBus: true, busRouteId: route2.id, boardingPoint: 'Palarivattom' } });
+  console.log('✅  Transport created (2 routes, 6 stops, 4 students assigned)');
+
+  // ── 22. Hostel (building, rooms, allotments, mess, gate-pass, complaint) ──────
+  const hostel = await prisma.hostel.create({
+    data: {
+      tenantId: tenant.id, name: 'Boys Hostel — Block A', type: 'BOYS',
+      wardenName: 'Mr. George Thomas', wardenPhone: '+91-98470-33001',
+      address: 'Campus North Wing, St. Mary\'s Academy', notes: 'Capacity 60 students across 3 floors.',
+    },
+  });
+  const room101 = await prisma.hostelRoom.create({ data: { tenantId: tenant.id, hostelId: hostel.id, roomNumber: '101', floor: 'Ground', capacity: 3 } });
+  const room102 = await prisma.hostelRoom.create({ data: { tenantId: tenant.id, hostelId: hostel.id, roomNumber: '102', floor: 'Ground', capacity: 3 } });
+  const room201 = await prisma.hostelRoom.create({ data: { tenantId: tenant.id, hostelId: hostel.id, roomNumber: '201', floor: 'First',  capacity: 2 } });
+  await prisma.hostelAllotment.create({ data: { tenantId: tenant.id, hostelId: hostel.id, roomId: room101.id, studentId: st1.id,  bedLabel: 'Bed A' } });
+  await prisma.hostelAllotment.create({ data: { tenantId: tenant.id, hostelId: hostel.id, roomId: room101.id, studentId: st4.id,  bedLabel: 'Bed B' } });
+  await prisma.hostelAllotment.create({ data: { tenantId: tenant.id, hostelId: hostel.id, roomId: room201.id, studentId: st9.id,  bedLabel: 'Bed A' } });
+  await prisma.messMenu.createMany({
+    data: [
+      { tenantId: tenant.id, hostelId: hostel.id, dayOfWeek: 1, meal: 'BREAKFAST', items: 'Idli, Sambar, Coconut Chutney, Banana', time: '07:30' },
+      { tenantId: tenant.id, hostelId: hostel.id, dayOfWeek: 1, meal: 'LUNCH',     items: 'Rice, Dal, Mixed Vegetable Curry, Curd, Pickle', time: '12:45' },
+      { tenantId: tenant.id, hostelId: hostel.id, dayOfWeek: 1, meal: 'DINNER',    items: 'Chapati, Paneer Butter Masala, Rice, Salad', time: '19:30' },
+      { tenantId: tenant.id, hostelId: hostel.id, dayOfWeek: 2, meal: 'BREAKFAST', items: 'Dosa, Tomato Chutney, Sambar', time: '07:30' },
+      { tenantId: tenant.id, hostelId: hostel.id, dayOfWeek: 2, meal: 'LUNCH',     items: 'Veg Biryani, Raita, Boiled Egg, Papad', time: '12:45' },
+      { tenantId: tenant.id, hostelId: hostel.id, dayOfWeek: 2, meal: 'DINNER',    items: 'Rice, Rasam, Cabbage Thoran, Curd', time: '19:30' },
+    ],
+  });
+  await prisma.gatePass.create({
+    data: {
+      tenantId: tenant.id, studentId: st1.id, reason: 'Weekend home visit', destination: 'Kochi',
+      fromDate: new Date('2026-05-23T16:00:00'), toDate: new Date('2026-05-25T18:00:00'),
+      status: 'APPROVED', reviewedById: schoolAdmin.id, reviewedAt: new Date('2026-05-22T10:00:00'),
+    },
+  });
+  await prisma.gatePass.create({
+    data: {
+      tenantId: tenant.id, studentId: st9.id, reason: 'Doctor appointment', destination: 'City Hospital',
+      fromDate: new Date('2026-05-26T09:00:00'), toDate: new Date('2026-05-26T13:00:00'), status: 'PENDING',
+    },
+  });
+  await prisma.hostelComplaint.create({
+    data: {
+      tenantId: tenant.id, studentId: st4.id, category: 'Maintenance', title: 'Ceiling fan not working in Room 101',
+      description: 'The fan has been making noise and stopped working since yesterday.', status: 'IN_PROGRESS',
+    },
+  });
+  console.log('✅  Hostel created (1 block, 3 rooms, 3 allotments, mess menu, gate-passes, complaint)');
+
+  // ── 23. Library (books + an active issue) ────────────────────────────────────
+  const book1 = await prisma.libraryBook.create({ data: { tenantId: tenant.id, title: 'The Jungle Book',                author: 'Rudyard Kipling', isbn: '9780141325293', category: 'Fiction',     readingLevel: 'Class 6-8', totalCopies: 4, availableCopies: 3 } });
+  const book2 = await prisma.libraryBook.create({ data: { tenantId: tenant.id, title: 'A Brief History of Time',        author: 'Stephen Hawking', isbn: '9780553380163', category: 'Science',     readingLevel: 'Class 8+',  totalCopies: 2, availableCopies: 2 } });
+  await prisma.libraryBook.create({ data: { tenantId: tenant.id, title: 'Wings of Fire',                  author: 'A.P.J. Abdul Kalam', isbn: '9788173711466', category: 'Biography',   readingLevel: 'Class 7+',  totalCopies: 3, availableCopies: 3 } });
+  await prisma.libraryBook.create({ data: { tenantId: tenant.id, title: 'Matilda',                         author: 'Roald Dahl',      isbn: '9780142410370', category: 'Fiction',     readingLevel: 'Class 5-7', totalCopies: 5, availableCopies: 5 } });
+  await prisma.libraryBook.create({ data: { tenantId: tenant.id, title: 'NCERT Atlas of India',            author: 'NCERT',           isbn: '9788174504760', category: 'Reference',   readingLevel: 'All',       totalCopies: 6, availableCopies: 6 } });
+  await prisma.bookIssue.create({
+    data: {
+      tenantId: tenant.id, bookId: book1.id, studentId: st4.id, issuedById: schoolAdmin.id,
+      issuedAt: new Date('2026-05-12'), dueDate: new Date('2026-05-26'),
+    },
+  });
+  console.log('✅  Library created (5 books, 1 active issue)');
+
+  // ── 24. Store / Purchases ────────────────────────────────────────────────────
+  const itemUniform = await prisma.storeItem.create({ data: { tenantId: tenant.id, name: 'School Uniform Set',     category: 'UNIFORM',   price: 1200, description: 'Shirt, trousers/skirt and tie.' } });
+  const itemShoes   = await prisma.storeItem.create({ data: { tenantId: tenant.id, name: 'Black School Shoes',     category: 'UNIFORM',   price: 850,  description: 'Standard black leather shoes.' } });
+  const itemBooks   = await prisma.storeItem.create({ data: { tenantId: tenant.id, name: 'Class 7 Textbook Bundle', category: 'BOOKS',     price: 2400, description: 'Full set of NCERT textbooks for Class 7.' } });
+  await prisma.storeItem.create({ data: { tenantId: tenant.id, name: 'Stationery Kit',          category: 'MATERIALS', price: 350,  description: 'Notebooks, pens, geometry box.' } });
+  await prisma.purchase.create({ data: { tenantId: tenant.id, studentId: st4.id, storeItemId: itemUniform.id, itemName: 'School Uniform Set',      category: 'UNIFORM', quantity: 2, amount: 2400, recordedById: schoolAdmin.id, purchasedAt: new Date('2026-04-05') } });
+  await prisma.purchase.create({ data: { tenantId: tenant.id, studentId: st4.id, storeItemId: itemBooks.id,   itemName: 'Class 7 Textbook Bundle', category: 'BOOKS',   quantity: 1, amount: 2400, recordedById: schoolAdmin.id, purchasedAt: new Date('2026-04-05') } });
+  await prisma.purchase.create({ data: { tenantId: tenant.id, studentId: st7.id, storeItemId: itemShoes.id,   itemName: 'Black School Shoes',      category: 'UNIFORM', quantity: 1, amount: 850,  recordedById: schoolAdmin.id, purchasedAt: new Date('2026-04-10') } });
+  console.log('✅  Store created (4 items, 3 purchases)');
+
+  // ── 25. Events (with photo & video media) ────────────────────────────────────
+  const event1 = await prisma.schoolEvent.create({
+    data: {
+      tenantId: tenant.id, title: 'Annual Sports Day 2026', createdById: schoolAdmin.id,
+      description: 'A day of athletics, team games and the inter-house championship.',
+      eventDate: new Date('2026-05-10T08:00:00'), location: 'School Grounds',
+    },
+  });
+  const event2 = await prisma.schoolEvent.create({
+    data: {
+      tenantId: tenant.id, title: 'Science Exhibition', createdById: schoolAdmin.id, classId: class7.id,
+      description: 'Class 7 students present working models and experiments.',
+      eventDate: new Date('2026-04-28T09:30:00'), location: 'School Auditorium',
+    },
+  });
+  const event3 = await prisma.schoolEvent.create({
+    data: {
+      tenantId: tenant.id, title: 'Independence Day Celebration', createdById: schoolAdmin.id,
+      description: 'Flag hoisting, cultural performances and prize distribution.',
+      eventDate: new Date('2026-08-15T07:30:00'), location: 'School Quadrangle',
+    },
+  });
+  await prisma.eventMedia.createMany({
+    data: [
+      { tenantId: tenant.id, eventId: event1.id, type: 'PHOTO',   url: 'https://images.unsplash.com/photo-1530549387789-4c1017266635?w=1200', caption: 'The 100m sprint final' },
+      { tenantId: tenant.id, eventId: event1.id, type: 'PHOTO',   url: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1200', caption: 'House march-past' },
+      { tenantId: tenant.id, eventId: event1.id, type: 'YOUTUBE', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', caption: 'Sports Day highlights reel' },
+      { tenantId: tenant.id, eventId: event2.id, type: 'PHOTO',   url: 'https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?w=1200', caption: 'Working volcano model' },
+      { tenantId: tenant.id, eventId: event2.id, type: 'PHOTO',   url: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=1200', caption: 'Robotics demonstration' },
+    ],
+  });
+  console.log('✅  Events created (3 events, 5 media items)');
+
   // ── Summary ──────────────────────────────────────────────────────────────────
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
   console.log("║          ST. MARY'S ACADEMY — DEMO SEED COMPLETE 🎉              ║");
@@ -518,8 +653,8 @@ async function main() {
   console.log('║  Teacher            sarah.thomas@stmarys.edu   Teacher@1234      ║');
   console.log('║  Teacher            raj.kumar@stmarys.edu      Teacher@1234      ║');
   console.log('║  Teacher            priya.nair@stmarys.edu     Teacher@1234      ║');
-  console.log('║  Parent             david.mathew@gmail.com     Parent@1234       ║');
-  console.log('║  Parent             sunita.sharma@gmail.com    Parent@1234       ║');
+  console.log('║  Parent             davidmathew@gmail.com      Parent@1234       ║');
+  console.log('║  Parent             sunitasharma@gmail.com     Parent@1234       ║');
   console.log('╠══════════════════════════════════════════════════════════════════╣');
   console.log('║  STUDENT PORTAL PINs (for parent link demo)                      ║');
   console.log('║  Rohan Mathew  ADM-2026-0004  PIN: 100004  [linked to David]     ║');

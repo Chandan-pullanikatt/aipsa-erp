@@ -31,10 +31,15 @@ app.use(cors({
 }));
 
 // Rate limiting
+// NOTE: Rate limits are currently DISABLED for demos (unlimited logins/requests).
+//       Before production, set DISABLE_RATE_LIMIT to false (or remove the skip override)
+//       to restore the 300 req / 20 auth-attempt limits per 15 min window.
+const RATE_LIMIT_DISABLED = process.env.DISABLE_RATE_LIMIT !== 'false';
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
-  skip: () => process.env.NODE_ENV !== 'production',
+  skip: () => RATE_LIMIT_DISABLED || process.env.NODE_ENV !== 'production',
   message: { error: 'Too many requests, please try again later.' },
 });
 app.use('/api/', limiter);
@@ -42,7 +47,7 @@ app.use('/api/', limiter);
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  skip: () => process.env.NODE_ENV !== 'production',
+  skip: () => RATE_LIMIT_DISABLED || process.env.NODE_ENV !== 'production',
   message: { error: 'Too many auth attempts, please try again later.' },
 });
 

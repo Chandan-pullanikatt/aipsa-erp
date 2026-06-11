@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
-    "db:demo": "node prisma/demo_seed.js"
+    "db:demo": "node prisma/demo_seed.js",
+    "test:isolation": "node tests/tenant-isolation.test.js"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
