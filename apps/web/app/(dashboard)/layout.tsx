@@ -163,9 +163,9 @@ function groupNavItems(items: NavItem[], role: AuthUser['role']): { standalone: 
   const dashboard = items.find(i => i.label === 'Dashboard');
 
   const academicsList = ['Students', 'Manage Classes', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Timetable'];
-  const financeList = ['Fee Management'];
-  const operationsList = ['Staff'];
-  const managementList = ['Communication', 'School Profile'];
+  const financeList = ['Fee Management', 'Store'];
+  const operationsList = ['Staff', 'Transport', 'Hostel', 'Library'];
+  const managementList = ['Communication', 'Events', 'School Profile'];
 
   const groups: NavGroup[] = [
     {
