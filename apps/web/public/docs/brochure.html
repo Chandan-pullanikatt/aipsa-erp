@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIPSA School ERP — Run Your Whole School in One Place</title>
+<meta name="description" content="AIPSA is a simple, all-in-one school management software and learning app for students, teachers and parents.">
+<style>
+  :root{
+    --brand:#1d4ed8; --brand-dark:#1e3a8a; --ink:#0f172a; --muted:#64748b;
+    --bg:#ffffff; --soft:#f1f5ff; --line:#e5e7eb; --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+  img{max-width:100%;display:block}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+  .btn{display:inline-block;background:var(--brand);color:#fff;font-weight:600;padding:14px 26px;border-radius:999px;transition:.2s;font-size:15px}
+  .btn:hover{background:var(--brand-dark);transform:translateY(-1px)}
+  .btn.ghost{background:#fff;color:var(--brand);border:2px solid var(--brand)}
+  .btn.ghost:hover{background:var(--soft)}
+  .eyebrow{color:var(--brand);font-weight:700;letter-spacing:.6px;text-transform:uppercase;font-size:13px}
+  h1,h2,h3{line-height:1.2;letter-spacing:-.5px}
+  h2.section-title{font-size:34px;text-align:center;margin-bottom:12px}
+  .section-sub{text-align:center;color:var(--muted);max-width:620px;margin:0 auto 48px;font-size:17px}
+  section{padding:84px 0}
+
+  /* Header */
+  header.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:68px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--brand)}
+  .logo .dot{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--brand),#60a5fa);display:grid;place-items:center;color:#fff;font-size:16px}
+  .nav-links{display:flex;gap:28px;align-items:center;font-weight:500;color:#334155}
+  .nav-links a:hover{color:var(--brand)}
+  @media(max-width:820px){.nav-links a:not(.btn){display:none}}
+
+  /* Hero */
+  .hero{background:linear-gradient(180deg,var(--soft),#fff);padding:72px 0 90px}
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+  .hero h1{font-size:50px;margin:16px 0 18px}
+  .hero p.lead{font-size:19px;color:#475569;margin-bottom:28px}
+  .hero-cta{display:flex;gap:14px;flex-wrap:wrap}
+  .hero-note{margin-top:18px;color:var(--muted);font-size:14px}
+  .hero-img{position:relative}
+  .hero-img img{border-radius:var(--radius);box-shadow:0 30px 60px -20px rgba(29,78,216,.35)}
+  .float-card{position:absolute;background:#fff;border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.12);padding:12px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px}
+  .float-card .ic{font-size:20px}
+  .fc1{bottom:-18px;left:-18px}
+  .fc2{top:-16px;right:-14px}
+  @media(max-width:820px){.hero-grid{grid-template-columns:1fr}.hero h1{font-size:36px}.float-card{display:none}}
+
+  /* Trust strip */
+  .trust{background:var(--ink);color:#cbd5e1;padding:26px 0}
+  .trust .wrap{display:flex;flex-wrap:wrap;justify-content:space-around;gap:18px;text-align:center}
+  .trust b{color:#fff;font-size:26px;display:block}
+  .trust span{font-size:13px}
+
+  /* Audience cards */
+  .aud-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  .aud{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:26px;text-align:center;transition:.2s}
+  .aud:hover{box-shadow:0 18px 40px -18px rgba(15,23,42,.25);transform:translateY(-3px)}
+  .aud .emo{font-size:34px}
+  .aud h3{font-size:19px;margin:12px 0 6px}
+  .aud p{color:var(--muted);font-size:14.5px}
+  @media(max-width:820px){.aud-grid{grid-template-columns:1fr 1fr}}
+
+  /* Feature rows */
+  .feat{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;margin-bottom:90px}
+  .feat:last-child{margin-bottom:0}
+  .feat.rev .feat-text{order:2}
+  .feat img{border-radius:var(--radius);box-shadow:0 24px 50px -24px rgba(15,23,42,.4)}
+  .feat h3{font-size:28px;margin:10px 0 14px}
+  .feat ul{list-style:none;display:grid;gap:10px}
+  .feat li{display:flex;gap:10px;font-size:16px;color:#334155}
+  .feat li::before{content:"✓";color:#16a34a;font-weight:800}
+  @media(max-width:820px){.feat{grid-template-columns:1fr;gap:24px}.feat.rev .feat-text{order:0}}
+
+  /* Everything grid */
+  .all{background:var(--soft)}
+  .all-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .tile{background:#fff;border-radius:14px;padding:22px;border:1px solid var(--line)}
+  .tile .emo{font-size:26px}
+  .tile h4{margin:10px 0 4px;font-size:17px}
+  .tile p{color:var(--muted);font-size:14px}
+  @media(max-width:820px){.all-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:520px){.all-grid{grid-template-columns:1fr}}
+
+  /* Steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+  .step{text-align:center;padding:10px}
+  .step .num{width:52px;height:52px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:20px;display:grid;place-items:center;margin:0 auto 16px}
+  .step h4{font-size:19px;margin-bottom:6px}
+  .step p{color:var(--muted);font-size:15px}
+  @media(max-width:820px){.steps{grid-template-columns:1fr}}
+
+  /* CTA */
+  .cta{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;text-align:center;border-radius:24px;padding:64px 28px;margin:0 24px}
+  .cta h2{font-size:36px;margin-bottom:12px}
+  .cta p{font-size:18px;opacity:.92;margin-bottom:28px}
+  .cta .btn{background:#fff;color:var(--brand)}
+  .cta .btn:hover{background:#eef2ff}
+
+  /* Footer */
+  footer{padding:46px 0;border-top:1px solid var(--line);color:var(--muted);font-size:14px;text-align:center}
+  footer .logo{justify-content:center;margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <div class="logo"><span class="dot">A</span> AIPSA</div>
+    <nav class="nav-links">
+      <a href="#audience">Who it's for</a>
+      <a href="#features">Features</a>
+      <a href="#everything">Everything</a>
+      <a href="#how">How it works</a>
+      <a href="#start" class="btn">Get Started</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">School ERP + Learning App</span>
+      <h1>Run your whole school in one simple place.</h1>
+      <p class="lead">Attendance, fees, exams, report cards, online classes, bus tracking, hostel, library and more — for your office, teachers, students and parents. No paperwork. No confusion.</p>
+      <div class="hero-cta">
+        <a href="#start" class="btn">Start Free Demo</a>
+        <a href="#features" class="btn ghost">See Features</a>
+      </div>
+      <p class="hero-note">Works on phone, tablet and computer — nothing to install.</p>
+    </div>
+    <div class="hero-img">
+      <img src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1100&q=80" alt="Students and teacher using the app together">
+      <div class="float-card fc1"><span class="ic">✅</span> Attendance marked</div>
+      <div class="float-card fc2"><span class="ic">📊</span> Report card ready</div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST -->
+<div class="trust">
+  <div class="wrap">
+    <div><b>1</b><span>One login for the whole school</span></div>
+    <div><b>4</b><span>Roles: Admin · Teacher · Student · Parent</span></div>
+    <div><b>15+</b><span>Modules included</span></div>
+    <div><b>24/7</b><span>Access from anywhere</span></div>
+  </div>
+</div>
+
+<!-- AUDIENCE -->
+<section id="audience">
+  <div class="wrap">
+    <h2 class="section-title">Made for everyone in your school</h2>
+    <p class="section-sub">Each person sees only what they need — clean and simple, no training required.</p>
+    <div class="aud-grid">
+      <div class="aud"><div class="emo">🏫</div><h3>School Office</h3><p>Manage classes, staff, fees and every module from one dashboard.</p></div>
+      <div class="aud"><div class="emo">👩‍🏫</div><h3>Teachers</h3><p>Mark attendance, enter marks, give homework and share lessons.</p></div>
+      <div class="aud"><div class="emo">🎓</div><h3>Students</h3><p>Watch lessons, submit homework and check results and timetable.</p></div>
+      <div class="aud"><div class="emo">👨‍👩‍👧</div><h3>Parents</h3><p>Follow attendance, fees, results and school events in real time.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE ROWS -->
+<section id="features" style="padding-top:30px">
+  <div class="wrap">
+    <h2 class="section-title">The features parents and schools love most</h2>
+    <p class="section-sub">The everyday things that used to take phone calls, registers and paperwork — now in a few taps.</p>
+
+    <div class="feat">
+      <div class="feat-text">
+        <span class="eyebrow">Online Learning (LMS)</span>
+        <h3>Lessons and video classes, anytime</h3>
+        <ul>
+          <li>Recorded video lessons and study material by subject</li>
+          <li>Students learn at their own pace; progress is tracked</li>
+          <li>Homework given, submitted and graded online</li>
+        </ul>
+      </div>
+      <img src="https://images.unsplash.com/photo-1610484826967-09c5720778c7?w=1000&q=80" alt="Child learning online">
+    </div>
+
+    <div class="feat rev">
+      <div class="feat-text">
+        <span class="eyebrow">Attendance & Report Cards</span>
+        <h3>Know everything about your child's progress</h3>
+        <ul>
+          <li>Daily attendance with instant absence alerts to parents</li>
+          <li>Exam marks entered by teachers, report cards made automatically</li>
+          <li>Teacher remarks and activities for each student</li>
+        </ul>
+      </div>
+      <img src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1000&q=80" alt="Report card and progress">
+    </div>
+
+    <div class="feat">
+      <div class="feat-text">
+        <span class="eyebrow">Fees Made Easy</span>
+        <h3>No more confusion over payments</h3>
+        <ul>
+          <li>Clear fee structure for every class</li>
+          <li>Payment history, due reminders and defaulter reports</li>
+          <li>Late-fee waivers handled in one click</li>
+        </ul>
+      </div>
+      <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1000&q=80" alt="Fees and payments">
+    </div>
+
+    <div class="feat rev">
+      <div class="feat-text">
+        <span class="eyebrow">Safety & Daily Life</span>
+        <h3>Bus tracking, hostel, library &amp; events</h3>
+        <ul>
+          <li>See the school bus route and stops for your child</li>
+          <li>Hostel rooms, mess menu and gate-passes for boarders</li>
+          <li>Event photos &amp; videos of your child, library books and more</li>
+        </ul>
+      </div>
+      <img src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1000&q=80" alt="School bus">
+    </div>
+  </div>
+</section>
+
+<!-- EVERYTHING -->
+<section id="everything" class="all">
+  <div class="wrap">
+    <h2 class="section-title">Everything your school needs — included</h2>
+    <p class="section-sub">One software replaces a dozen registers, spreadsheets and apps.</p>
+    <div class="all-grid">
+      <div class="tile"><div class="emo">📝</div><h4>Attendance</h4><p>Students &amp; staff, with leave management.</p></div>
+      <div class="tile"><div class="emo">📚</div><h4>Online Classes (LMS)</h4><p>Video lessons &amp; study material.</p></div>
+      <div class="tile"><div class="emo">🧮</div><h4>Exams &amp; Marks</h4><p>Marks entry and auto report cards.</p></div>
+      <div class="tile"><div class="emo">💳</div><h4>Fee Management</h4><p>Structures, payments &amp; reports.</p></div>
+      <div class="tile"><div class="emo">📅</div><h4>Timetable</h4><p>Class schedules with clash checks.</p></div>
+      <div class="tile"><div class="emo">✏️</div><h4>Homework</h4><p>Assign, submit and grade online.</p></div>
+      <div class="tile"><div class="emo">🚌</div><h4>Transport</h4><p>Bus routes, stops &amp; tracking.</p></div>
+      <div class="tile"><div class="emo">🏨</div><h4>Hostel</h4><p>Rooms, mess, gate-passes, complaints.</p></div>
+      <div class="tile"><div class="emo">📖</div><h4>Library</h4><p>Issue, return &amp; fine tracking.</p></div>
+      <div class="tile"><div class="emo">📸</div><h4>Events</h4><p>Photos &amp; videos for parents.</p></div>
+      <div class="tile"><div class="emo">🛍️</div><h4>School Store</h4><p>Uniforms, books &amp; purchases.</p></div>
+      <div class="tile"><div class="emo">🔔</div><h4>Announcements</h4><p>Notices &amp; instant notifications.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <h2 class="section-title">Get started in 3 easy steps</h2>
+    <p class="section-sub">No technical knowledge needed. If you can use WhatsApp, you can use AIPSA.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h4>Register your school</h4><p>Create your school account in minutes and add your details.</p></div>
+      <div class="step"><div class="num">2</div><h4>Add classes &amp; people</h4><p>Set up classes, invite teachers and add students and parents.</p></div>
+      <div class="step"><div class="num">3</div><h4>Start managing</h4><p>Attendance, fees, lessons and more — all from day one.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="start" style="padding-top:0">
+  <div class="cta">
+    <h2>Ready to modernise your school?</h2>
+    <p>See AIPSA in action with a free demo — no commitment.</p>
+    <a href="#" class="btn">Book a Free Demo</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="logo"><span class="dot">A</span> AIPSA</div>
+    <p>The simple all-in-one School ERP &amp; Learning app.</p>
+    <p style="margin-top:8px">📧 support@aipsa.org &nbsp;·&nbsp; © 2026 AIPSA. All rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

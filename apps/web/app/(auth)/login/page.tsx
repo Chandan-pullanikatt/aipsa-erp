@@ -114,6 +114,27 @@ export default function LoginPage() {
             <Link href="/student-join" className="text-blue-600 hover:underline font-medium">Register with class code</Link>
           </p>
         </div>
+
+        {/* Documentation — for prospects evaluating the product before sign-in */}
+        <div className="mt-6 flex items-center justify-center gap-4 text-xs text-gray-400">
+          <a
+            href="/docs/brochure.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-gray-600 hover:underline transition-colors"
+          >
+            Features
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
+            href="/docs/guides.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-gray-600 hover:underline transition-colors"
+          >
+            Guides
+          </a>
+        </div>
       </div>
     </div>
   );

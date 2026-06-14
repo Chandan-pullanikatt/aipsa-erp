@@ -226,13 +226,21 @@ function renderHTML(key, g) {
 </html>`;
 }
 
-const outDir = __dirname;
+// Source folder (editable, kept in repo) + the web app's public folder so the
+// login-screen "Guides" links resolve in production (Vercel only deploys apps/web).
+const outDirs = [
+  __dirname,
+  path.join(__dirname, '..', '..', 'apps', 'web', 'public', 'docs'),
+];
 let count = 0;
-for (const [key, g] of Object.entries(GUIDES)) {
-  const file = path.join(outDir, `onboarding-${key}.html`);
-  fs.writeFileSync(file, renderHTML(key, g), 'utf8');
-  console.log(`  ✓ ${path.basename(file)}  (${g.role})`);
-  count++;
+for (const dir of outDirs) {
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [key, g] of Object.entries(GUIDES)) {
+    const file = path.join(dir, `onboarding-${key}.html`);
+    fs.writeFileSync(file, renderHTML(key, g), 'utf8');
+    console.log(`  ✓ ${path.relative(process.cwd(), file)}  (${g.role})`);
+    count++;
+  }
 }
-console.log(`\nGenerated ${count} onboarding guides in ${outDir}`);
+console.log(`\nGenerated ${count} onboarding guides across ${outDirs.length} folders.`);
 console.log('Open each in a browser → Ctrl/Cmd+P → Save as PDF.');
