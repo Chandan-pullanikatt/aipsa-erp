@@ -1,0 +1,7 @@
+node_modules/
+# Generated native project — recreated via `npx cap add android`.
+android/
+# Capacitor copies web assets here on sync.
+www/*
+!www/index.html
+# Build assets generated from assets/logo.png

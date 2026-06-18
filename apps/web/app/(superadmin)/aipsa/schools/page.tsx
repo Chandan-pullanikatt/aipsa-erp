@@ -161,8 +161,8 @@ function SchoolsContent() {
         ) : (
           <>
             {/* Table Header */}
-            <div className="bg-[#F7F8FA] border-b border-[#E5E7EB] px-5 py-3 grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 items-center">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">School</span>
+            <div className="hidden sm:flex bg-[#F7F8FA] border-b border-[#E5E7EB] px-5 py-3 gap-4 items-center">
+              <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">School</span>
               <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] text-center w-24">Status</span>
               <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] text-center w-16">Users</span>
               <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] w-28">Registered</span>
@@ -175,10 +175,10 @@ function SchoolsContent() {
                 return (
                   <div
                     key={school.id}
-                    className="px-5 py-4 grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 items-center hover:bg-[#F9FAFB] transition-colors group"
+                    className="px-4 sm:px-5 py-4 flex flex-col gap-3 sm:flex-row sm:gap-4 sm:items-center hover:bg-[#F9FAFB] transition-colors group"
                   >
                     {/* School Info */}
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 sm:flex-1">
                       <div className="w-10 h-10 rounded-xl bg-[#EEF2FF] text-[#4338CA] flex items-center justify-center font-display font-bold text-sm shrink-0">
                         {initials(displayName)}
                       </div>
@@ -198,15 +198,17 @@ function SchoolsContent() {
                       </div>
                     </div>
 
+                    {/* Meta: stacks under name on mobile (flex-wrap), becomes table cells on desktop */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:contents">
                     {/* Status */}
-                    <div className="w-24 text-center">
+                    <div className="sm:w-24 sm:text-center">
                       <span className={`inline-flex text-[11px] font-semibold px-2.5 py-0.5 rounded ${STATUS_STYLE[school.status]}`}>
                         {school.status}
                       </span>
                     </div>
 
                     {/* Users */}
-                    <div className="w-16 text-center">
+                    <div className="sm:w-16 sm:text-center">
                       <span className="inline-flex items-center gap-1 text-[13px] text-[#6B7280]">
                         <Users className="w-3.5 h-3.5" strokeWidth={1.75} />
                         {school._count.users}
@@ -214,7 +216,7 @@ function SchoolsContent() {
                     </div>
 
                     {/* Date */}
-                    <div className="w-28">
+                    <div className="sm:w-28">
                       <span className="text-[12px] text-[#6B7280]">
                         {new Date(school.createdAt).toLocaleDateString('en-IN', {
                           day: 'numeric',
@@ -225,7 +227,7 @@ function SchoolsContent() {
                     </div>
 
                     {/* Actions */}
-                    <div className="w-32 flex items-center justify-end gap-2">
+                    <div className="w-full sm:w-32 flex items-center justify-end gap-2">
                       {school.status === 'PENDING' && (
                         <button
                           onClick={() => handleApprove(school.id)}
@@ -269,6 +271,7 @@ function SchoolsContent() {
                       >
                         <ChevronRight className="w-4 h-4" strokeWidth={1.75} />
                       </Link>
+                    </div>
                     </div>
                   </div>
                 );

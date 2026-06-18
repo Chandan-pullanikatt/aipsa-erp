@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline · AIPSA</title>
+    <style>
+      html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
+      body { display: flex; align-items: center; justify-content: center; background: #F9FAFB; color: #1A1D23; }
+      .box { text-align: center; padding: 2rem; max-width: 22rem; }
+      .dot { width: 56px; height: 56px; border-radius: 16px; background: #1D7A4A; margin: 0 auto 1rem; }
+      h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+      p { color: #6B7280; font-size: .95rem; line-height: 1.5; margin: 0 0 1.25rem; }
+      button { background: #1D7A4A; color: #fff; border: 0; padding: .65rem 1.25rem; border-radius: 10px; font-weight: 600; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <div class="dot"></div>
+      <h1>You're offline</h1>
+      <p>AIPSA needs an internet connection. Check your network and try again.</p>
+      <button onclick="location.reload()">Retry</button>
+    </div>
+  </body>
+</html>
