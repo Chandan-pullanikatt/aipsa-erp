@@ -228,7 +228,7 @@ function MessTab() {
       </form>
 
       <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead><tr className="text-xs uppercase text-[#9CA3AF]"><th className="text-left p-2">Day</th>{MEALS.map((m) => <th key={m} className="text-left p-2">{m[0] + m.slice(1).toLowerCase()}</th>)}</tr></thead>
           <tbody>
             {DAYS.map((d, i) => (

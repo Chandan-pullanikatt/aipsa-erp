@@ -768,7 +768,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                     <p className="text-xs text-[#9CA3AF] font-semibold italic px-4 py-3">No marks entered yet.</p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full min-w-[640px] text-sm">
                         <thead>
                           <tr className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider border-b border-[#F3F4F6]">
                             <th className="text-left px-4 py-2">Subject</th>
@@ -937,7 +937,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Payment History</p>
                 <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[640px] text-sm">
                       <thead>
                         <tr className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider bg-[#F9FAFB] border-b border-[#E5E7EB]">
                           <th className="text-left px-4 py-2.5">Date</th>

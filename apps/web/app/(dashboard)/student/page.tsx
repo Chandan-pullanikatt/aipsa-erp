@@ -740,8 +740,8 @@ function StudentPortalContent() {
 
             {/* List logs */}
             {attendance?.records && attendance.records.length > 0 ? (
-              <div className="border border-[#E5E7EB] rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="border border-[#E5E7EB] rounded-lg overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                <table className="w-full min-w-[640px] text-left text-xs border-collapse">
                   <thead className="bg-gray-50 border-b border-[#E5E7EB] text-gray-400 uppercase text-[10px] tracking-wider font-semibold font-display">
                     <tr>
                       <th className="px-5 py-3">Register Date</th>
@@ -818,8 +818,8 @@ function StudentPortalContent() {
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-4">
               <h3 className="font-semibold text-gray-800 text-sm font-display">Fee Structure Ledger</h3>
               {fees?.breakdown && fees.breakdown.length > 0 ? (
-                <div className="border border-[#E5E7EB] rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="border border-[#E5E7EB] rounded-lg overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                  <table className="w-full min-w-[640px] text-left text-xs border-collapse">
                     <thead className="bg-gray-50 border-b border-[#E5E7EB] text-gray-400 font-semibold uppercase tracking-wider text-[10px] font-display">
                       <tr>
                         <th className="px-5 py-3">Category</th>
@@ -880,8 +880,8 @@ function StudentPortalContent() {
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-4">
               <h3 className="font-semibold text-gray-800 text-sm font-display">Payment History Log</h3>
               {fees?.payments && fees.payments.length > 0 ? (
-                <div className="border border-[#E5E7EB] rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="border border-[#E5E7EB] rounded-lg overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                  <table className="w-full min-w-[640px] text-left text-xs border-collapse">
                     <thead className="bg-gray-50 border-b border-[#E5E7EB] text-gray-400 font-semibold uppercase tracking-wider text-[10px] font-display">
                       <tr>
                         <th className="px-5 py-3">Receipt No</th>
@@ -982,8 +982,8 @@ function StudentPortalContent() {
                       </div>
 
                       {/* Grades Table */}
-                      <div className="border border-[#E5E7EB] rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                        <table className="w-full text-left border-collapse text-[11px]">
+                      <div className="border border-[#E5E7EB] rounded-lg overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                        <table className="w-full min-w-[600px] text-left border-collapse text-[11px]">
                           <thead>
                             <tr className="bg-gray-50 border-b border-[#E5E7EB] text-gray-400 font-bold uppercase tracking-wider text-[9px] font-display">
                               <th className="px-4 py-2">Subject course</th>

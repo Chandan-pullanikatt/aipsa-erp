@@ -101,7 +101,7 @@ function IssuesTab() {
         <button onClick={() => setShowIssue(true)} className="ml-auto px-4 py-2 rounded-lg bg-[#1D7A4A] text-white text-sm font-semibold inline-flex items-center gap-1"><Plus className="w-4 h-4" /> Issue Book</button>
       </div>
       <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]"><tr>{['Book', 'Student', 'Issued', 'Due', 'Status', 'Fine', ''].map(h => <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-[#F3F4F6]">
             {issues.map(i => (

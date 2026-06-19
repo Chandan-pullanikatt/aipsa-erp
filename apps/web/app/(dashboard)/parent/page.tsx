@@ -682,7 +682,7 @@ function ParentDashboardContent() {
                               </div>
                             ) : (
                               <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
+                                <table className="w-full min-w-[640px] text-left border-collapse text-sm">
                                   <thead>
                                     <tr className="bg-gray-50/50 border-b border-gray-150 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                       <th className="px-5 py-3">Date</th>
@@ -793,7 +793,7 @@ function ParentDashboardContent() {
                               <h3 className="font-semibold text-gray-805 text-sm font-display">Fee Structure Breakdown</h3>
                             </div>
                             <div className="overflow-x-auto">
-                              <table className="w-full text-left border-collapse text-sm">
+                              <table className="w-full min-w-[640px] text-left border-collapse text-sm">
                                 <thead>
                                   <tr className="bg-gray-50/50 border-b border-gray-150 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     <th className="px-5 py-3">Fee Category</th>
@@ -843,7 +843,7 @@ function ParentDashboardContent() {
                               </div>
                             ) : (
                               <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
+                                <table className="w-full min-w-[640px] text-left border-collapse text-sm">
                                   <thead>
                                     <tr className="bg-gray-50/50 border-b border-gray-150 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                       <th className="px-5 py-3">Receipt No</th>
@@ -950,8 +950,8 @@ function ParentDashboardContent() {
                                     </div>
 
                                     {/* Subject Splits Table */}
-                                    <div className="border border-gray-200 rounded-xl overflow-hidden">
-                                      <table className="w-full text-left border-collapse text-sm">
+                                    <div className="border border-gray-200 rounded-xl overflow-x-auto">
+                                      <table className="w-full min-w-[640px] text-left border-collapse text-sm">
                                         <thead>
                                           <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                             <th className="px-5 py-3">Subject Name</th>

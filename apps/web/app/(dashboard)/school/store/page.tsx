@@ -126,7 +126,7 @@ function HistoryTab({ classes }: { classes: any[] }) {
         <span className="ml-auto text-sm font-semibold text-[#1A1D23] self-center">Total: {rupees(total)}</span>
       </div>
       <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]"><tr>{['Student', 'Class', 'Item', 'Category', 'Qty', 'Amount', 'Date', ''].map(h => <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-[#F3F4F6]">
             {rows.map(r => (

@@ -138,7 +138,7 @@ export default function StudentsPage() {
       {loading ? (
         <div className="py-16 text-center text-text-muted font-body">Loading students...</div>
       ) : (
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div className="bg-white rounded-xl border border-border overflow-x-auto">
           {students.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <GraduationCap className="w-10 h-10 text-gray-300" strokeWidth={1.75} />
@@ -150,7 +150,7 @@ export default function StudentsPage() {
               </Link>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr>
                   <th className="px-4 py-3 font-semibold text-[12px] uppercase tracking-wide text-text-muted">Adm. No.</th>

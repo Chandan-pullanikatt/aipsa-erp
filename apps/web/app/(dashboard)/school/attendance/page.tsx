@@ -257,8 +257,8 @@ function MarkStudents({ classes, sections, setSections }: { classes: ClassItem[]
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-[#F7F8FA] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#6B7280] w-12">#</th>
@@ -375,8 +375,8 @@ function MarkTeachers({ teachers }: { teachers: TeacherUser[] }) {
 
       {loaded && teachers.length > 0 && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-[#F7F8FA] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Teacher</th>
@@ -565,8 +565,8 @@ function AttendanceReports({ classes }: { classes: ClassItem[] }) {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-[#F7F8FA] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Date</th>

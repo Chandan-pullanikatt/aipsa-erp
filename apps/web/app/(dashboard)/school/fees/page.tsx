@@ -206,8 +206,8 @@ function FeeStructureTab({ classes, academicYear }: { classes: ClassItem[]; acad
           </form>
         )}
 
-        <div className="overflow-hidden rounded-xl border border-[#E5E7EB]">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Category</th>
@@ -504,8 +504,8 @@ function PaymentHistoryTab() {
         <div className="py-12 text-center text-gray-400 font-body text-sm">Loading payment log history...</div>
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto shadow-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Receipt</th>
@@ -602,8 +602,8 @@ function DueReportTab({ classes }: { classes: ClassItem[] }) {
             <p className="text-2xl font-bold text-[#991B1B] font-mono">{rupees(totalDue)}</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto shadow-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Student</th>
@@ -729,7 +729,7 @@ function DefaulterReportTab({ classes }: { classes: ClassItem[] }) {
 
           {/* detailed table */}
           <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Student</th>

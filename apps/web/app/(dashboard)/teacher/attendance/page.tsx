@@ -132,8 +132,8 @@ export default function TeacherAttendancePage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-gray-50 border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-display w-16">#</th>

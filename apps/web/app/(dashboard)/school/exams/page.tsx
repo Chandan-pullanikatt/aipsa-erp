@@ -445,7 +445,8 @@ function MarksEntryTab({ classes, academicYear }: { classes: ClassItem[]; academ
                 Mark All Absent
               </button>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">#</th>
@@ -488,6 +489,7 @@ function MarksEntryTab({ classes, academicYear }: { classes: ClassItem[]; academ
                 })}
               </tbody>
             </table>
+            </div>
           </div>
           <div className="flex items-center gap-3 pt-2">
             <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white rounded-lg text-sm font-semibold transition-all shadow-xs disabled:opacity-60">
@@ -559,8 +561,8 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
           </div>
           
           {filtered.length > 0 && (
-            <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto shadow-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                   <tr>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider font-body">Student Name</th>
@@ -619,7 +621,8 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
                       {es.overallGrade && <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${GRADE_COLORS[es.overallGrade] || ''}`}>GRADE {es.overallGrade}</span>}
                     </div>
                   </div>
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-sm">
                     <thead className="border-b border-[#E5E7EB] bg-gray-55">
                       <tr>
                         <th className="text-left px-6 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider font-body">Subject</th>
@@ -649,6 +652,7 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
                       {es.results.length === 0 && <tr><td colSpan={6} className="px-6 py-4 text-center text-gray-400 text-xs font-body">No exam results recorded for this segment.</td></tr>}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               ))}
 

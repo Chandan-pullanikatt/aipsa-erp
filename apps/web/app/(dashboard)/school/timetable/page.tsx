@@ -304,7 +304,7 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
       {classId && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full min-w-[800px] text-sm border-collapse">
               <thead>
                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                   <th className="px-4 py-3.5 text-left text-xs font-bold text-[#4B5563] uppercase tracking-wider w-36 border-r border-[#E5E7EB]">Period</th>
@@ -466,7 +466,7 @@ function TeacherScheduleTab({ teachers, academicYear }: { teachers: Teacher[]; a
           ) : (
             <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
+                <table className="w-full min-w-[800px] text-sm border-collapse">
                   <thead>
                     <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                       <th className="px-4 py-3.5 text-left text-xs font-bold text-[#4B5563] uppercase tracking-wider w-36 border-r border-[#E5E7EB]">Period</th>
