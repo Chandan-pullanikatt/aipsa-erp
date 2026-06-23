@@ -1,4 +1,5 @@
 ﻿const prisma = require('../lib/prisma');
+const notify = require('./notify.service');
 
 function currentAcademicYear() {
   const now = new Date();
@@ -221,7 +222,7 @@ async function recordPayment(tenantId, collectedById, data) {
   const receiptNumber = await generateReceiptNumber(tenantId);
   const year = academicYear || currentAcademicYear();
 
-  return prisma.feePayment.create({
+  const payment = await prisma.feePayment.create({
     data: {
       tenantId, studentId, feeCategoryId,
       academicYear: year,
@@ -240,6 +241,16 @@ async function recordPayment(tenantId, collectedById, data) {
       collectedBy: { select: { id: true, firstName: true, lastName: true } },
     },
   });
+
+  // Notify guardians a payment was received (all enabled channels). Fire-and-forget.
+  notify.notifyStudentGuardians(tenantId, studentId, 'FEE_RECEIVED', {
+    studentName: `${payment.student.firstName} ${payment.student.lastName}`,
+    amount: payment.amount,
+    receiptNo: payment.receiptNumber,
+    referenceId: payment.id,
+  });
+
+  return payment;
 }
 
 async function listPayments(tenantId, { studentId, feeCategoryId, academicYear, page = 1, limit = 20 }) {

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
-import { Search, Building2, MapPin, Users, Calendar, CheckCircle2, Clock, Ban, ChevronRight } from 'lucide-react';
+import { Search, Building2, MapPin, Users, Calendar, CheckCircle2, Clock, Ban, ChevronRight, Plus, X } from 'lucide-react';
 
 interface School {
   id: string;
@@ -45,6 +45,7 @@ function SchoolsContent() {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [confirmSuspend, setConfirmSuspend] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const fetchSchools = useCallback(async (status: string) => {
     setLoading(true);
@@ -98,7 +99,21 @@ function SchoolsContent() {
             {total} {total === 1 ? 'school' : 'schools'} registered on the platform.
           </p>
         </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="inline-flex items-center justify-center gap-2 bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[44px] px-5 rounded-lg font-semibold text-[14px] transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" strokeWidth={2} />
+          Add School
+        </button>
       </div>
+
+      {showCreate && (
+        <CreateSchoolModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); fetchSchools(statusFilter); }}
+        />
+      )}
 
       {/* Search + Filter Row */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
@@ -287,6 +302,102 @@ function SchoolsContent() {
           Showing {filtered.length} of {total} schools
         </p>
       )}
+    </div>
+  );
+}
+
+function CreateSchoolModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({
+    schoolName: '', city: '', state: '', phone: '',
+    adminFirstName: '', adminLastName: '', adminEmail: '', adminPassword: '',
+  });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      await api.post('/superadmin/schools', form);
+      onCreated();
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Could not create school.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const update = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm({ ...form, [k]: e.target.value });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div
+        className="modal-content bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E7EB] sticky top-0 bg-white">
+          <h2 className="font-display text-[18px] font-semibold text-[#1A1D23]">Add New School</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]" aria-label="Close">
+            <X className="w-5 h-5" strokeWidth={1.75} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="bg-[#FCEBEB] border border-[#FCEBEB] text-[#A32D2D] text-[13px] rounded-lg px-4 py-3">{error}</div>
+          )}
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF]">School Information</p>
+          <div>
+            <label className="block mb-1">School Name *</label>
+            <input type="text" required value={form.schoolName} onChange={update('schoolName')} placeholder="St. Mary's High School" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block mb-1">City</label>
+              <input type="text" value={form.city} onChange={update('city')} placeholder="Mumbai" />
+            </div>
+            <div>
+              <label className="block mb-1">State</label>
+              <input type="text" value={form.state} onChange={update('state')} placeholder="Maharashtra" />
+            </div>
+          </div>
+          <div>
+            <label className="block mb-1">Phone</label>
+            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+91 98765 43210" />
+          </div>
+
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF] pt-1">Admin Account</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block mb-1">First Name *</label>
+              <input type="text" required value={form.adminFirstName} onChange={update('adminFirstName')} />
+            </div>
+            <div>
+              <label className="block mb-1">Last Name *</label>
+              <input type="text" required value={form.adminLastName} onChange={update('adminLastName')} />
+            </div>
+          </div>
+          <div>
+            <label className="block mb-1">Admin Email *</label>
+            <input type="email" required value={form.adminEmail} onChange={update('adminEmail')} placeholder="principal@school.com" />
+          </div>
+          <div>
+            <label className="block mb-1">Password *</label>
+            <input type="password" required value={form.adminPassword} onChange={update('adminPassword')} placeholder="Min. 8 characters" />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="h-[44px] px-4 rounded-lg border border-[#E5E7EB] text-[#374151] font-semibold text-[14px] hover:bg-[#F7F8FA]">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="h-[44px] px-5 rounded-lg bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white font-semibold text-[14px] disabled:opacity-60">
+              {saving ? 'Creating…' : 'Create School'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -59,6 +59,11 @@ model Tenant {
   bookIssues           BookIssue[]
   schoolEvents         SchoolEvent[]
   eventMedia           EventMedia[]
+  deviceTokens            DeviceToken[]
+  notificationPreferences NotificationPreference[]
+  ccaAreas                CcaArea[]
+  ccaGrades               CcaGrade[]
+  progressTerms           ProgressTerm[]
 
   @@map("tenants")
 }
@@ -136,6 +141,10 @@ model User {
   recordedPurchases     Purchase[]         @relation("PurchaseRecordedBy")
   issuedBooks           BookIssue[]        @relation("BookIssuedBy")
   createdEvents         SchoolEvent[]      @relation("EventCreatedBy")
+  deviceTokens          DeviceToken[]      @relation("UserDeviceTokens")
+  notificationPreference NotificationPreference? @relation("UserNotificationPreference")
+  ccaAreas              CcaArea[]         @relation("CcaTeacher")
+  publishedProgressTerms ProgressTerm[]   @relation("ProgressPublisher")
 
   @@map("users")
 }
@@ -205,6 +214,7 @@ model Class {
   homeworks     Homework[]
   joinRequests  ClassJoinRequest[]
   schoolEvents  SchoolEvent[]
+  ccaAreas      CcaArea[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -298,6 +308,8 @@ model Student {
   hostelComplaints    HostelComplaint[]
   purchases           Purchase[]
   bookIssues          BookIssue[]
+  ccaGrades           CcaGrade[]
+  progressTerms       ProgressTerm[]
 
   @@unique([tenantId, admissionNumber])
   @@index([tenantId])
@@ -567,6 +579,45 @@ model Notification {
   @@map("notifications")
 }
 
+// ─── Push device tokens (FCM) ──────────────────────────────────────────────────
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  token     String   @unique
+  platform  String   @default("android") // android | ios | web
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserDeviceTokens", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("device_tokens")
+}
+
+// ─── Per-user notification channel preferences ─────────────────────────────────
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String   @unique
+  inApp     Boolean  @default(true)
+  email     Boolean  @default(true)
+  push      Boolean  @default(true)
+  sms       Boolean  @default(false)
+  whatsapp  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserNotificationPreference", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("notification_preferences")
+}
+
 // ─── Examinations ─────────────────────────────────────────────────────────────
 
 model Subject {
@@ -598,6 +649,14 @@ enum ExamStatus {
   COMPLETED
 }
 
+// Term tag for the main, report-card-eligible exam of each term.
+// null = class test / non-reportable assessment (never shown on the progress card).
+enum ExamTerm {
+  TERM_1
+  TERM_2
+  ANNUAL
+}
+
 model Exam {
   id           String     @id @default(cuid())
   tenantId     String
@@ -605,6 +664,7 @@ model Exam {
   classId      String
   sectionId    String?
   academicYear String
+  term         ExamTerm?
   startDate    DateTime   @db.Date
   endDate      DateTime?  @db.Date
   maxMarks     Float      @default(100)
@@ -644,6 +704,78 @@ model ExamResult {
   @@index([tenantId, examId])
   @@index([tenantId, studentId])
   @@map("exam_results")
+}
+
+// ─── Holistic Progress Card: CCA / Co-scholastic ─────────────────────────────
+
+// Admin-configured co-scholastic activity area, scoped to a class, with its own
+// CCA teacher (per area per class) who grades students in it. Mirrors Subject grain.
+model CcaArea {
+  id        String   @id @default(cuid())
+  tenantId  String
+  classId   String
+  name      String
+  teacherId String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class   Class      @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher User?      @relation("CcaTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  grades  CcaGrade[]
+
+  @@unique([tenantId, classId, name])
+  @@index([tenantId, classId])
+  @@index([tenantId, teacherId])
+  @@map("cca_areas")
+}
+
+// A student's 3-point (A/B/C) grade in a CCA area for a given term.
+model CcaGrade {
+  id        String   @id @default(cuid())
+  tenantId  String
+  ccaAreaId String
+  studentId String
+  term      ExamTerm
+  grade     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ccaArea CcaArea @relation(fields: [ccaAreaId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([ccaAreaId, studentId, term])
+  @@index([tenantId, studentId])
+  @@map("cca_grades")
+}
+
+// One per student × term: conduct grid, achievements, class-teacher remark, and
+// the publish gate. facultySnapshot freezes teacher names at publish time.
+model ProgressTerm {
+  id              String    @id @default(cuid())
+  tenantId        String
+  studentId       String
+  term            ExamTerm
+  academicYear    String
+  conduct         Json?
+  achievements    String?
+  remark          String?
+  facultySnapshot Json?
+  status          String    @default("DRAFT")
+  publishedAt     DateTime?
+  publishedById   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student     Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  publishedBy User?   @relation("ProgressPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, term, academicYear])
+  @@index([tenantId, studentId])
+  @@map("progress_terms")
 }
 
 // ─── Timetable ────────────────────────────────────────────────────────────────

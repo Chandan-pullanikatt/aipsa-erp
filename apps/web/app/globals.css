@@ -265,3 +265,82 @@ tbody td {
   background-color: #EEF2FF !important;
   color: #4338CA !important;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MOBILE / NATIVE APP BEHAVIOUR
+   (also applies to the Capacitor Android webview)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Standard, consistent base font size + stop the OS resizing text on rotate.
+   On a normal browser body stays 14px; small/touch screens get a slightly
+   larger, more readable base. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Kill the elastic / rubber-band overscroll (pull-past-the-edge bounce). */
+html,
+body {
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+}
+
+/* Prevent text selection callouts / long-press magnifier feeling app-like,
+   while keeping inputs and editable content selectable. */
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@media (max-width: 640px) {
+  /* Slightly larger base text for readability on phones. */
+  body {
+    font-size: 15px;
+  }
+  /* 16px inputs stop Android/iOS webviews from auto-zooming on focus. */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Larger touch targets on touch / coarse-pointer devices.
+   Keeps the dense desktop UI untouched (mouse = fine pointer). */
+@media (pointer: coarse) {
+  button,
+  a.btn,
+  [role="button"],
+  a[href] {
+    min-height: 44px;
+  }
+  /* Inline text links inside prose shouldn't be forced to 44px. */
+  p a[href],
+  span a[href],
+  label a[href] {
+    min-height: 0;
+  }
+}
+
+/* The sidebar shell must never get the global 8px corner rounding. */
+aside.app-sidebar,
+aside.app-sidebar:not(img) {
+  border-radius: 0 !important;
+}
+
+/* When the mobile sidebar is open we lock scrolling on the body. */
+body.sidebar-open {
+  overflow: hidden;
+}

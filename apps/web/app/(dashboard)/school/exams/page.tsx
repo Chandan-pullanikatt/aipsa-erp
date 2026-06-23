@@ -8,7 +8,9 @@ type Tab = 'subjects' | 'exams' | 'marks' | 'reports';
 
 interface ClassItem { id: string; name: string; }
 interface Subject { id: string; name: string; code: string | null; class: { id: string; name: string }; teacher: { firstName: string; lastName: string } | null; }
-interface Exam { id: string; name: string; classId: string; class: { name: string }; startDate: string; maxMarks: number; passingMarks: number; status: string; academicYear: string; _count: { results: number }; }
+interface Exam { id: string; name: string; classId: string; class: { name: string }; startDate: string; maxMarks: number; passingMarks: number; status: string; academicYear: string; term: string | null; _count: { results: number }; }
+
+const TERM_LABELS: Record<string, string> = { TERM_1: 'Term 1', TERM_2: 'Term 2', ANNUAL: 'Annual' };
 interface Teacher { id: string; firstName: string; lastName: string; }
 
 const GRADE_COLORS: Record<string, string> = { 
@@ -218,7 +220,7 @@ function SubjectsTab({ classes, teachers }: { classes: ClassItem[]; teachers: Te
 function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYear: string }) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', classId: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' });
+  const [form, setForm] = useState({ name: '', classId: '', term: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' });
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -230,7 +232,7 @@ function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYea
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault(); setError('');
-    try { await api.post('/exams/exams', form); setShowForm(false); setForm({ name: '', classId: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' }); load(); }
+    try { await api.post('/exams/exams', form); setShowForm(false); setForm({ name: '', classId: '', term: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' }); load(); }
     catch (err: any) { setError(err.response?.data?.error || 'Error creating exam.'); }
   }
 
@@ -283,6 +285,16 @@ function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYea
                 </select>
               </div>
               <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Progress Card Term</label>
+                <select value={form.term} onChange={e => setForm({ ...form, term: e.target.value })}
+                  className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] bg-white transition-all">
+                  <option value="">None — class test (hidden from progress card)</option>
+                  <option value="TERM_1">Term 1</option>
+                  <option value="TERM_2">Term 2</option>
+                  <option value="ANNUAL">Annual</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Start Date *</label>
                 <input type="date" required value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })}
                   className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all" />
@@ -319,6 +331,7 @@ function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYea
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-[#1A1D23] font-display text-base">{exam.name}</p>
                   <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${STATUS_STYLES[exam.status] || 'bg-gray-100 text-gray-600'}`}>{exam.status}</span>
+                  {exam.term && <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-[#E5F6EE] text-[#1D7A4A] border border-[#1D7A4A]/15">{TERM_LABELS[exam.term] || exam.term} · Progress Card</span>}
                 </div>
                 <p className="text-xs text-gray-500 font-body">
                   Class {exam.class.name} · Starts {new Date(exam.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · Max Score: <span className="font-semibold text-gray-700">{exam.maxMarks}</span> · Pass Score: <span className="font-semibold text-gray-700">{exam.passingMarks}</span>

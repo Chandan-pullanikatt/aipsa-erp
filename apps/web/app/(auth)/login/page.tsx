@@ -134,6 +134,14 @@ export default function LoginPage() {
           >
             Guides
           </a>
+          <span aria-hidden="true">·</span>
+          <Link href="/privacy" className="hover:text-gray-600 hover:underline transition-colors">
+            Privacy
+          </Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/terms" className="hover:text-gray-600 hover:underline transition-colors">
+            Terms
+          </Link>
         </div>
       </div>
     </div>

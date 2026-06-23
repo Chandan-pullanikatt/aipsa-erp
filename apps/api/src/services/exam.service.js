@@ -68,15 +68,31 @@ async function listExams(tenantId, { classId, academicYear, status } = {}) {
   });
 }
 
+const TERMS = ['TERM_1', 'TERM_2', 'ANNUAL'];
+
+// A term tag must be unique within a class+year: only one main (report-card) exam
+// per term. Class tests stay term-less and are exempt.
+async function assertTermAvailable(tenantId, classId, academicYear, term, excludeExamId) {
+  if (!term) return;
+  if (!TERMS.includes(term)) throw Object.assign(new Error('Invalid term'), { status: 422 });
+  const clash = await prisma.exam.findFirst({
+    where: { tenantId, classId, academicYear, term, ...(excludeExamId && { id: { not: excludeExamId } }) },
+  });
+  if (clash) throw Object.assign(new Error(`This class already has a ${term.replace('_', ' ')} exam for ${academicYear}.`), { status: 409 });
+}
+
 async function createExam(tenantId, data) {
-  const { name, classId, sectionId, academicYear, startDate, endDate, maxMarks, passingMarks } = data;
+  const { name, classId, sectionId, academicYear, term, startDate, endDate, maxMarks, passingMarks } = data;
   const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
   if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
+  const year = academicYear || currentAcademicYear();
+  await assertTermAvailable(tenantId, classId, year, term || null);
   return prisma.exam.create({
     data: {
       tenantId, name, classId,
       sectionId: sectionId || null,
-      academicYear: academicYear || currentAcademicYear(),
+      academicYear: year,
+      term: term || null,
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
       maxMarks: parseFloat(maxMarks) || 100,
@@ -89,11 +105,15 @@ async function createExam(tenantId, data) {
 async function updateExam(tenantId, id, data) {
   const exam = await prisma.exam.findFirst({ where: { id, tenantId } });
   if (!exam) throw Object.assign(new Error('Exam not found'), { status: 404 });
-  const { name, startDate, endDate, maxMarks, passingMarks, status } = data;
+  const { name, term, startDate, endDate, maxMarks, passingMarks, status } = data;
+  if (term !== undefined) {
+    await assertTermAvailable(tenantId, exam.classId, exam.academicYear, term || null, id);
+  }
   return prisma.exam.update({
     where: { id },
     data: {
       ...(name && { name }),
+      ...(term !== undefined && { term: term || null }),
       ...(startDate && { startDate: new Date(startDate) }),
       ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
       ...(maxMarks !== undefined && { maxMarks: parseFloat(maxMarks) }),
@@ -225,5 +245,5 @@ module.exports = {
   listExams, createExam, updateExam, deleteExam,
   getMarksEntry, saveMarks,
   getStudentReportCard, getExamSummary,
-  currentAcademicYear,
+  currentAcademicYear, calculateGrade,
 };

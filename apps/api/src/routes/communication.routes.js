@@ -70,4 +70,32 @@ router.patch('/notifications/:id/read', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─── Push device tokens ─────────────────────────────────────────────────────────
+
+router.post('/device-token', [body('token').trim().notEmpty()], validate, async (req, res, next) => {
+  try {
+    res.json(await comm.registerDeviceToken(req.tenant.id, req.user.id, req.body));
+  } catch (e) { next(e); }
+});
+
+router.delete('/device-token', async (req, res, next) => {
+  try {
+    res.json(await comm.removeDeviceToken(req.tenant.id, req.user.id, req.body?.token || req.query.token));
+  } catch (e) { next(e); }
+});
+
+// ─── Notification preferences ───────────────────────────────────────────────────
+
+router.get('/notification-preferences', async (req, res, next) => {
+  try {
+    res.json(await comm.getPreferences(req.tenant.id, req.user.id));
+  } catch (e) { next(e); }
+});
+
+router.patch('/notification-preferences', async (req, res, next) => {
+  try {
+    res.json(await comm.updatePreferences(req.tenant.id, req.user.id, req.body));
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

@@ -99,4 +99,23 @@ async function sendStudentApproval(to, { firstName, schoolName, admissionNumber,
   });
 }
 
-module.exports = { sendPasswordReset, sendWelcome, sendApprovalNotification, sendInvite, sendAttendanceSummary, sendStudentApproval };
+// Generic sender used by the notification dispatcher (email channel).
+function isConfigured() {
+  return !!process.env.SMTP_HOST && !!process.env.SMTP_USER;
+}
+
+async function sendRaw({ to, subject, html }) {
+  if (!isConfigured()) {
+    console.warn('[email] SMTP not configured — email skipped:', subject);
+    return { skipped: true };
+  }
+  await transporter.sendMail({
+    from: `"AIPSA Digital School" <${process.env.SMTP_FROM}>`,
+    to,
+    subject,
+    html,
+  });
+  return { sent: true };
+}
+
+module.exports = { sendPasswordReset, sendWelcome, sendApprovalNotification, sendInvite, sendAttendanceSummary, sendStudentApproval, sendRaw, isConfigured };

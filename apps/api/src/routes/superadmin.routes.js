@@ -1,11 +1,68 @@
 const { Router } = require('express');
+const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
 const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
-const { sendApprovalNotification } = require('../services/email.service');
+const { sendApprovalNotification, sendWelcome } = require('../services/email.service');
 
 const router = Router();
 
 router.use(authenticate, authorize('SUPER_ADMIN'));
+
+// POST /api/superadmin/schools — super admin creates a school (goes live immediately)
+router.post('/schools', async (req, res, next) => {
+  try {
+    const { schoolName, city, state, phone, adminFirstName, adminLastName, adminEmail, adminPassword } = req.body;
+
+    if (!schoolName || !adminEmail || !adminPassword || !adminFirstName || !adminLastName) {
+      return res.status(400).json({ error: 'School name, admin name, email and password are required.' });
+    }
+    if (String(adminPassword).length < 8) {
+      return res.status(400).json({ error: 'Admin password must be at least 8 characters.' });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
+    if (existing) return res.status(409).json({ error: 'Email already registered.' });
+
+    const baseSlug = schoolName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const uniqueSlug = `${baseSlug}-${uuidv4().slice(0, 6)}`;
+    const hashed = await bcrypt.hash(adminPassword, 12);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: {
+          name: schoolName,
+          slug: uniqueSlug,
+          status: 'ACTIVE', // created by super admin → live immediately
+          profile: { create: { schoolName, city: city || null, state: state || null, phone: phone || null } },
+        },
+        include: { profile: true, _count: { select: { users: true } } },
+      });
+
+      await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: adminEmail,
+          password: hashed,
+          role: 'SCHOOL_ADMIN',
+          firstName: adminFirstName,
+          lastName: adminLastName,
+          phone: phone || null,
+          isActive: true,
+        },
+      });
+
+      return tenant;
+    });
+
+    const loginUrl = `${process.env.WEB_URL}/login`;
+    sendWelcome(adminEmail, schoolName, loginUrl).catch(console.error);
+
+    res.status(201).json({ message: 'School created.', tenant: result });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/superadmin/schools — list all schools
 router.get('/schools', async (req, res, next) => {

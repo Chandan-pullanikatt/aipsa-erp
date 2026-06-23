@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getUser, clearAuth } from '@/lib/auth';
 import type { AuthUser } from '@/lib/auth';
 import api from '@/lib/api';
+import PullToRefresh from '@/components/PullToRefresh';
 import {
   GraduationCap,
   CalendarCheck,
@@ -30,6 +31,8 @@ import {
   UserPlus,
   Layers,
   KeyRound,
+  Award,
+  Users,
 } from 'lucide-react';
 
 interface NavItem {
@@ -68,6 +71,11 @@ const ICON_MAP = {
   'Exams & Results': ClipboardList,
   Results: ClipboardList,
   Announcements: Bell,
+  'Co-Curricular': Award,
+  'CCA Grading': Award,
+  'Progress Cards': BarChart3,
+  'Progress Card': BarChart3,
+  'My Teachers': Users,
 };
 
 function getIcon(label: string) {
@@ -84,6 +92,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Attendance', href: '/school/attendance', available: true },
       { label: 'Fee Management', href: '/school/fees', available: true },
       { label: 'Examinations', href: '/school/exams', available: true },
+      { label: 'Co-Curricular', href: '/school/cca', available: true },
       { label: 'Timetable', href: '/school/timetable', available: true },
       { label: 'Transport', href: '/school/transport', available: true },
       { label: 'Hostel', href: '/school/hostel', available: true },
@@ -102,6 +111,8 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Timetable', href: '/teacher/timetable', available: true },
       { label: 'Attendance', href: '/teacher/attendance', available: true },
       { label: 'Marks Entry', href: '/teacher/marks', available: true },
+      { label: 'CCA Grading', href: '/teacher/cca', available: true },
+      { label: 'Progress Cards', href: '/teacher/progress', available: true },
       { label: 'Homework', href: '/teacher/homework', available: true },
       { label: 'LMS', href: '/teacher/lms', available: true },
       { label: 'Events', href: '/school/events', available: true },
@@ -113,6 +124,8 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Attendance', href: '/student?tab=attendance', available: true },
       { label: 'Fees', href: '/student?tab=fees', available: true },
       { label: 'Exams & Results', href: '/student?tab=exams', available: true },
+      { label: 'Progress Card', href: '/student/progress', available: true },
+      { label: 'My Teachers', href: '/student/teachers', available: true },
       { label: 'Homework', href: '/student?tab=homework', available: true },
       { label: 'LMS', href: '/student/lms', available: true },
       { label: 'Transport', href: '/student/transport', available: true },
@@ -128,6 +141,8 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Attendance', href: '/parent?tab=attendance', available: true },
       { label: 'Fees', href: '/parent?tab=fees', available: true },
       { label: 'Results', href: '/parent?tab=exams', available: true },
+      { label: 'Progress Card', href: '/parent/progress', available: true },
+      { label: 'My Teachers', href: '/parent/teachers', available: true },
       { label: 'Homework', href: '/parent?tab=homework', available: true },
       { label: 'Transport', href: '/parent/transport', available: true },
       { label: 'Hostel', href: '/parent/hostel', available: true },
@@ -318,6 +333,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [pathname]);
 
+  // Lock body scroll while the mobile sidebar is open.
+  useEffect(() => {
+    document.body.classList.toggle('sidebar-open', sidebarOpen);
+    return () => document.body.classList.remove('sidebar-open');
+  }, [sidebarOpen]);
+
   if (!user) return null;
 
   const navItems = getNavItems(user.role);
@@ -364,9 +385,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <div className="min-h-screen flex bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
+    <div className="h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
+      <aside className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[70%] max-w-[320px] lg:w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
           <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA Digital School</p>
@@ -416,7 +437,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Header */}
-        <header className="lg:hidden bg-white border-b border-[#E5E7EB] h-[60px] px-4 flex items-center justify-between shrink-0">
+        <header className="lg:hidden bg-white border-b border-[#E5E7EB] h-[60px] px-4 flex items-center justify-between shrink-0 z-30">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100" aria-label="Menu">
               <Menu className="w-5 h-5" strokeWidth={1.75} />
@@ -425,7 +446,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-6 max-w-[1280px] w-full mx-auto">{children}</main>
+        <PullToRefresh className="flex-1 overflow-auto">
+          <main className="p-6 max-w-[1280px] w-full mx-auto">{children}</main>
+        </PullToRefresh>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 ﻿const prisma = require('../lib/prisma');
 const { sendAttendanceSummary } = require('./email.service');
+const notify = require('./notify.service');
 
 // ─── Student Attendance ──────────────────────────────────────────────────────
 
@@ -14,7 +15,28 @@ async function markStudentAttendance(tenantId, markedById, { date, classId, sect
       update: { status, note: note || null, markedById, classId, sectionId },
     })
   );
-  return prisma.$transaction(ops);
+  const result = await prisma.$transaction(ops);
+
+  // Alert guardians of students marked absent (all enabled channels). Fire-and-forget.
+  const absentIds = records.filter((r) => r.status === 'ABSENT').map((r) => r.studentId);
+  if (absentIds.length) notifyAbsences(tenantId, absentIds, d).catch((e) => console.error('[attendance] notify failed:', e.message));
+
+  return result;
+}
+
+async function notifyAbsences(tenantId, studentIds, date) {
+  const students = await prisma.student.findMany({
+    where: { id: { in: studentIds }, tenantId },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  for (const s of students) {
+    notify.notifyStudentGuardians(tenantId, s.id, 'ATTENDANCE_ABSENT', {
+      studentName: `${s.firstName} ${s.lastName}`,
+      date: dateStr,
+      referenceId: s.id,
+    });
+  }
 }
 
 async function getStudentAttendance(tenantId, { classId, sectionId, date, studentId }) {

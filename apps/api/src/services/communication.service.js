@@ -1,4 +1,5 @@
 ﻿const prisma = require('../lib/prisma');
+const notify = require('./notify.service');
 
 const ROLE_MAP = { ALL: null, SCHOOL_ADMIN: 'SCHOOL_ADMIN', TEACHER: 'TEACHER', STUDENT: 'STUDENT', PARENT: 'PARENT' };
 
@@ -41,30 +42,14 @@ async function createAnnouncement(tenantId, createdById, data) {
     },
     include: { createdBy: { select: { firstName: true, lastName: true } } },
   });
-  // Create notifications in background
-  createAnnouncementNotifications(tenantId, announcement).catch(console.error);
-  return announcement;
-}
-
-async function createAnnouncementNotifications(tenantId, announcement) {
-  const targets = announcement.targetRoles;
-  const where = {
-    tenantId,
-    isActive: true,
-    ...(targets.includes('ALL') ? {} : { role: { in: targets } }),
-  };
-  const users = await prisma.user.findMany({ where, select: { id: true } });
-  if (users.length === 0) return;
-  await prisma.notification.createMany({
-    data: users.map(u => ({
-      tenantId, userId: u.id,
-      title: announcement.title,
-      body: announcement.body.substring(0, 300),
-      type: announcement.type,
-      referenceId: announcement.id,
-    })),
-    skipDuplicates: true,
+  // Fan out across all channels (in-app + push + email + sms + whatsapp) in the
+  // background, respecting each recipient's preferences. Fire-and-forget.
+  notify.notifyRoles(tenantId, announcement.targetRoles, 'ANNOUNCEMENT', {
+    title: announcement.title,
+    body: announcement.body,
+    referenceId: announcement.id,
   });
+  return announcement;
 }
 
 async function updateAnnouncement(tenantId, id, data) {
@@ -133,7 +118,47 @@ async function createNotification(tenantId, userId, { title, body, type = 'INFO'
   });
 }
 
+// ─── Device tokens (push) ──────────────────────────────────────────────────────
+
+async function registerDeviceToken(tenantId, userId, { token, platform = 'android' } = {}) {
+  if (!token) throw Object.assign(new Error('token is required'), { status: 422 });
+  // Upsert by token; reassign to this user/tenant if the device was reused.
+  await prisma.deviceToken.upsert({
+    where: { token },
+    create: { tenantId, userId, token, platform },
+    update: { tenantId, userId, platform },
+  });
+  return { message: 'Device registered.' };
+}
+
+async function removeDeviceToken(tenantId, userId, token) {
+  if (!token) throw Object.assign(new Error('token is required'), { status: 422 });
+  await prisma.deviceToken.deleteMany({ where: { token, tenantId, userId } });
+  return { message: 'Device removed.' };
+}
+
+// ─── Notification preferences ──────────────────────────────────────────────────
+
+const PREF_KEYS = ['inApp', 'email', 'push', 'sms', 'whatsapp'];
+const DEFAULT_PREFS = { inApp: true, email: true, push: true, sms: false, whatsapp: false };
+
+async function getPreferences(tenantId, userId) {
+  const pref = await prisma.notificationPreference.findUnique({ where: { userId } });
+  return pref || { userId, ...DEFAULT_PREFS };
+}
+
+async function updatePreferences(tenantId, userId, data = {}) {
+  const clean = {};
+  for (const k of PREF_KEYS) if (typeof data[k] === 'boolean') clean[k] = data[k];
+  return prisma.notificationPreference.upsert({
+    where: { userId },
+    create: { tenantId, userId, ...DEFAULT_PREFS, ...clean },
+    update: clean,
+  });
+}
+
 module.exports = {
   listAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
   getNotifications, getUnreadCount, markRead, markAllRead, createNotification,
+  registerDeviceToken, removeDeviceToken, getPreferences, updatePreferences,
 };
