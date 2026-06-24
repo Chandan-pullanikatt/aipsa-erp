@@ -36,17 +36,12 @@ export async function registerPushNotifications(): Promise<void> {
     Push.addListener('registration', (token) => {
       if (!token.value) return;
       api.post('/communication/device-token', { token: token.value, platform: 'android' })
-        .then(() => console.log('[push] device token registered'))
-        .catch((e) => {
-          console.error('[push] device token POST failed:', e?.response?.status, e?.message);
-          registered = false; // allow a later retry (e.g. token saved on next dashboard load)
-        });
+        .catch(() => { registered = false; }); // failed save → retry on the next dashboard load
     });
-    Push.addListener('registrationError', (err) => console.error('[push] registrationError', err));
+    Push.addListener('registrationError', () => {});
 
     await Push.register();
-  } catch (e) {
-    console.error('[push] register() threw:', e);
+  } catch {
     registered = false; // allow a later retry
   }
 }
