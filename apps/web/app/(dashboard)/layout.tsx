@@ -7,6 +7,7 @@ import { getUser, clearAuth } from '@/lib/auth';
 import type { AuthUser } from '@/lib/auth';
 import api from '@/lib/api';
 import PullToRefresh from '@/components/PullToRefresh';
+import { registerPushNotifications } from '@/lib/push';
 import {
   GraduationCap,
   CalendarCheck,
@@ -323,7 +324,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const u = getUser();
     if (!u) router.push('/login');
-    else setUser(u);
+    else {
+      setUser(u);
+      // Register for native push now that we have a logged-in user. PwaProvider only
+      // fires on a cold start that's already authenticated; a fresh login lands here.
+      registerPushNotifications();
+    }
   }, [router]);
 
   useEffect(() => {
