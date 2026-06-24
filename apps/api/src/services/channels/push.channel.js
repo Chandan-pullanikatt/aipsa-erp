@@ -8,7 +8,7 @@
 //   FIREBASE_CLIENT_EMAIL
 //   FIREBASE_PRIVATE_KEY   (paste the full key; literal "\n" sequences are converted)
 
-let admin = null;
+let messaging = null;
 let initialized = false;
 let enabled = false;
 
@@ -23,12 +23,14 @@ function init() {
     return;
   }
   try {
-    admin = require('firebase-admin');
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-      });
-    }
+    // firebase-admin v13+ dropped the legacy `admin.apps`/`admin.credential`/
+    // `admin.messaging()` namespace — use the modular entry points instead.
+    const { getApps, initializeApp, cert } = require('firebase-admin/app');
+    const { getMessaging } = require('firebase-admin/messaging');
+    const app = getApps().length
+      ? getApps()[0]
+      : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    messaging = getMessaging(app);
     enabled = true;
   } catch (e) {
     console.error('[push] FCM init failed:', e.message);
@@ -55,7 +57,7 @@ async function send(tokens, { title, body, data } = {}) {
   };
 
   try {
-    const res = await admin.messaging().sendEachForMulticast(message);
+    const res = await messaging.sendEachForMulticast(message);
     const invalidTokens = [];
     res.responses.forEach((r, i) => {
       if (!r.success) {
