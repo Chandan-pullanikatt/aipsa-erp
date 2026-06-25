@@ -5,7 +5,7 @@ export interface AuthUser {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'SUPER_ADMIN' | 'SCHOOL_ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
+  role: 'SUPER_ADMIN' | 'SCHOOL_ADMIN' | 'TEACHER' | 'STAFF' | 'STUDENT' | 'PARENT';
   tenantId: string | null;
   tenantStatus: string | null;
   tenantSlug: string | null;
@@ -38,6 +38,7 @@ export function getDashboardPath(role: AuthUser['role']): string {
     case 'SUPER_ADMIN': return '/aipsa';
     case 'SCHOOL_ADMIN': return '/school';
     case 'TEACHER': return '/teacher';
+    case 'STAFF': return '/staff';
     case 'STUDENT': return '/student';
     case 'PARENT': return '/parent';
     default: return '/login';

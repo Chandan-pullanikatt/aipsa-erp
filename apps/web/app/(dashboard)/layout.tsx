@@ -34,6 +34,7 @@ import {
   KeyRound,
   Award,
   Users,
+  Briefcase,
 } from 'lucide-react';
 
 interface NavItem {
@@ -55,6 +56,7 @@ const ICON_MAP = {
   Curriculum: BookOpen,
   'LMS / Curriculum': BookOpen,
   Staff: UserCog,
+  HR: Briefcase,
   'School Profile': Settings2,
   'Manage Classes': Layers,
   Transport: Bus,
@@ -103,6 +105,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Communication', href: '/school/communication', available: true },
       { label: 'LMS / Curriculum', href: '/school/curriculum', available: true },
       { label: 'Staff', href: '/school/staff', available: true },
+      { label: 'HR', href: '/school/hr', available: true },
       { label: 'School Profile', href: '/school/profile', available: true },
     ];
   } else if (role === 'TEACHER') {
@@ -118,6 +121,11 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'LMS', href: '/teacher/lms', available: true },
       { label: 'Events', href: '/school/events', available: true },
       { label: 'Join Requests', href: '/teacher/join-requests', available: true },
+    ];
+  } else if (role === 'STAFF') {
+    items = [
+      { label: 'Dashboard', href: '/staff', available: true },
+      { label: 'Change Password', href: '/change-password', available: true },
     ];
   } else if (role === 'STUDENT') {
     items = [
@@ -180,7 +188,7 @@ function groupNavItems(items: NavItem[], role: AuthUser['role']): { standalone: 
 
   const academicsList = ['Students', 'Manage Classes', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Co-Curricular', 'Timetable'];
   const financeList = ['Fee Management', 'Store'];
-  const operationsList = ['Staff', 'Transport', 'Hostel', 'Library'];
+  const operationsList = ['Staff', 'HR', 'Transport', 'Hostel', 'Library'];
   const managementList = ['Communication', 'Events', 'School Profile'];
 
   const groups: NavGroup[] = [
