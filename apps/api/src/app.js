@@ -21,6 +21,7 @@ const purchaseRoutes = require('./routes/purchase.routes');
 const libraryRoutes = require('./routes/library.routes');
 const eventRoutes = require('./routes/event.routes');
 const progressRoutes = require('./routes/progress.routes');
+const hrRoutes = require('./routes/hr.routes');
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use('/api/purchases', purchaseRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/hr', hrRoutes);
 
 // 404
 app.use((req, res) => {

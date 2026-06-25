@@ -69,12 +69,12 @@ router.post('/reset-password', [
   }
 });
 
-// POST /api/auth/invite — admin sends magic link to teacher or parent
+// POST /api/auth/invite — admin sends magic link to teacher, staff or parent
 router.post('/invite',
   authenticate, authorize('SCHOOL_ADMIN'), requireTenant,
   [
     body('email').isEmail().normalizeEmail(),
-    body('role').isIn(['TEACHER', 'PARENT']),
+    body('role').isIn(['TEACHER', 'STAFF', 'PARENT']),
     body('firstName').trim().notEmpty(),
     body('lastName').trim().notEmpty(),
   ], validate,

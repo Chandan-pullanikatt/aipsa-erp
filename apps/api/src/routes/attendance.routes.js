@@ -5,7 +5,7 @@ const { requireTenant } = require('../middleware/tenant');
 const svc = require('../services/attendance.service');
 
 const router = Router();
-router.use(authenticate, authorize('SCHOOL_ADMIN', 'TEACHER', 'STUDENT', 'PARENT'), requireTenant);
+router.use(authenticate, authorize('SCHOOL_ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT'), requireTenant);
 
 function validate(req, res, next) {
   const errors = validationResult(req);
@@ -95,8 +95,8 @@ router.get('/leave', async (req, res, next) => {
   try {
     const user = req.user;
     const filter = { ...req.query };
-    if (user.role === 'TEACHER') filter.userId = user.id;
-    if (user.role === 'STUDENT' || user.role === 'PARENT') filter.userId = user.id;
+    // Non-admins only ever see their own leaves.
+    if (user.role !== 'SCHOOL_ADMIN') filter.userId = user.id;
     res.json(await svc.listLeaves(req.tenant.id, filter));
   } catch (err) { next(err); }
 });

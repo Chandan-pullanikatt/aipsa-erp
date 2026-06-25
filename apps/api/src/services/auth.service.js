@@ -192,8 +192,8 @@ async function regenerateJoinCode(tenantId) {
 // ─── Invite (Magic Link) ─────────────────────────────────────────────────────
 
 async function inviteUser(tenantId, { email, role, firstName, lastName }) {
-  if (!['TEACHER', 'PARENT'].includes(role)) {
-    throw Object.assign(new Error('Can only invite teachers or parents'), { status: 400 });
+  if (!['TEACHER', 'STAFF', 'PARENT'].includes(role)) {
+    throw Object.assign(new Error('Can only invite teachers, staff or parents'), { status: 400 });
   }
 
   const tenant = await prisma.tenant.findUnique({
