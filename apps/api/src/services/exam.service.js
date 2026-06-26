@@ -24,11 +24,14 @@ async function listSubjects(tenantId, { classId } = {}) {
   });
 }
 
-async function createSubject(tenantId, { classId, name, code, teacherId }) {
+async function createSubject(tenantId, { classId, name, code, teacherId, periodsPerWeek }) {
   const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
   if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
   return prisma.subject.create({
-    data: { tenantId, classId, name: name.trim(), code: code || null, teacherId: teacherId || null },
+    data: {
+      tenantId, classId, name: name.trim(), code: code || null, teacherId: teacherId || null,
+      periodsPerWeek: Number.isInteger(periodsPerWeek) ? periodsPerWeek : 0,
+    },
     include: { class: { select: { id: true, name: true } }, teacher: { select: { id: true, firstName: true, lastName: true } } },
   });
 }
@@ -38,7 +41,12 @@ async function updateSubject(tenantId, id, data) {
   if (!s) throw Object.assign(new Error('Subject not found'), { status: 404 });
   return prisma.subject.update({
     where: { id },
-    data: { name: data.name?.trim() || s.name, code: data.code ?? s.code, teacherId: data.teacherId ?? s.teacherId },
+    data: {
+      name: data.name?.trim() || s.name,
+      code: data.code ?? s.code,
+      teacherId: data.teacherId ?? s.teacherId,
+      periodsPerWeek: Number.isInteger(data.periodsPerWeek) ? data.periodsPerWeek : s.periodsPerWeek,
+    },
     include: { class: { select: { id: true, name: true } }, teacher: { select: { id: true, firstName: true, lastName: true } } },
   });
 }

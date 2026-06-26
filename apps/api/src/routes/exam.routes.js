@@ -21,6 +21,7 @@ router.get('/subjects', async (req, res, next) => {
 });
 router.post('/subjects', adminOnly, [
   body('classId').notEmpty(), body('name').trim().notEmpty(),
+  body('periodsPerWeek').optional().isInt({ min: 0, max: 40 }),
 ], validate, async (req, res, next) => {
   try { res.status(201).json(await svc.createSubject(req.tenant.id, req.body)); } catch (e) { next(e); }
 });

@@ -84,6 +84,55 @@ router.get('/conflicts', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─── Generation config (bell schedule) ───────────────────────────────────────
+
+// GET /api/timetable/config?academicYear= — returns saved config or a default
+router.get('/config', async (req, res, next) => {
+  try {
+    res.json(await svc.getTimetableConfig(req.tenant.id, req.query.academicYear));
+  } catch (e) { next(e); }
+});
+
+// PUT /api/timetable/config — save the school's bell schedule
+router.put('/config', adminOnly, [
+  body('slots').optional().isArray(),
+  body('workingDays').optional().isArray(),
+  body('maxPeriodsPerDayPerTeacher').optional().isInt({ min: 1, max: 12 }),
+], validate, async (req, res, next) => {
+  try {
+    res.json(await svc.saveTimetableConfig(req.tenant.id, req.body));
+  } catch (e) { next(e); }
+});
+
+// ─── Teacher availability (blocked slots) ─────────────────────────────────────
+
+// GET /api/timetable/availability?teacherId=&academicYear=
+router.get('/availability', adminOrTeacher, async (req, res, next) => {
+  try {
+    const { teacherId, academicYear } = req.query;
+    res.json(await svc.listTeacherAvailability(req.tenant.id, teacherId, academicYear));
+  } catch (e) { next(e); }
+});
+
+// POST /api/timetable/availability — block a slot (or whole day if no periodNumber)
+router.post('/availability', adminOnly, [
+  body('teacherId').notEmpty(),
+  body('dayOfWeek').isIn(['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY']),
+  body('periodNumber').optional({ nullable: true }).isInt({ min: 1, max: 12 }),
+], validate, async (req, res, next) => {
+  try {
+    res.status(201).json(await svc.addTeacherAvailability(req.tenant.id, req.body));
+  } catch (e) { next(e); }
+});
+
+// DELETE /api/timetable/availability/:id — unblock
+router.delete('/availability/:id', adminOnly, async (req, res, next) => {
+  try {
+    await svc.removeTeacherAvailability(req.tenant.id, req.params.id);
+    res.json({ message: 'Removed.' });
+  } catch (e) { next(e); }
+});
+
 // GET /api/timetable/academic-year
 router.get('/academic-year', (req, res) => {
   res.json({ academicYear: svc.currentAcademicYear() });
