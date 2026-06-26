@@ -164,6 +164,53 @@ async function updateStaffProfile(tenantId, userId, profile) {
   }
 }
 
+// Deactivates or reactivates a staff/teacher account. Deactivation is a soft
+// delete: it blocks login (auth checks isActive) and stops push delivery, but
+// preserves the user's financial/academic records, which the school is required
+// to retain. Hard erasure is handled separately by the grace-period purge job.
+async function setStaffStatus(tenantId, userId, isActive, actingUser, { ipAddress } = {}) {
+  // Admins must not lock themselves out, and a school must never be left without
+  // an active admin to manage it.
+  if (actingUser && userId === actingUser.id) {
+    throw badRequest('You cannot change your own account status');
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId, role: { in: STAFF_ROLES } },
+    select: { id: true, role: true, email: true, isActive: true },
+  });
+  if (!user) throw notFound('Staff member not found');
+
+  if (!isActive && user.role === 'SCHOOL_ADMIN') {
+    const activeAdmins = await prisma.user.count({
+      where: { tenantId, role: 'SCHOOL_ADMIN', isActive: true },
+    });
+    if (activeAdmins <= 1) throw conflict('Cannot deactivate the last active school admin');
+  }
+
+  // No-op if already in the requested state — return the current record.
+  if (user.isActive === isActive) return getStaff(tenantId, userId);
+
+  await prisma.$transaction([
+    // Deactivation stops push delivery immediately (matches account-deletion flow).
+    ...(!isActive ? [prisma.deviceToken.deleteMany({ where: { userId } })] : []),
+    prisma.user.update({ where: { id: userId }, data: { isActive } }),
+    prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId: actingUser ? actingUser.id : null,
+        action: isActive ? 'STAFF_REACTIVATED' : 'STAFF_DEACTIVATED',
+        entity: 'User',
+        entityId: userId,
+        meta: { email: user.email, role: user.role },
+        ipAddress: ipAddress || null,
+      },
+    }),
+  ]);
+
+  return getStaff(tenantId, userId);
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildProfileData(tenantId, p) {
@@ -197,5 +244,5 @@ const conflict = (m) => Object.assign(new Error(m), { status: 409 });
 
 module.exports = {
   listDepartments, createDepartment, updateDepartment, deleteDepartment,
-  listStaff, getStaff, createStaff, updateStaffProfile,
+  listStaff, getStaff, createStaff, updateStaffProfile, setStaffStatus,
 };

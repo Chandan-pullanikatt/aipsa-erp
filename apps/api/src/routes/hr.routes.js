@@ -87,4 +87,15 @@ router.put('/staff/:id/profile', [
   } catch (err) { next(err); }
 });
 
+// PATCH /api/hr/staff/:id/status — deactivate (soft-delete) or reactivate a staff account
+router.patch('/staff/:id/status', [
+  body('isActive').isBoolean().toBoolean(),
+], validate, async (req, res, next) => {
+  try {
+    res.json(await svc.setStaffStatus(
+      req.tenant.id, req.params.id, req.body.isActive, req.user, { ipAddress: req.ip },
+    ));
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
