@@ -2,21 +2,24 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
-import { 
-  Calendar, 
-  Save, 
-  Trash2, 
-  Settings, 
-  Plus, 
-  Clock, 
-  Check, 
-  AlertTriangle, 
-  BookOpen, 
+import {
+  Calendar,
+  Save,
+  Trash2,
+  Settings,
+  Plus,
+  Clock,
+  Check,
+  AlertTriangle,
+  BookOpen,
   User,
-  Activity
+  Activity,
+  Sparkles,
+  X,
+  RefreshCw
 } from 'lucide-react';
 
-type Tab = 'class' | 'teacher';
+type Tab = 'class' | 'teacher' | 'generate';
 
 interface ClassItem { id: string; name: string; }
 interface Subject { id: string; name: string; code: string | null; }
@@ -71,7 +74,7 @@ export default function TimetablePage() {
 
       {/* Tab Switcher */}
       <div className="flex gap-1.5 bg-[#F3F4F6] p-1.5 rounded-xl border border-[#E5E7EB] w-fit">
-        {([['class', 'Class Timetable'], ['teacher', 'Teacher Schedule']] as [Tab, string][]).map(([t, l]) => (
+        {([['class', 'Class Timetable'], ['teacher', 'Teacher Schedule'], ['generate', 'Auto-generate']] as [Tab, string][]).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg font-display text-[14px] font-semibold transition-all ${
               tab === t 
@@ -85,6 +88,7 @@ export default function TimetablePage() {
 
       {tab === 'class' && <ClassTimetableTab classes={classes} teachers={teachers} academicYear={academicYear} />}
       {tab === 'teacher' && <TeacherScheduleTab teachers={teachers} academicYear={academicYear} />}
+      {tab === 'generate' && <AutoGenerateTab classes={classes} teachers={teachers} academicYear={academicYear} />}
     </div>
   );
 }
@@ -512,6 +516,331 @@ function TeacherScheduleTab({ teachers, academicYear }: { teachers: Teacher[]; a
           <Calendar className="mx-auto h-12 w-12 text-[#9CA3AF] mb-3" strokeWidth={1.25} />
           <h3 className="text-sm font-bold text-[#1A1D23] mb-1">Instructor Workload Grid</h3>
           <p className="text-xs text-[#6B7280]">Select a faculty member from the workload selector above to inspect their weekly workload allocation.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Auto-generate Tab ────────────────────────────────────────────────────────
+
+interface Slot { periodNumber: number; startTime: string; endTime: string; isBreak?: boolean; breakLabel?: string; }
+interface Availability { id: string; teacherId: string; dayOfWeek: string; periodNumber: number | null; reason: string | null; teacher?: { firstName: string; lastName: string }; }
+interface GenReport { feasible: boolean; totalDemands: number; placed: number; unplacedCount: number; unplaced: string[]; warnings: string[]; seed: number; }
+interface Draft { classId: string; className: string; periods: any[]; }
+
+function AutoGenerateTab({ classes, teachers, academicYear }: { classes: ClassItem[]; teachers: Teacher[]; academicYear: string }) {
+  const [config, setConfig] = useState<{ workingDays: string[]; slots: Slot[]; maxPeriodsPerDayPerTeacher: number }>({ workingDays: [...DAYS], slots: DEFAULT_PERIODS.map(p => ({ periodNumber: p.number, startTime: p.startTime, endTime: p.endTime, isBreak: p.isBreak, breakLabel: p.label })), maxPeriodsPerDayPerTeacher: 6 });
+  const [subjectById, setSubjectById] = useState<Record<string, Subject>>({});
+  const [availability, setAvailability] = useState<Availability[]>([]);
+  const [availForm, setAvailForm] = useState({ teacherId: '', dayOfWeek: 'MONDAY', periodNumber: '', reason: '' });
+
+  const [showConfig, setShowConfig] = useState(false);
+  const [showAvail, setShowAvail] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
+
+  const [result, setResult] = useState<{ drafts: Draft[]; report: GenReport } | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [previewClassId, setPreviewClassId] = useState('');
+  const [error, setError] = useState('');
+
+  const teacherById = Object.fromEntries(teachers.map(t => [t.id, t]));
+
+  useEffect(() => {
+    api.get('/timetable/config', { params: { academicYear } }).then(r => {
+      setConfig({
+        workingDays: r.data.workingDays?.length ? r.data.workingDays : [...DAYS],
+        slots: r.data.slots?.length ? r.data.slots : config.slots,
+        maxPeriodsPerDayPerTeacher: r.data.maxPeriodsPerDayPerTeacher ?? 6,
+      });
+    }).catch(() => {});
+    api.get('/exams/subjects').then(r => setSubjectById(Object.fromEntries(r.data.map((s: Subject) => [s.id, s])))).catch(() => {});
+    api.get('/timetable/availability', { params: { academicYear } }).then(r => setAvailability(r.data)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [academicYear]);
+
+  async function saveConfig() {
+    setSavingConfig(true);
+    setError('');
+    try {
+      await api.put('/timetable/config', { academicYear, ...config });
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 2500);
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to save bell schedule.');
+    } finally { setSavingConfig(false); }
+  }
+
+  function addSlot() {
+    const last = config.slots[config.slots.length - 1];
+    setConfig(c => ({ ...c, slots: [...c.slots, { periodNumber: (last?.periodNumber || 0) + 1, startTime: '15:00', endTime: '15:45' }] }));
+  }
+  function removeSlot(pn: number) {
+    setConfig(c => ({ ...c, slots: c.slots.filter(s => s.periodNumber !== pn) }));
+  }
+  function toggleDay(day: string) {
+    setConfig(c => ({ ...c, workingDays: c.workingDays.includes(day) ? c.workingDays.filter(d => d !== day) : [...DAYS].filter(d => c.workingDays.includes(d) || d === day) }));
+  }
+
+  async function addAvailability() {
+    if (!availForm.teacherId) return;
+    setError('');
+    try {
+      await api.post('/timetable/availability', {
+        academicYear,
+        teacherId: availForm.teacherId,
+        dayOfWeek: availForm.dayOfWeek,
+        periodNumber: availForm.periodNumber === '' ? null : parseInt(availForm.periodNumber),
+        reason: availForm.reason || null,
+      });
+      const r = await api.get('/timetable/availability', { params: { academicYear } });
+      setAvailability(r.data);
+      setAvailForm({ teacherId: '', dayOfWeek: 'MONDAY', periodNumber: '', reason: '' });
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to add availability block.');
+    }
+  }
+  async function removeAvailability(id: string) {
+    await api.delete(`/timetable/availability/${id}`).catch(() => {});
+    setAvailability(prev => prev.filter(a => a.id !== id));
+  }
+
+  async function generate() {
+    setGenerating(true);
+    setError('');
+    setApplied(false);
+    try {
+      const { data } = await api.post('/timetable/generate', { academicYear });
+      setResult(data);
+      setPreviewClassId(data.drafts[0]?.classId || '');
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to generate timetable.');
+    } finally { setGenerating(false); }
+  }
+
+  async function apply() {
+    if (!result) return;
+    if (!confirm('Apply this generated timetable to all classes? This replaces their current schedules for the year.')) return;
+    setApplying(true);
+    setError('');
+    try {
+      await api.post('/timetable/generate/apply', { academicYear, drafts: result.drafts });
+      setApplied(true);
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to apply timetable.');
+    } finally { setApplying(false); }
+  }
+
+  const preview = result?.drafts.find(d => d.classId === previewClassId);
+  const previewPeriodNumbers = preview ? [...new Set(preview.periods.map((p: any) => p.periodNumber))].sort((a, b) => a - b) : [];
+  const previewByCell: Record<string, any> = {};
+  preview?.periods.forEach((p: any) => { previewByCell[`${p.dayOfWeek}-${p.periodNumber}`] = p; });
+  const previewWorkingDays = DAYS.filter(d => config.workingDays.includes(d));
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gradient-to-r from-[#E5F6EE] to-white border border-[#26A96B]/20 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-[#1D7A4A] flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-white" strokeWidth={2} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#1A1D23]">Automatic Timetable Generation</h3>
+            <p className="text-xs text-[#6B7280] mt-0.5 max-w-xl">
+              Builds a conflict-free weekly schedule for every class from each subject&apos;s periods/week, teacher assignments, the bell schedule, and availability. Review the draft, then apply.
+            </p>
+          </div>
+        </div>
+        <button onClick={generate} disabled={generating}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1D7A4A] text-white rounded-lg text-sm font-semibold hover:bg-[#155B37] disabled:opacity-60 transition-all shadow-sm">
+          {generating ? <Activity className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" strokeWidth={2} />}
+          {generating ? 'Generating…' : 'Generate Draft'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-[#FEF2F2] border border-[#FCA5A5] rounded-xl px-4 py-3 flex items-center justify-between">
+          <span className="text-sm font-semibold text-[#B91C1C]">{error}</span>
+          <button onClick={() => setError('')} className="text-[#B91C1C]"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* Setup: bell schedule + availability (collapsibles) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Bell schedule */}
+        <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-sm">
+          <button onClick={() => setShowConfig(s => !s)} className="w-full flex items-center justify-between px-5 py-4">
+            <span className="flex items-center gap-2 text-sm font-bold text-[#1A1D23]"><Clock className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} /> Bell Schedule</span>
+            <span className="text-xs font-semibold text-[#6B7280]">{config.slots.length} slots · {config.workingDays.length} days</span>
+          </button>
+          {showConfig && (
+            <div className="px-5 pb-5 space-y-4 border-t border-[#E5E7EB] pt-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-2">Working Days</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAYS.map(day => (
+                    <button key={day} onClick={() => toggleDay(day)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${config.workingDays.includes(day) ? 'bg-[#1D7A4A] text-white border-[#1D7A4A]' : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:bg-[#F9FAFB]'}`}>
+                      {DAY_SHORT[day]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {config.slots.map((s) => (
+                  <div key={s.periodNumber} className="flex flex-wrap items-center gap-2 bg-[#F9FAFB] p-2 rounded-lg border border-[#E5E7EB]">
+                    <span className="text-xs font-bold text-[#4B5563] w-16">P{s.periodNumber}</span>
+                    <input type="time" value={s.startTime} onChange={e => setConfig(c => ({ ...c, slots: c.slots.map(x => x.periodNumber === s.periodNumber ? { ...x, startTime: e.target.value } : x) }))} className="border border-[#E5E7EB] rounded px-1.5 py-1 text-xs" />
+                    <input type="time" value={s.endTime} onChange={e => setConfig(c => ({ ...c, slots: c.slots.map(x => x.periodNumber === s.periodNumber ? { ...x, endTime: e.target.value } : x) }))} className="border border-[#E5E7EB] rounded px-1.5 py-1 text-xs" />
+                    <label className="flex items-center gap-1 text-xs font-semibold text-[#4B5563]">
+                      <input type="checkbox" checked={!!s.isBreak} onChange={e => setConfig(c => ({ ...c, slots: c.slots.map(x => x.periodNumber === s.periodNumber ? { ...x, isBreak: e.target.checked } : x) }))} /> Break
+                    </label>
+                    {s.isBreak && <input value={s.breakLabel || ''} onChange={e => setConfig(c => ({ ...c, slots: c.slots.map(x => x.periodNumber === s.periodNumber ? { ...x, breakLabel: e.target.value } : x) }))} placeholder="Label" className="border border-[#E5E7EB] rounded px-1.5 py-1 text-xs w-24" />}
+                    <button onClick={() => removeSlot(s.periodNumber)} className="ml-auto text-xs font-bold text-[#DC2626] hover:bg-[#FEF2F2] px-1.5 py-1 rounded">Remove</button>
+                  </div>
+                ))}
+                <button onClick={addSlot} className="inline-flex items-center gap-1 text-xs font-bold text-[#1D7A4A]"><Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add slot</button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-[#4B5563]">Max periods/day per teacher</label>
+                <input type="number" min={1} max={12} value={config.maxPeriodsPerDayPerTeacher} onChange={e => setConfig(c => ({ ...c, maxPeriodsPerDayPerTeacher: parseInt(e.target.value) || 6 }))} className="border border-[#E5E7EB] rounded px-2 py-1 text-xs w-16" />
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={saveConfig} disabled={savingConfig} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1D7A4A] text-white rounded-lg text-xs font-semibold hover:bg-[#155B37] disabled:opacity-60">
+                  <Save className="w-3.5 h-3.5" /> {savingConfig ? 'Saving…' : 'Save Schedule'}
+                </button>
+                {configSaved && <span className="text-xs font-semibold text-[#0F6E56]">Saved</span>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Availability */}
+        <div className="bg-white border border-[#E5E7EB] rounded-xl shadow-sm">
+          <button onClick={() => setShowAvail(s => !s)} className="w-full flex items-center justify-between px-5 py-4">
+            <span className="flex items-center gap-2 text-sm font-bold text-[#1A1D23]"><User className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} /> Teacher Availability</span>
+            <span className="text-xs font-semibold text-[#6B7280]">{availability.length} block{availability.length === 1 ? '' : 's'}</span>
+          </button>
+          {showAvail && (
+            <div className="px-5 pb-5 space-y-3 border-t border-[#E5E7EB] pt-4">
+              <p className="text-xs text-[#6B7280]">Teachers are available everywhere by default. Add a block to mark a teacher off for a slot (leave period empty for the whole day).</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <select value={availForm.teacherId} onChange={e => setAvailForm(f => ({ ...f, teacherId: e.target.value }))} className="border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs min-w-[140px]">
+                  <option value="">Teacher…</option>
+                  {teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+                </select>
+                <select value={availForm.dayOfWeek} onChange={e => setAvailForm(f => ({ ...f, dayOfWeek: e.target.value }))} className="border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs">
+                  {DAYS.map(d => <option key={d} value={d}>{DAY_SHORT[d]}</option>)}
+                </select>
+                <input type="number" min={1} max={12} placeholder="Period (all)" value={availForm.periodNumber} onChange={e => setAvailForm(f => ({ ...f, periodNumber: e.target.value }))} className="border border-[#E5E7EB] rounded-lg px-2 py-1.5 text-xs w-24" />
+                <button onClick={addAvailability} disabled={!availForm.teacherId} className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#1D7A4A] text-white rounded-lg text-xs font-semibold disabled:opacity-50"><Plus className="w-3.5 h-3.5" /> Block</button>
+              </div>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {availability.length === 0 ? <p className="text-xs text-[#9CA3AF]">No blocks.</p> : availability.map(a => (
+                  <div key={a.id} className="flex items-center justify-between bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs">
+                    <span className="font-semibold text-[#1A1D23]">
+                      {a.teacher ? `${a.teacher.firstName} ${a.teacher.lastName}` : (teacherById[a.teacherId] ? `${teacherById[a.teacherId].firstName} ${teacherById[a.teacherId].lastName}` : 'Teacher')}
+                      <span className="text-[#6B7280] font-medium"> · {DAY_SHORT[a.dayOfWeek]}{a.periodNumber ? ` · P${a.periodNumber}` : ' · all day'}</span>
+                    </span>
+                    <button onClick={() => removeAvailability(a.id)} className="text-[#DC2626] hover:bg-[#FEF2F2] rounded p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Report */}
+      {result && (
+        <div className={`rounded-xl border p-5 shadow-sm ${result.report.feasible ? 'bg-[#F0FDF4] border-[#26A96B]/30' : 'bg-[#FFFBEB] border-[#F59E0B]/30'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {result.report.feasible
+                ? <span className="inline-flex items-center gap-1.5 text-sm font-bold text-[#0F6E56]"><Check className="w-4 h-4" strokeWidth={2.5} /> Complete schedule generated</span>
+                : <span className="inline-flex items-center gap-1.5 text-sm font-bold text-[#92400E]"><AlertTriangle className="w-4 h-4" strokeWidth={2} /> Generated with {result.report.unplacedCount} unplaced period(s)</span>}
+              <span className="text-xs font-semibold text-[#6B7280]">{result.report.placed}/{result.report.totalDemands} periods placed</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={generate} disabled={generating} className="inline-flex items-center gap-1.5 px-3 py-2 border border-[#E5E7EB] bg-white rounded-lg text-xs font-semibold text-[#4B5563] hover:bg-[#F9FAFB] disabled:opacity-60">
+                <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} /> Regenerate
+              </button>
+              <button onClick={apply} disabled={applying || applied} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1D7A4A] text-white rounded-lg text-xs font-semibold hover:bg-[#155B37] disabled:opacity-60">
+                <Save className="w-3.5 h-3.5" /> {applied ? 'Applied ✓' : applying ? 'Applying…' : 'Apply to All Classes'}
+              </button>
+            </div>
+          </div>
+
+          {(result.report.warnings.length > 0 || result.report.unplaced.length > 0) && (
+            <div className="mt-3 pt-3 border-t border-[#E5E7EB]/60 space-y-1">
+              {result.report.warnings.map((w, i) => <p key={`w${i}`} className="text-xs font-semibold text-[#B45309]">⚠ {w}</p>)}
+              {result.report.unplaced.map((u, i) => <p key={`u${i}`} className="text-xs font-semibold text-[#B91C1C]">✗ {u}</p>)}
+            </div>
+          )}
+          {applied && <p className="mt-3 text-xs font-semibold text-[#0F6E56]">Timetable applied. View it under the Class Timetable tab.</p>}
+        </div>
+      )}
+
+      {/* Draft preview */}
+      {result && preview && (
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+            <span className="text-xs font-bold text-[#4B5563] uppercase tracking-wider">Draft preview</span>
+            <select value={previewClassId} onChange={e => setPreviewClassId(e.target.value)} className="border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-sm bg-white font-semibold">
+              {result.drafts.map(d => <option key={d.classId} value={d.classId}>{d.className}</option>)}
+            </select>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[800px] text-sm border-collapse">
+              <thead>
+                <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                  <th className="px-4 py-3 text-left text-xs font-bold text-[#4B5563] uppercase tracking-wider w-32 border-r border-[#E5E7EB]">Period</th>
+                  {previewWorkingDays.map(day => <th key={day} className="px-3 py-3 text-center text-xs font-bold text-[#4B5563] uppercase tracking-wider border-r border-[#E5E7EB] last:border-0">{DAY_SHORT[day]}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB]">
+                {previewPeriodNumbers.map(pn => {
+                  const sample = previewByCell[`${previewWorkingDays[0]}-${pn}`];
+                  const isBreak = sample?.isBreak;
+                  return (
+                    <tr key={pn} className={isBreak ? 'bg-[#FFFBEB]/40' : ''}>
+                      <td className="px-4 py-2.5 border-r border-[#E5E7EB] bg-[#F9FAFB]/20">
+                        <p className="text-xs font-bold text-[#1A1D23]">{isBreak ? (sample?.breakLabel || 'Break') : `Period ${pn}`}</p>
+                        <p className="text-[10px] text-[#6B7280] font-semibold">{sample?.startTime} – {sample?.endTime}</p>
+                      </td>
+                      {previewWorkingDays.map(day => {
+                        const cell = previewByCell[`${day}-${pn}`];
+                        if (cell?.isBreak) return <td key={day} className="px-3 py-2.5 text-center border-r border-[#E5E7EB] last:border-0"><span className="text-[10px] text-[#D97706] font-bold uppercase">{cell.breakLabel || 'Break'}</span></td>;
+                        const subj = cell?.subjectId ? subjectById[cell.subjectId] : null;
+                        const teach = cell?.teacherId ? teacherById[cell.teacherId] : null;
+                        return (
+                          <td key={day} className="px-2 py-2.5 text-center border-r border-[#E5E7EB] last:border-0 min-w-[130px]">
+                            {subj ? (
+                              <div className="p-1.5 rounded-lg bg-[#E5F6EE]/50 border border-[#26A96B]/15">
+                                <p className="text-xs font-bold text-[#1D7A4A] truncate">{subj.name}</p>
+                                {teach && <p className="text-[10px] font-semibold text-[#0F6E56] truncate">{teach.firstName} {teach.lastName}</p>}
+                              </div>
+                            ) : <span className="text-xs text-[#D1D5DB]">—</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!result && !generating && (
+        <div className="text-center py-16 bg-white border border-[#E5E7EB] rounded-xl shadow-sm">
+          <Sparkles className="mx-auto h-12 w-12 text-[#9CA3AF] mb-3" strokeWidth={1.25} />
+          <h3 className="text-sm font-bold text-[#1A1D23] mb-1">No draft yet</h3>
+          <p className="text-xs text-[#6B7280] max-w-md mx-auto">Set each subject&apos;s periods/week (in Staff → Subjects), review the bell schedule and availability above, then click <span className="font-semibold">Generate Draft</span>.</p>
         </div>
       )}
     </div>

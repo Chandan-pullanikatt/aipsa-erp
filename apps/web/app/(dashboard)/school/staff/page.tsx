@@ -40,6 +40,7 @@ interface SubjectItem {
   class: { id: string; name: string } | null;
   teacherId: string | null;
   teacher: { id: string; firstName: string; lastName: string } | null;
+  periodsPerWeek?: number;
 }
 
 export default function StaffPage() {
@@ -70,7 +71,7 @@ export default function StaffPage() {
   // Subject Form States
   const [showSubjectForm, setShowSubjectForm] = useState(false);
   const [editingSubject, setEditingSubject] = useState<SubjectItem | null>(null);
-  const [subjectForm, setSubjectForm] = useState({ name: '', code: '', classId: '', teacherId: '' });
+  const [subjectForm, setSubjectForm] = useState({ name: '', code: '', classId: '', teacherId: '', periodsPerWeek: '' });
   const [submittingSubject, setSubmittingSubject] = useState(false);
 
   // Teacher Subject Mapping Drawer / Modal
@@ -253,6 +254,7 @@ export default function StaffPage() {
         name: subjectForm.name.trim(),
         code: subjectForm.code ? subjectForm.code.trim() : null,
         teacherId: subjectForm.teacherId || null,
+        periodsPerWeek: subjectForm.periodsPerWeek === '' ? 0 : parseInt(subjectForm.periodsPerWeek) || 0,
       };
 
       if (editingSubject) {
@@ -265,7 +267,7 @@ export default function StaffPage() {
         setSuccess('New academic subject registered.');
       }
 
-      setSubjectForm({ name: '', code: '', classId: '', teacherId: '' });
+      setSubjectForm({ name: '', code: '', classId: '', teacherId: '', periodsPerWeek: '' });
       setEditingSubject(null);
       setShowSubjectForm(false);
     } catch (err: any) {
@@ -386,7 +388,7 @@ export default function StaffPage() {
           <button
             onClick={() => {
               setEditingSubject(null);
-              setSubjectForm({ name: '', code: '', classId: classes[0]?.id || '', teacherId: '' });
+              setSubjectForm({ name: '', code: '', classId: classes[0]?.id || '', teacherId: '', periodsPerWeek: '' });
               setShowSubjectForm(true);
             }}
             className="inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px]"
@@ -765,7 +767,7 @@ export default function StaffPage() {
               <button
                 onClick={() => {
                   setEditingSubject(null);
-                  setSubjectForm({ name: '', code: '', classId: classes[0]?.id || '', teacherId: '' });
+                  setSubjectForm({ name: '', code: '', classId: classes[0]?.id || '', teacherId: '', periodsPerWeek: '' });
                   setShowSubjectForm(true);
                 }}
                 className="mt-4 inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px]"
@@ -841,6 +843,7 @@ export default function StaffPage() {
                               code: sub.code || '',
                               classId: sub.classId,
                               teacherId: sub.teacherId || '',
+                              periodsPerWeek: sub.periodsPerWeek != null ? String(sub.periodsPerWeek) : '',
                             });
                             setShowSubjectForm(true);
                           }}
@@ -942,6 +945,20 @@ export default function StaffPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Periods / Week</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={40}
+                  placeholder="0"
+                  value={subjectForm.periodsPerWeek}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, periodsPerWeek: e.target.value })}
+                  className="w-full"
+                />
+                <p className="text-[11px] text-[#6B7280] mt-1">How many lessons this subject needs per week. Used by timetable auto-generation.</p>
               </div>
 
               <div className="flex justify-end gap-3 pt-5 border-t border-[#E5E7EB] mt-6">

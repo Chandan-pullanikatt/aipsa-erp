@@ -133,6 +133,27 @@ router.delete('/availability/:id', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─── Auto-generation ──────────────────────────────────────────────────────────
+
+// POST /api/timetable/generate — build a draft timetable for all classes (no write)
+router.post('/generate', adminOnly, [
+  body('seed').optional().isInt(),
+], validate, async (req, res, next) => {
+  try {
+    const seed = req.body.seed != null ? parseInt(req.body.seed) : undefined;
+    res.json(await svc.generateTimetable(req.tenant.id, req.body.academicYear, { seed }));
+  } catch (e) { next(e); }
+});
+
+// POST /api/timetable/generate/apply — persist reviewed drafts for all classes
+router.post('/generate/apply', adminOnly, [
+  body('drafts').isArray({ min: 1 }),
+], validate, async (req, res, next) => {
+  try {
+    res.json(await svc.applyGeneratedTimetable(req.tenant.id, req.body.academicYear, req.body.drafts));
+  } catch (e) { next(e); }
+});
+
 // GET /api/timetable/academic-year
 router.get('/academic-year', (req, res) => {
   res.json({ academicYear: svc.currentAcademicYear() });
