@@ -142,6 +142,22 @@ router.post('/change-password',
   }
 );
 
+// POST /api/auth/account/delete — authenticated, user requests deletion of their
+// own account + data (required by Google Play). Deactivates immediately; PII purge
+// runs on a grace-period job. Confirm intent with the literal "DELETE".
+router.post('/account/delete',
+  authenticate,
+  [
+    body('confirm').equals('DELETE').withMessage('Type DELETE to confirm.'),
+  ], validate,
+  async (req, res, next) => {
+    try {
+      const result = await authService.requestAccountDeletion(req.user.id, { ipAddress: req.ip });
+      res.json(result);
+    } catch (err) { next(err); }
+  }
+);
+
 // GET /api/auth/class-code/:code — public, lookup class info for confirmation step
 router.get('/class-code/:code', async (req, res, next) => {
   try {

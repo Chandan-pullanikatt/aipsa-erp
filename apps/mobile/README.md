@@ -39,10 +39,42 @@ The PWA manifest (`apps/web/app/manifest.ts`) expects these — add them:
 - `apps/web/public/icons/icon-512.png`
 - `apps/web/public/icons/maskable-512.png`
 
-## Releasing to Google Play
-1. In Android Studio: **Build > Generate Signed Bundle / APK > Android App Bundle (.aab)**.
-2. Create a keystore (keep it safe — losing it means you can never update the app).
-3. Upload the `.aab` to the Play Console (one-time $25 developer account).
+## Release signing (set up once)
+
+The native `android/` folder is gitignored (recreated by `cap add android`), so the
+signing config lives in two tracked places and is re-applied automatically:
+
+- `app/build.gradle` reads `android/keystore.properties` (a gitignored file).
+- `keystore.properties.example` (this folder) is the template.
+
+**One-time:**
+
+1. Generate the upload keystore (store it **outside** the repo, e.g. a `secrets/` dir
+   in your home folder). Losing this file = you can never update the app:
+   ```bash
+   keytool -genkeypair -v \
+     -keystore "$HOME/secrets/aipsa-upload.jks" \
+     -alias aipsa-upload \
+     -keyalg RSA -keysize 2048 -validity 10000 \
+     -dname "CN=AIPSA Digital School, O=All India Private Schools Association, L=, S=, C=IN"
+   ```
+2. Copy the template into the native project and fill it in:
+   ```bash
+   cp apps/mobile/keystore.properties.example apps/mobile/android/keystore.properties
+   # edit android/keystore.properties: set storeFile (absolute path) + passwords + alias
+   ```
+3. Build the signed bundle (CLI or Android Studio):
+   ```bash
+   cd apps/mobile && npx cap sync android
+   cd android && ./gradlew bundleRelease
+   # output: android/app/build/outputs/bundle/release/app-release.aab
+   ```
+   Or in Android Studio: **Build > Generate Signed Bundle / APK > Android App Bundle**.
+4. Upload the `.aab` to the Play Console (one-time $25 developer account). Start on the
+   **Internal testing** track, not Production.
+
+> Back up the `.jks` + its passwords in AIPSA's secret manager. If `keystore.properties`
+> is absent, release builds fall back to **unsigned** (fine for CI; not uploadable).
 
 ## Push notifications (FCM) — setup
 

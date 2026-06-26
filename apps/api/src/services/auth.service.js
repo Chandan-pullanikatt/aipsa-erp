@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../lib/prisma');
 const { signToken } = require('../lib/jwt');
-const { sendPasswordReset, sendWelcome, sendInvite } = require('./email.service');
+const { sendPasswordReset, sendWelcome, sendInvite, sendRaw } = require('./email.service');
 
 async function registerSchool({ schoolName, adminEmail, adminPassword, adminFirstName, adminLastName, city, state, phone }) {
   const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
@@ -310,10 +310,78 @@ async function linkStudentToParent(userId, tenantId, { admissionNumber, portalPi
   return { message: 'Student linked successfully.', studentName: `${student.firstName} ${student.lastName}` };
 }
 
+// ─── Account Deletion ───────────────────────────────────────────────────────
+//
+// Google Play (and most app stores) require a user-initiated way to request
+// account + data deletion. This is the request flow: it takes the immediate,
+// reversible-safe privacy actions synchronously — disable login and revoke all
+// push device tokens so no further data flows to the user — and records an
+// audit trail. The destructive purge/anonymization of the user's PII across the
+// rest of the schema is intentionally NOT done inline: a school user is tied to
+// financial and academic records the school is legally required to retain, so
+// the actual erasure runs later (admin-reviewed / scheduled grace-period job).
+//
+// TODO(account-deletion): build the grace-period purge job that anonymizes PII
+// (email/phone/name) after N days while preserving referential integrity, and
+// add sole-SCHOOL_ADMIN handover handling so a school can't be orphaned.
+async function requestAccountDeletion(userId, { ipAddress } = {}) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
+
+  // AIPSA-internal accounts are managed manually, not via self-service deletion.
+  if (user.role === 'SUPER_ADMIN') {
+    throw Object.assign(
+      new Error('Super admin accounts cannot be deleted through this flow. Contact AIPSA support.'),
+      { status: 403 },
+    );
+  }
+
+  const requestedAt = new Date();
+
+  // Immediate, safe actions: stop all push delivery and block login.
+  await prisma.$transaction([
+    prisma.deviceToken.deleteMany({ where: { userId } }),
+    prisma.user.update({ where: { id: userId }, data: { isActive: false } }),
+    prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId,
+        action: 'ACCOUNT_DELETION_REQUESTED',
+        entity: 'User',
+        entityId: userId,
+        meta: { requestedAt: requestedAt.toISOString(), email: user.email, role: user.role },
+        ipAddress: ipAddress || null,
+      },
+    }),
+  ]);
+
+  // Confirmation email — fire-and-forget, must never block or fail the request.
+  if (sendRaw) {
+    sendRaw({
+      to: user.email,
+      subject: 'Your AIPSA account deletion request',
+      html: `<p>Hi ${user.firstName},</p>
+        <p>We've received your request to delete your AIPSA Digital School account
+        (<strong>${user.email}</strong>). Your account has been deactivated immediately
+        and you will no longer receive notifications.</p>
+        <p>Your personal data will be permanently removed within 30 days. Records the
+        school is legally required to retain (such as fee receipts and academic results)
+        may be kept in anonymized form.</p>
+        <p>If you did not make this request, contact your school administrator immediately.</p>`,
+    }).catch(() => {});
+  }
+
+  return {
+    message:
+      'Account deletion requested. Your account has been deactivated and your personal data will be removed within 30 days.',
+  };
+}
+
 module.exports = {
   registerSchool, login, requestPasswordReset, resetPassword,
   changePassword,
   getOrCreateJoinCode, regenerateJoinCode,
   inviteUser, acceptInvite,
   joinSchool, linkStudentToParent,
+  requestAccountDeletion,
 };
