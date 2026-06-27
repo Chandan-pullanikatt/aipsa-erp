@@ -86,7 +86,8 @@ export default function PrivacyPolicyPage() {
             <p>
               You may request access to, correction of, or deletion of your personal information by contacting your
               school administrator or us at the address below. Some requests may be fulfilled by your school as the data
-              controller.
+              controller. To delete your account and personal data, see{' '}
+              <Link href="/account-deletion" className="text-[#1D7A4A] hover:underline">Delete Your Account</Link>.
             </p>
           </Section>
 

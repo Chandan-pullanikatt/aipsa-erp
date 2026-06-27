@@ -433,6 +433,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             {user.tenantId && <NotificationBell tenantId={user.tenantId} />}
           </div>
+          <Link
+            href="/settings/account"
+            className="flex items-center text-xs font-medium text-white/70 hover:text-white transition-colors w-full gap-1.5 py-1 px-1.5 rounded hover:bg-white/5 mb-1"
+          >
+            <Settings2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <span>Settings &amp; Privacy</span>
+          </Link>
           <button
             onClick={() => { clearAuth(); router.push('/login'); }}
             className="flex items-center text-xs font-medium text-red-300 hover:text-red-100 transition-colors w-full gap-1.5 py-1 px-1.5 rounded hover:bg-white/5"
