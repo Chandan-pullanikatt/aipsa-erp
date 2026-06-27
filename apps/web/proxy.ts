@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/join', '/student-join', '/change-password'];
 
+// Legal/info pages that must be reachable by ANYONE, signed in or not (required by
+// Google Play — the privacy policy + account-deletion URLs must open without a login).
+// Unlike PUBLIC_PATHS, signed-in users are NOT bounced away from these.
+const OPEN_PATHS = ['/privacy', '/terms', '/account-deletion'];
+
 const ROLE_HOME: Record<string, string> = {
   SUPER_ADMIN: '/aipsa',
   SCHOOL_ADMIN: '/school',
@@ -24,6 +29,12 @@ export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const token = request.cookies.get('token')?.value;
     const userRaw = request.cookies.get('user')?.value;
+
+    // Open to everyone, any auth state — no redirects in either direction.
+    const isOpen = OPEN_PATHS.some(
+      (p) => pathname === p || pathname.startsWith(p + '/'),
+    );
+    if (isOpen) return NextResponse.next();
 
     const isPublic = PUBLIC_PATHS.some(
       (p) => pathname === p || pathname.startsWith(p + '/'),
