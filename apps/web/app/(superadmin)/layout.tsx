@@ -5,11 +5,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getUser, clearAuth } from '@/lib/auth';
 import type { AuthUser } from '@/lib/auth';
-import { LayoutDashboard, Building2, LogOut, Menu, UserCog } from 'lucide-react';
+import { LayoutDashboard, Building2, LogOut, Menu, UserCog, GraduationCap } from 'lucide-react';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/aipsa', exact: true, icon: LayoutDashboard },
   { label: 'Schools', href: '/aipsa/schools', exact: false, icon: Building2 },
+  { label: 'Home Schooling', href: '/aipsa/homeschool', exact: false, icon: GraduationCap },
   { label: 'My Profile', href: '/aipsa/profile', exact: false, icon: UserCog },
 ];
 

@@ -15,6 +15,7 @@ model Tenant {
   name      String
   slug      String       @unique
   joinCode  String?      @unique
+  type      TenantType   @default(SCHOOL)
   status    TenantStatus @default(PENDING)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
@@ -68,8 +69,20 @@ model Tenant {
   progressTerms           ProgressTerm[]
   staffProfiles           StaffProfile[]
   departments             Department[]
+  hsLearners              HsLearner[]
+  hsEnrollments           HsEnrollment[]
+  hsLessonProgress        HsLessonProgress[]
+  hsSubscriptions         HsSubscription[]
 
   @@map("tenants")
+}
+
+// A tenant is either a SCHOOL (the multi-tenant ERP, default) or an INDIVIDUAL
+// home-schooling family (B2C product). INDIVIDUAL tenants never touch the
+// class/section/fee school graph — they use the Hs* models below.
+enum TenantType {
+  SCHOOL
+  INDIVIDUAL
 }
 
 enum TenantStatus {
@@ -163,6 +176,7 @@ enum Role {
   STAFF
   STUDENT
   PARENT
+  HS_PARENT
 }
 
 // ─── Password Reset ──────────────────────────────────────────────────────────
@@ -1444,4 +1458,151 @@ model EventMedia {
 
   @@index([eventId])
   @@map("event_media")
+}
+
+// ─── Home Schooling (B2C) ─────────────────────────────────────────────────────
+//
+// A separate product served from its own frontend (apps/homeschool) but sharing
+// this API + database. Two halves:
+//   1. Global catalog (HsCourse → HsModule → HsLesson): AIPSA-owned content, NOT
+//      tenant-scoped, sold to individuals. Read-only to families.
+//   2. Family data (HsLearner / HsEnrollment / HsLessonProgress / HsSubscription):
+//      scoped to a Tenant of type INDIVIDUAL, isolated exactly like a school.
+
+// ── Global catalog (AIPSA-owned, no tenant) ──
+
+model HsCourse {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  subject     String
+  gradeLevel  String
+  board       String? // optional NIOS / CBSE mapping (future accreditation path)
+  coverUrl    String?
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modules     HsModule[]
+  enrollments HsEnrollment[]
+
+  @@index([gradeLevel])
+  @@index([subject])
+  @@map("hs_courses")
+}
+
+model HsModule {
+  id        String   @id @default(cuid())
+  courseId  String
+  title     String
+  sequence  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course  HsCourse   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons HsLesson[]
+
+  @@index([courseId])
+  @@map("hs_modules")
+}
+
+model HsLesson {
+  id            String   @id @default(cuid())
+  moduleId      String
+  title         String
+  description   String?
+  content       String? // markdown / rich lesson text
+  videoUrl      String? // YouTube link (never host raw video)
+  attachmentUrl String?
+  durationMin   Int?
+  sequence      Int      @default(0)
+  isFreePreview Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  module   HsModule           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress HsLessonProgress[]
+
+  @@index([moduleId])
+  @@map("hs_lessons")
+}
+
+// ── Family data (tenant type INDIVIDUAL) ──
+
+// A child learner managed by the HS_PARENT account. No school baggage
+// (no admission number / class / section) — just identity + grade level.
+model HsLearner {
+  id          String    @id @default(cuid())
+  tenantId    String
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime? @db.Date
+  gradeLevel  String?
+  avatarUrl   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enrollments HsEnrollment[]
+  progress    HsLessonProgress[]
+
+  @@index([tenantId])
+  @@map("hs_learners")
+}
+
+model HsEnrollment {
+  id         String   @id @default(cuid())
+  tenantId   String
+  learnerId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+
+  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  learner HsLearner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  course  HsCourse  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, courseId])
+  @@index([tenantId])
+  @@map("hs_enrollments")
+}
+
+model HsLessonProgress {
+  id          String    @id @default(cuid())
+  tenantId    String
+  learnerId   String
+  lessonId    String
+  status      String    @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  learner HsLearner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  lesson  HsLesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, lessonId])
+  @@index([tenantId, learnerId])
+  @@map("hs_lesson_progress")
+}
+
+// Family-level subscription that unlocks the whole catalog for all the family's
+// learners. v1 = time-boxed access (one Razorpay order grants access until
+// currentPeriodEnd); renew = pay again. Upgrade path = Razorpay Subscriptions.
+model HsSubscription {
+  id                String    @id @default(cuid())
+  tenantId          String
+  plan              String    @default("FAMILY")
+  amount            Float
+  status            String    @default("PENDING") // PENDING | ACTIVE | EXPIRED | CANCELLED
+  razorpayOrderId   String?   @unique
+  razorpayPaymentId String?
+  currentPeriodEnd  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("hs_subscriptions")
 }

@@ -115,6 +115,19 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Cross-sell: AIPSA's separate B2C home-schooling product (own app/URL) */}
+        <a
+          href={process.env.NEXT_PUBLIC_HOMESCHOOL_URL || 'http://localhost:3001'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 block bg-white border border-gray-200 rounded-xl px-5 py-4 hover:border-green-500 transition-colors"
+        >
+          <p className="text-sm font-semibold text-gray-900">Home schooling for families →</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Not a school? Get AIPSA's structured, grade-by-grade curriculum for learning at home.
+          </p>
+        </a>
+
         {/* Documentation — for prospects evaluating the product before sign-in */}
         <div className="mt-6 flex items-center justify-center gap-4 text-xs text-gray-400">
           <a
