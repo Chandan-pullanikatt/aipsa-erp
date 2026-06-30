@@ -8,9 +8,9 @@ import "@fontsource/dm-sans/500.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AIPSA Digital School",
-  description: "Multi-Tenant School ERP & LMS by AIPSA",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "AIPSA" },
+  title: "EduBridge",
+  description: "Multi-Tenant School ERP & LMS",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "EduBridge" },
 };
 
 export const viewport: Viewport = {

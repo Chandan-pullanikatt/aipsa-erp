@@ -73,7 +73,7 @@ export default function SchoolDashboard() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center max-w-md bg-white rounded-xl border border-border p-6 shadow-none">
           <p className="text-4xl mb-4">⏳</p>
-          <h2 className="font-display text-[22px] font-semibold text-text-primary mb-2">Pending AIPSA Approval</h2>
+          <h2 className="font-display text-[22px] font-semibold text-text-primary mb-2">Pending EduBridge Approval</h2>
           <p className="font-body text-[14px] text-text-muted mb-6 leading-relaxed">
             Your school registration is under review. You'll receive an email once approved.
           </p>

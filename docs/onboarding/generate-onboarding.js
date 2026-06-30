@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const BRAND = {
-  product: 'AIPSA School ERP',
+  product: 'EduBridge',
   tagline: 'School ERP + Learning Management System',
   color: '#1d4ed8',
   support: 'support@aipsa.org',
@@ -25,7 +25,7 @@ const GUIDES = {
       'As the School Administrator you set up the school and everything inside it. Follow the steps in order — each step depends on the one before it (you cannot add students before classes exist).',
     sections: [
       ['1. Create your school account', [
-        'Go to the AIPSA sign-up page and choose "Register a School".',
+        'Go to the EduBridge sign-up page and choose "Register a School".',
         'Enter your school name, your name, email and a password. This makes you the School Admin.',
         'Log in. You land on the School Dashboard with the module menu on the left.',
         'Open School → Profile and complete the school details (address, logo, contact).',

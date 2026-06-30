@@ -155,7 +155,7 @@ export default function AipsaDashboard() {
             Platform Overview
           </h1>
           <p className="font-body text-[14px] text-[#6B7280] mt-1">
-            Welcome back, {adminName}. Here's the current state of the AIPSA Digital School platform.
+            Welcome back, {adminName}. Here's the current state of the EduBridge platform.
           </p>
         </div>
         <Link

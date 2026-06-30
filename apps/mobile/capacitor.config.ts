@@ -8,7 +8,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // IMPORTANT: replace server.url with your real production URL (the Vercel domain).
 const config: CapacitorConfig = {
   appId: 'in.aipsa.school',
-  appName: 'AIPSA Digital School',
+  appName: 'EduBridge',
   // webDir is unused in the hosted model but Capacitor requires a valid path.
   webDir: 'www',
   server: {
@@ -20,7 +20,7 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 2000,
       launchAutoHide: true,
-      backgroundColor: '#0B4D2E',
+      backgroundColor: '#F7F7F7',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
     },

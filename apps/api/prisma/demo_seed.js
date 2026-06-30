@@ -1,5 +1,5 @@
 /**
- * AIPSA Digital School — Demo Seed Script
+ * EduBridge — Demo Seed Script
  * School: St. Mary's Academy
  *
  * Run:  node prisma/demo_seed.js    (from apps/api directory)

@@ -17,7 +17,7 @@ async function requireTenant(req, res, next) {
   }
 
   if (tenant.status === 'SUSPENDED') {
-    return res.status(403).json({ error: 'School account is suspended. Contact AIPSA support.' });
+    return res.status(403).json({ error: 'School account is suspended. Contact EduBridge support.' });
   }
 
   req.tenant = tenant;

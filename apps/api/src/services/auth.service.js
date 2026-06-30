@@ -331,7 +331,7 @@ async function requestAccountDeletion(userId, { ipAddress } = {}) {
   // AIPSA-internal accounts are managed manually, not via self-service deletion.
   if (user.role === 'SUPER_ADMIN') {
     throw Object.assign(
-      new Error('Super admin accounts cannot be deleted through this flow. Contact AIPSA support.'),
+      new Error('Super admin accounts cannot be deleted through this flow. Contact EduBridge support.'),
       { status: 403 },
     );
   }
@@ -359,9 +359,9 @@ async function requestAccountDeletion(userId, { ipAddress } = {}) {
   if (sendRaw) {
     sendRaw({
       to: user.email,
-      subject: 'Your AIPSA account deletion request',
+      subject: 'Your EduBridge account deletion request',
       html: `<p>Hi ${user.firstName},</p>
-        <p>We've received your request to delete your AIPSA Digital School account
+        <p>We've received your request to delete your EduBridge account
         (<strong>${user.email}</strong>). Your account has been deactivated immediately
         and you will no longer receive notifications.</p>
         <p>Your personal data will be permanently removed within 30 days. Records the

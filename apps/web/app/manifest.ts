@@ -5,9 +5,9 @@ import type { MetadataRoute } from 'next';
 // real PNGs there before shipping. Brand green matches the app (#1D7A4A).
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'AIPSA Digital School',
-    short_name: 'AIPSA',
-    description: 'Multi-Tenant School ERP & LMS by AIPSA',
+    name: 'EduBridge',
+    short_name: 'EduBridge',
+    description: 'Multi-Tenant School ERP & LMS',
     start_url: '/',
     scope: '/',
     display: 'standalone',

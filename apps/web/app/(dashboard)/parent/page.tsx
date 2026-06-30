@@ -939,7 +939,7 @@ function ParentDashboardContent() {
                                     {/* Official Header (Visible on print only) */}
                                     <div className="hidden print:block text-center border-b-2 border-gray-900 pb-4 mb-4 font-display">
                                       <h2 className="text-xl font-black uppercase text-gray-900 tracking-wider">Official Academic Record</h2>
-                                      <p className="text-sm font-semibold text-gray-600 mt-1">AIPSA Multi-Tenant School ERP Systems</p>
+                                      <p className="text-sm font-semibold text-gray-600 mt-1">EduBridge Multi-Tenant School ERP Systems</p>
                                       
                                       <div className="grid grid-cols-2 text-left text-xs text-gray-700 mt-4 border border-gray-300 p-3 rounded">
                                         <p><span className="font-bold">Student:</span> {activeStudent?.firstName} {activeStudent?.lastName}</p>

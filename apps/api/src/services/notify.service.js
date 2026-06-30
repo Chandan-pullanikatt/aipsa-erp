@@ -19,7 +19,7 @@ function shell(title, bodyHtml) {
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
     <h2 style="color:#1A1D23">${esc(title)}</h2>
     <div style="color:#374151;font-size:14px;line-height:1.6">${bodyHtml}</div>
-    <p style="color:#9CA3AF;font-size:12px;margin-top:24px">AIPSA Digital School</p>
+    <p style="color:#9CA3AF;font-size:12px;margin-top:24px">EduBridge</p>
   </div>`;
 }
 

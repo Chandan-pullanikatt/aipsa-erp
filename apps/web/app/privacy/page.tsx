@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy · AIPSA Digital School',
-  description: 'How AIPSA Digital School collects, uses and protects your information.',
+  title: 'Privacy Policy · EduBridge',
+  description: 'How EduBridge collects, uses and protects your information.',
 };
 
 const UPDATED = 'June 23, 2026';
@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
 
         <div className="prose-legal mt-8 space-y-6 text-[14px] leading-relaxed text-[#374151]">
           <p>
-            AIPSA Digital School (&ldquo;AIPSA&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) provides a school
+            EduBridge (&ldquo;EduBridge&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) provides a school
             management platform (ERP &amp; LMS) used by schools, their staff, students and parents. This policy
             explains what information we collect, how we use it, and the choices you have. By using our website or
             mobile app you agree to this policy.

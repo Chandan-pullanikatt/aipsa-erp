@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Delete Your Account · AIPSA Digital School',
-  description: 'How to request deletion of your AIPSA Digital School account and personal data.',
+  title: 'Delete Your Account · EduBridge',
+  description: 'How to request deletion of your EduBridge account and personal data.',
 };
 
 const UPDATED = 'June 27, 2026';
@@ -21,7 +21,7 @@ export default function AccountDeletionPage() {
 
         <div className="prose-legal mt-8 space-y-6 text-[14px] leading-relaxed text-[#374151]">
           <p>
-            This page explains how to request deletion of your <strong>AIPSA Digital School</strong> account
+            This page explains how to request deletion of your <strong>EduBridge</strong> account
             (developed by the All India Private Schools Association) and the personal data associated with it.
           </p>
 

@@ -404,7 +404,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[70%] max-w-[320px] lg:w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
-          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA Digital School</p>
+          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">EduBridge</p>
           <p className="text-[11px] font-medium tracking-wide text-white/50 mt-1 uppercase">{roleLabel[user.role]}</p>
         </div>
 
@@ -447,6 +447,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <LogOut className="w-3.5 h-3.5" strokeWidth={1.75} />
             <span>Sign out</span>
           </button>
+          <p className="text-[10px] text-white/40 mt-3 leading-tight">Powered by All India Private Schools Association</p>
         </div>
       </aside>
 
@@ -463,7 +464,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100" aria-label="Menu">
               <Menu className="w-5 h-5" strokeWidth={1.75} />
             </button>
-            <span className="font-display font-semibold text-gray-800 text-sm">AIPSA Digital School</span>
+            <span className="font-display font-semibold text-gray-800 text-sm">EduBridge</span>
           </div>
         </header>
 

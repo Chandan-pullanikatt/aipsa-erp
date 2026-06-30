@@ -25,7 +25,7 @@ router.post('/register', [
 ], validate, async (req, res, next) => {
   try {
     const result = await authService.registerSchool(req.body);
-    res.status(201).json({ message: 'School registered. Pending AIPSA approval.', ...result });
+    res.status(201).json({ message: 'School registered. Pending EduBridge approval.', ...result });
   } catch (err) {
     next(err);
   }

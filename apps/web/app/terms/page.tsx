@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Terms & Conditions · AIPSA Digital School',
-  description: 'The terms that govern your use of AIPSA Digital School.',
+  title: 'Terms & Conditions · EduBridge',
+  description: 'The terms that govern your use of EduBridge.',
 };
 
 const UPDATED = 'June 23, 2026';
@@ -18,14 +18,13 @@ export default function TermsPage() {
 
         <div className="mt-8 space-y-6 text-[14px] leading-relaxed text-[#374151]">
           <p>
-            These Terms &amp; Conditions (&ldquo;Terms&rdquo;) govern your access to and use of the AIPSA Digital
-            School website and mobile application (the &ldquo;Service&rdquo;). By creating an account or using the
+            These Terms &amp; Conditions (&ldquo;Terms&rdquo;) govern your access to and use of the EduBridge website and mobile application (the &ldquo;Service&rdquo;). By creating an account or using the
             Service, you agree to these Terms.
           </p>
 
           <Section title="1. The Service">
             <p>
-              AIPSA Digital School is a multi-tenant school management platform (ERP &amp; LMS). Schools subscribe to
+              EduBridge is a multi-tenant school management platform (ERP &amp; LMS). Schools subscribe to
               the Service and provide access to their administrators, teachers, students and parents. Features available
               to you depend on your role and the modules your school has enabled.
             </p>
@@ -67,7 +66,7 @@ export default function TermsPage() {
 
           <Section title="6. Intellectual Property">
             <p>
-              The Service, including its software, design and content (excluding school-owned data), is owned by AIPSA
+              The Service, including its software, design and content (excluding school-owned data), is owned by EduBridge
               and protected by applicable laws. You may not copy, modify, distribute or reverse-engineer any part of the
               Service except as permitted by law.
             </p>
@@ -82,7 +81,7 @@ export default function TermsPage() {
 
           <Section title="8. Limitation of Liability">
             <p>
-              To the maximum extent permitted by law, AIPSA shall not be liable for any indirect, incidental or
+              To the maximum extent permitted by law, EduBridge shall not be liable for any indirect, incidental or
               consequential damages arising from your use of the Service. The Service is provided &ldquo;as is&rdquo;
               without warranties of any kind.
             </p>

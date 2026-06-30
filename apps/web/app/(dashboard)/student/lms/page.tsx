@@ -143,7 +143,7 @@ export default function StudentLmsPage() {
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: 'AIPSA Digital School',
+        name: 'EduBridge',
         description: `Premium LMS — ${order.academicYear}`,
         order_id: order.orderId,
         handler: async (response: any) => {

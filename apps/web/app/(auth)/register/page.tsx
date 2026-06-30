@@ -47,7 +47,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Register Your School</h1>
-          <p className="text-gray-500 mt-1">Join the AIPSA platform. Approval takes 1–2 business days.</p>
+          <p className="text-gray-500 mt-1">Join the EduBridge platform. Approval takes 1–2 business days.</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

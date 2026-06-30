@@ -44,7 +44,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       >
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
-          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">AIPSA Digital School</p>
+          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">EduBridge</p>
           <p className="text-[11px] font-medium tracking-wide text-white/50 mt-1 uppercase">Global Admin</p>
         </div>
 
@@ -96,6 +96,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             <LogOut className="w-3.5 h-3.5" strokeWidth={1.75} />
             <span>Sign out</span>
           </button>
+          <p className="text-[10px] text-white/40 mt-3 leading-tight">Powered by All India Private Schools Association</p>
         </div>
       </aside>
 
@@ -116,7 +117,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           >
             <Menu className="w-5 h-5" strokeWidth={1.75} />
           </button>
-          <span className="font-display font-semibold text-gray-800 text-sm">AIPSA Digital School</span>
+          <span className="font-display font-semibold text-gray-800 text-sm">EduBridge</span>
         </header>
         <main className="flex-1 overflow-auto p-6 max-w-[1280px] w-full mx-auto">{children}</main>
       </div>

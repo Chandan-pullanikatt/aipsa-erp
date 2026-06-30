@@ -117,7 +117,7 @@ export default function JoinSchoolPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">AIPSA Digital School</h1>
+          <h1 className="text-3xl font-bold text-gray-900">EduBridge</h1>
           <p className="text-gray-500 mt-1">Join your school workspace</p>
         </div>
 
