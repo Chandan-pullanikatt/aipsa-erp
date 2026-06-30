@@ -156,6 +156,11 @@ export default function LoginPage() {
             Terms
           </Link>
         </div>
+
+        {/* Footer — operating company attribution */}
+        <p className="mt-6 text-center text-[11px] text-gray-400">
+          Powered by All India Private Schools Association
+        </p>
       </div>
     </div>
   );
