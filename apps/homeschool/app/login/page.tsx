@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, ArrowLeft } from 'lucide-react';
 import api from '@/lib/api';
 import { setAuth } from '@/lib/auth';
 
@@ -61,6 +61,9 @@ export default function LoginPage() {
         <p className="text-center text-[14px] text-[#6B7280] mt-5">
           New here? <Link href="/signup" className="text-[#1D7A4A] font-medium hover:underline">Create a family account</Link>
         </p>
+        <Link href="/" className="flex items-center justify-center gap-1.5 text-[13px] font-medium text-[#6B7280] hover:text-[#0B4D2E] mt-4">
+          <ArrowLeft className="w-4 h-4" /> Back to home
+        </Link>
       </div>
     </div>
   );
