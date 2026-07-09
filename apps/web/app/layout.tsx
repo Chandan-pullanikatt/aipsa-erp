@@ -8,9 +8,16 @@ import "@fontsource/dm-sans/500.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://aipsa-erp-api.vercel.app"),
   title: "EduBridge",
   description: "Multi-Tenant School ERP & LMS",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "EduBridge" },
+  openGraph: {
+    title: "EduBridge",
+    description: "Multi-Tenant School ERP & LMS",
+    siteName: "EduBridge",
+    type: "website",
+  },
 };
 
 export const viewport: Viewport = {
