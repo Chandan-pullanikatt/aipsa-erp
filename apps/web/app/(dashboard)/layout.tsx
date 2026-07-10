@@ -80,6 +80,7 @@ const ICON_MAP = {
   'Progress Card': BarChart3,
   'My Teachers': Users,
   Programs: Award,
+  'Daily Reports': ClipboardList,
 };
 
 function getIcon(label: string) {
@@ -104,6 +105,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Library', href: '/school/library', available: true },
       { label: 'Events', href: '/school/events', available: true },
       { label: 'Programs', href: '/school/programs', available: true },
+      { label: 'Daily Reports', href: '/school/reports', available: true },
       { label: 'Communication', href: '/school/communication', available: true },
       { label: 'LMS / Curriculum', href: '/school/curriculum', available: true },
       { label: 'Staff', href: '/school/staff', available: true },
@@ -192,7 +194,7 @@ function groupNavItems(items: NavItem[], role: AuthUser['role']): { standalone: 
   const academicsList = ['Students', 'Manage Classes', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Co-Curricular', 'Timetable'];
   const financeList = ['Fee Management', 'Store'];
   const operationsList = ['Staff', 'HR', 'Transport', 'Hostel', 'Library'];
-  const managementList = ['Communication', 'Events', 'Programs', 'School Profile'];
+  const managementList = ['Communication', 'Events', 'Programs', 'Daily Reports', 'School Profile'];
 
   const groups: NavGroup[] = [
     {

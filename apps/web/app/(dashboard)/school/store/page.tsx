@@ -34,27 +34,38 @@ export default function StorePage() {
 
 function CatalogTab() {
   const [items, setItems] = useState<any[]>([]);
-  const [form, setForm] = useState({ name: '', category: 'UNIFORM', price: '', description: '' });
+  const [form, setForm] = useState({ name: '', category: 'UNIFORM', price: '', description: '', imageUrl: '', stock: '' });
   const load = useCallback(async () => { const { data } = await api.get('/purchases/items', { params: { includeInactive: true } }); setItems(data); }, []);
   useEffect(() => { load(); }, [load]);
-  async function add(e: React.FormEvent) { e.preventDefault(); if (!form.name.trim() || form.price === '') return; await api.post('/purchases/items', form); setForm({ name: '', category: 'UNIFORM', price: '', description: '' }); await load(); }
+  async function add(e: React.FormEvent) { e.preventDefault(); if (!form.name.trim() || form.price === '') return; await api.post('/purchases/items', form); setForm({ name: '', category: 'UNIFORM', price: '', description: '', imageUrl: '', stock: '' }); await load(); }
   async function del(id: string) { if (!confirm('Delete item?')) return; await api.delete(`/purchases/items/${id}`); await load(); }
   return (
     <div className="space-y-4">
-      <form onSubmit={add} className="bg-white rounded-xl border border-[#E5E7EB] p-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <form onSubmit={add} className="bg-white rounded-xl border border-[#E5E7EB] p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
         <input placeholder="Item name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm" />
         <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm">
           {CATEGORIES.map(c => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}
         </select>
-        <input placeholder="Price" type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm" />
+        <input placeholder="Price ₹" type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm" />
         <input placeholder="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm" />
-        <button className="px-3 py-2 rounded-lg bg-[#1D7A4A] text-white text-sm font-semibold inline-flex items-center justify-center gap-1"><Plus className="w-4 h-4" /> Add</button>
+        <input placeholder="Stock (blank = ∞)" type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm" />
+        <input placeholder="Image URL (optional)" value={form.imageUrl} onChange={e => setForm({ ...form, imageUrl: e.target.value })} className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm" />
+        <button className="sm:col-span-3 px-3 py-2 rounded-lg bg-[#1D7A4A] text-white text-sm font-semibold inline-flex items-center justify-center gap-1"><Plus className="w-4 h-4" /> Add Item</button>
       </form>
       <div className="bg-white rounded-xl border border-[#E5E7EB] divide-y divide-[#F3F4F6]">
         {items.map(i => (
-          <div key={i.id} className="flex items-center justify-between px-4 py-3">
-            <div><span className="font-semibold text-[#1A1D23]">{i.name}</span> <span className="text-xs bg-[#F3F4F6] px-2 py-0.5 rounded ml-2">{i.category}</span>{!i.isActive && <span className="text-xs text-[#DC2626] ml-2">inactive</span>}{i.description && <span className="text-xs text-[#9CA3AF] ml-2">{i.description}</span>}</div>
-            <div className="flex items-center gap-3"><span className="font-mono font-semibold text-[#1A1D23]">{rupees(i.price)}</span><button onClick={() => del(i.id)}><Trash2 className="w-4 h-4 text-[#DC2626]" /></button></div>
+          <div key={i.id} className="flex items-center justify-between px-4 py-3 gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {i.imageUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={i.imageUrl} alt={i.name} className="w-10 h-10 rounded object-cover border border-[#E5E7EB] shrink-0" />
+                : <div className="w-10 h-10 rounded bg-[#F3F4F6] flex items-center justify-center shrink-0"><ShoppingBag className="w-4 h-4 text-[#D1D5DB]" /></div>}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-[#1A1D23]">{i.name}</span> <span className="text-xs bg-[#F3F4F6] px-2 py-0.5 rounded">{i.category}</span>{!i.isActive && <span className="text-xs text-[#DC2626]">inactive</span>}</div>
+                <div className="text-xs text-[#9CA3AF] mt-0.5">{i.stock != null ? `${i.stock} in stock` : 'Unlimited stock'}{i.description ? ` · ${i.description}` : ''}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0"><span className="font-mono font-semibold text-[#1A1D23]">{rupees(i.price)}</span><button onClick={() => del(i.id)}><Trash2 className="w-4 h-4 text-[#DC2626]" /></button></div>
           </div>
         ))}
         {items.length === 0 && <p className="text-sm text-[#9CA3AF] italic text-center py-8">No items yet.</p>}
