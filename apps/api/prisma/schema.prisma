@@ -73,6 +73,10 @@ model Tenant {
   hsEnrollments           HsEnrollment[]
   hsLessonProgress        HsLessonProgress[]
   hsSubscriptions         HsSubscription[]
+  programs                Program[]
+  registrations           Registration[]
+  kpiAreas                KpiArea[]
+  dailyReports            DailyReport[]
 
   @@map("tenants")
 }
@@ -165,6 +169,9 @@ model User {
   publishedProgressTerms ProgressTerm[]          @relation("ProgressPublisher")
   staffProfile           StaffProfile?
   headedDepartments      Department[]            @relation("DepartmentHead")
+  programRegistrations   Registration[]          @relation("RegistrationRegistrant")
+  assignedRegistrations  Registration[]          @relation("RegistrationTeacher")
+  preparedDailyReports   DailyReport[]           @relation("DailyReportPreparedBy")
 
   @@map("users")
 }
@@ -332,6 +339,7 @@ model Student {
   bookIssues              BookIssue[]
   ccaGrades               CcaGrade[]
   progressTerms           ProgressTerm[]
+  registrations           Registration[]
 
   @@unique([tenantId, admissionNumber])
   @@index([tenantId])
@@ -1331,6 +1339,8 @@ model StoreItem {
   category    PurchaseCategory @default(OTHER)
   price       Float
   description String?
+  imageUrl    String? // product photo for the online store
+  stock       Int? // null = unlimited; decremented on paid online checkout
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
@@ -1354,6 +1364,11 @@ model Purchase {
   purchasedAt  DateTime         @default(now())
   note         String?
   recordedById String
+  // Online-checkout fields. Admin-recorded sales default to PAID (no Razorpay);
+  // student/parent online purchases go PENDING → PAID after signature verify.
+  paymentStatus     String   @default("PAID") // PENDING | PAID | FAILED
+  razorpayOrderId   String?  @unique
+  razorpayPaymentId String?
   createdAt    DateTime         @default(now())
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1605,4 +1620,206 @@ model HsSubscription {
 
   @@index([tenantId])
   @@map("hs_subscriptions")
+}
+
+// ─── Programs & Registrations (generic engine) ──────────────────────────────────
+//
+// One config-driven engine behind competitions, olympiads, arts-festival items,
+// 1-to-1 tuition, teacher/leadership training, counseling, general events and the
+// conclave. Adding a new offering = inserting a Program row, not shipping code.
+// See docs/NEW-MODULES-ARCHITECTURE.md for the full rationale.
+//
+// tenantId is NULLABLE by design: null = an AIPSA-global program (conclave, Youth
+// First Marathon, trainings, pre-school initiative) visible across schools and
+// managed by SUPER_ADMIN; a set tenantId = a single school's own program. This
+// mirrors the global-catalog vs tenant-data split already used by HsCourse.
+
+enum ProgramType {
+  COMPETITION // sports, olympiad, scholarship exam, coloring, arts festival
+  TUITION // 1-to-1 / individual tuition (needs teacher matching)
+  TRAINING // teacher training, school-leadership training
+  COUNSELING // parental / student counseling (free or paid)
+  EVENT // general event registration, marathon, conclave
+}
+
+enum ProgramAudience {
+  STUDENT
+  PARENT
+  TEACHER
+  PRINCIPAL
+  ANYONE
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+// Payment lifecycle for a registration. NOT_REQUIRED lets free programs (e.g. free
+// counseling) confirm immediately without touching Razorpay.
+enum RegPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  FAILED
+}
+
+model Program {
+  id                   String          @id @default(cuid())
+  tenantId             String? // null = AIPSA-global program (cross-school)
+  type                 ProgramType
+  category             String? // finer label: SPORTS, OLYMPIAD, ARTS_FESTIVAL, CONCLAVE, ...
+  title                String
+  description          String?
+  bannerUrl            String?
+  fee                  Float           @default(0) // 0 = free
+  audience             ProgramAudience @default(ANYONE)
+  capacity             Int? // null = unlimited
+  opensAt              DateTime?
+  closesAt             DateTime?
+  requiresTeacherMatch Boolean         @default(false) // true for 1-to-1 tuition
+  isActive             Boolean         @default(true)
+  metadata             Json? // per-program extra fields without a schema change
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  tenant        Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items         ProgramItem[]
+  registrations Registration[]
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([type, isActive])
+  @@map("programs")
+}
+
+// Optional sub-choices within a Program: arts-festival categories, olympiad
+// subjects, individual competition events. fee overrides the parent Program fee.
+model ProgramItem {
+  id        String   @id @default(cuid())
+  programId String
+  name      String
+  fee       Float? // null = inherit Program.fee
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  program       Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  registrations Registration[]
+
+  @@index([programId])
+  @@map("program_items")
+}
+
+model Registration {
+  id                String             @id @default(cuid())
+  tenantId          String // always the registrant's tenant, even for global programs
+  programId         String
+  programItemId     String?
+  registrantUserId  String
+  studentId         String? // the student this registration is for, if applicable
+  status            RegistrationStatus @default(PENDING)
+  paymentStatus     RegPaymentStatus   @default(NOT_REQUIRED)
+  amount            Float              @default(0)
+  razorpayOrderId   String?            @unique
+  razorpayPaymentId String?
+  assignedTeacherId String? // teacher matched for 1-to-1 tuition
+  formData          Json? // flexible per-program answers without a schema change
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  program         Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programItem     ProgramItem? @relation(fields: [programItemId], references: [id], onDelete: SetNull)
+  registrant      User         @relation("RegistrationRegistrant", fields: [registrantUserId], references: [id], onDelete: Cascade)
+  student         Student?     @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  assignedTeacher User?        @relation("RegistrationTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([programId])
+  @@index([tenantId, registrantUserId])
+  @@index([assignedTeacherId])
+  @@map("registrations")
+}
+
+// ─── KPI & Reports (Principal's daily monitoring report) ────────────────────────
+//
+// Seeded from docs/dailyreport.xlsx: AREAS (Academics/Hostel/Administrative) each
+// holding fixed PARTICULARS. Some particulars are numeric KPIs (attendance, fees)
+// the Formula Engine/Dashboard aggregate; the rest are narrative + follow-up.
+
+enum KpiInputType {
+  TEXT
+  NUMBER
+  CURRENCY
+  STATUS
+}
+
+model KpiArea {
+  id        String   @id @default(cuid())
+  tenantId  String? // null = AIPSA default template area (cloned per school)
+  name      String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant      Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  particulars KpiParticular[]
+
+  @@index([tenantId])
+  @@map("kpi_areas")
+}
+
+model KpiParticular {
+  id        String       @id @default(cuid())
+  areaId    String
+  name      String
+  inputType KpiInputType @default(TEXT)
+  isKpi     Boolean      @default(false) // true = machine-readable metric the Formula Engine can aggregate
+  order     Int          @default(0)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+
+  area    KpiArea            @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  entries DailyReportEntry[]
+
+  @@index([areaId])
+  @@map("kpi_particulars")
+}
+
+model DailyReport {
+  id           String   @id @default(cuid())
+  tenantId     String
+  reportDate   DateTime
+  preparedById String
+  status       String   @default("DRAFT") // DRAFT | SUBMITTED
+  summary      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  preparedBy User               @relation("DailyReportPreparedBy", fields: [preparedById], references: [id], onDelete: Cascade)
+  entries    DailyReportEntry[]
+
+  @@unique([tenantId, reportDate])
+  @@index([tenantId])
+  @@map("daily_reports")
+}
+
+model DailyReportEntry {
+  id           String   @id @default(cuid())
+  reportId     String
+  particularId String
+  valueText    String?
+  valueNum     Float?
+  remarks      String?
+  followUp     String?
+  createdAt    DateTime @default(now())
+
+  report     DailyReport   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  particular KpiParticular @relation(fields: [particularId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([particularId])
+  @@map("daily_report_entries")
 }

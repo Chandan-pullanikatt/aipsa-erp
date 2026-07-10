@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const razorpay = require('../lib/razorpay');
 
 async function resolveStudent(tenantId, user, studentId) {
   if (user.role === 'STUDENT') {
@@ -27,16 +28,20 @@ async function listItems(tenantId, { includeInactive } = {}) {
   });
 }
 
-async function createItem(tenantId, { name, category, price, description }) {
+async function createItem(tenantId, { name, category, price, description, imageUrl, stock }) {
   return prisma.storeItem.create({
-    data: { tenantId, name: name.trim(), category: category || 'OTHER', price: parseFloat(price), description: description || undefined },
+    data: {
+      tenantId, name: name.trim(), category: category || 'OTHER', price: parseFloat(price),
+      description: description || undefined, imageUrl: imageUrl || undefined,
+      stock: stock != null && stock !== '' ? parseInt(stock) : null,
+    },
   });
 }
 
 async function updateItem(tenantId, id, data) {
   const item = await prisma.storeItem.findFirst({ where: { id, tenantId } });
   if (!item) throw Object.assign(new Error('Item not found'), { status: 404 });
-  const { name, category, price, description, isActive } = data;
+  const { name, category, price, description, isActive, imageUrl, stock } = data;
   return prisma.storeItem.update({
     where: { id },
     data: {
@@ -44,6 +49,8 @@ async function updateItem(tenantId, id, data) {
       ...(category !== undefined && { category }),
       ...(price !== undefined && { price: parseFloat(price) }),
       ...(description !== undefined && { description: description || null }),
+      ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
+      ...(stock !== undefined && { stock: stock === '' || stock === null ? null : parseInt(stock) }),
       ...(isActive !== undefined && { isActive }),
     },
   });
@@ -135,7 +142,63 @@ async function notPurchasedReport(tenantId, { category, classId } = {}) {
   return { category, total: students.length, missing, missingCount: missing.length };
 }
 
+// ─── Online checkout (student / parent self-purchase) ───────────────────────────
+// The admin-recorded createPurchase() flow above is unchanged. This adds a paid
+// online path: create a Razorpay order + a PENDING purchase, then confirm and
+// decrement stock after signature verification.
+
+async function initiateCheckout(tenantId, user, { storeItemId, quantity, studentId }) {
+  const sid = await resolveStudent(tenantId, user, studentId);
+  const item = await prisma.storeItem.findFirst({ where: { id: storeItemId, tenantId, isActive: true } });
+  if (!item) throw Object.assign(new Error('Store item not found'), { status: 404 });
+
+  const qty = quantity ? parseInt(quantity) : 1;
+  if (qty < 1) throw Object.assign(new Error('Quantity must be at least 1'), { status: 400 });
+  if (item.stock != null && item.stock < qty) throw Object.assign(new Error('Not enough stock available'), { status: 400 });
+
+  const amount = item.price * qty;
+  const order = await razorpay.createOrder(amount, `store_${item.id}_${Date.now()}`);
+  const purchase = await prisma.purchase.create({
+    data: {
+      tenantId, studentId: sid, recordedById: user.id,
+      storeItemId: item.id, itemName: item.name, category: item.category,
+      quantity: qty, amount, paymentStatus: 'PENDING', razorpayOrderId: order.id,
+    },
+  });
+  return {
+    purchase,
+    payment: { orderId: order.id, amount: order.amount, currency: 'INR', keyId: razorpay.keyId() },
+  };
+}
+
+async function verifyOnlinePayment(tenantId, body) {
+  if (!razorpay.verifySignature(body)) throw Object.assign(new Error('Payment verification failed: invalid signature'), { status: 400 });
+  const purchase = await prisma.purchase.findUnique({ where: { razorpayOrderId: body.razorpay_order_id } });
+  if (!purchase) throw Object.assign(new Error('Purchase not found for this order'), { status: 404 });
+  if (purchase.tenantId !== tenantId) throw Object.assign(new Error('Order does not belong to this account'), { status: 403 });
+  if (purchase.paymentStatus === 'PAID') return { success: true, purchase }; // idempotent
+
+  // Confirm payment and decrement stock atomically.
+  const updated = await prisma.$transaction(async (tx) => {
+    if (purchase.storeItemId) {
+      const item = await tx.storeItem.findUnique({ where: { id: purchase.storeItemId } });
+      if (item?.stock != null) {
+        await tx.storeItem.update({
+          where: { id: item.id },
+          data: { stock: Math.max(0, item.stock - purchase.quantity) },
+        });
+      }
+    }
+    return tx.purchase.update({
+      where: { id: purchase.id },
+      data: { paymentStatus: 'PAID', razorpayPaymentId: body.razorpay_payment_id, purchasedAt: new Date() },
+    });
+  });
+  return { success: true, purchase: updated };
+}
+
 module.exports = {
   listItems, createItem, updateItem, deleteItem,
   createPurchase, listPurchases, deletePurchase, getStudentPurchases, notPurchasedReport,
+  initiateCheckout, verifyOnlinePayment,
 };

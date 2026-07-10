@@ -76,6 +76,22 @@ const EVENTS = {
     waTemplateEnv: 'MSG91_WA_TEMPLATE_ATTENDANCE_ABSENT',
     waBodyValues: (d) => [d.studentName, d.date],
   },
+  // Fired to SCHOOL_ADMIN when someone registers for a program (competition,
+  // course, counseling, event…). Satisfies the "notify admin on counseling/
+  // registration" requirement via the same multi-channel fan-out.
+  PROGRAM_REGISTRATION: {
+    type: 'PROGRAM',
+    title: (d) => `New registration: ${d.programTitle}`,
+    body: (d) => `${d.registrantName} registered for ${d.programTitle}${d.itemName ? ` (${d.itemName})` : ''}${d.paid ? ` — ${rupee(d.amount)} paid` : ''}.`,
+    email: (d) => ({
+      subject: `New registration — ${d.programTitle}`,
+      html: shell('New Program Registration', `<p><strong>${esc(d.registrantName)}</strong> registered for <strong>${esc(d.programTitle)}</strong>${d.itemName ? ` (${esc(d.itemName)})` : ''}.</p><p>Payment: <strong>${d.paid ? rupee(d.amount) + ' paid' : d.amount > 0 ? 'pending' : 'free'}</strong></p>`),
+    }),
+    smsTemplateEnv: 'MSG91_TEMPLATE_PROGRAM_REGISTRATION',
+    smsVariables: (d) => ({ var1: d.registrantName, var2: d.programTitle }),
+    waTemplateEnv: 'MSG91_WA_TEMPLATE_PROGRAM_REGISTRATION',
+    waBodyValues: (d) => [d.registrantName, d.programTitle],
+  },
 };
 
 // pref defaults: in-app/email/push ON unless explicitly false; sms/whatsapp OFF

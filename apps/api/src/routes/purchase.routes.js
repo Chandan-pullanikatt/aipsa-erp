@@ -49,4 +49,15 @@ router.get('/student', async (req, res, next) => {
   try { res.json(await purchase.getStudentPurchases(req.tenant.id, req.user, req.query.studentId)); } catch (e) { next(e); }
 });
 
+// ─── Online checkout (student / parent self-purchase) ───────────────────────────
+router.post('/checkout', [body('storeItemId').trim().notEmpty()], validate, async (req, res, next) => {
+  try { res.status(201).json(await purchase.initiateCheckout(req.tenant.id, req.user, req.body)); } catch (e) { next(e); }
+});
+router.post('/checkout/verify',
+  [body('razorpay_order_id').notEmpty(), body('razorpay_payment_id').notEmpty(), body('razorpay_signature').notEmpty()],
+  validate,
+  async (req, res, next) => {
+    try { res.json(await purchase.verifyOnlinePayment(req.tenant.id, req.body)); } catch (e) { next(e); }
+  });
+
 module.exports = router;

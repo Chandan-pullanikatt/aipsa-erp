@@ -24,6 +24,8 @@ const progressRoutes = require('./routes/progress.routes');
 const hrRoutes = require('./routes/hr.routes');
 const homeschoolRoutes = require('./routes/homeschool.routes');
 const hsCatalogRoutes = require('./routes/hsCatalog.routes');
+const programRoutes = require('./routes/program.routes');
+const kpiRoutes = require('./routes/kpi.routes');
 
 const { UPLOAD_DIR } = require('./lib/storage');
 
@@ -90,6 +92,8 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/homeschool', homeschoolRoutes);
 app.use('/api/hs-catalog', hsCatalogRoutes);
+app.use('/api/programs', programRoutes);
+app.use('/api/kpi', kpiRoutes);
 
 // 404
 app.use((req, res) => {
