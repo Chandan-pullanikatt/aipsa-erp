@@ -25,6 +25,8 @@ const hrRoutes = require('./routes/hr.routes');
 const homeschoolRoutes = require('./routes/homeschool.routes');
 const hsCatalogRoutes = require('./routes/hsCatalog.routes');
 
+const { UPLOAD_DIR } = require('./lib/storage');
+
 const app = express();
 
 // Security
@@ -76,6 +78,9 @@ app.use('/api/timetable', timetableRoutes);
 app.use('/api/homework', homeworkRoutes);
 app.use('/api/lms', lmsRoutes);
 app.use('/api/uploads', uploadRoutes);
+// Serve locally-stored uploads (STORAGE_DRIVER=local). Reached from the browser
+// through the Next.js proxy at /api/proxy/files/<key>. No-op for cloud drivers.
+app.use('/api/files', express.static(UPLOAD_DIR, { fallthrough: false, maxAge: '7d' }));
 app.use('/api/transport', transportRoutes);
 app.use('/api/hostel', hostelRoutes);
 app.use('/api/purchases', purchaseRoutes);

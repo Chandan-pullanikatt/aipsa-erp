@@ -55,6 +55,20 @@ async function handler(
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
     }
 
+    // Non-JSON responses (locally-stored uploads served at /api/files, PDF
+    // downloads, etc.) are binary. Stream the raw bytes through unchanged —
+    // decoding them as text would corrupt images and PDFs.
+    const responseType = apiRes.headers.get('content-type') || '';
+    if (!responseType.includes('application/json')) {
+      const bytes = Buffer.from(await apiRes.arrayBuffer());
+      const passthrough: Record<string, string> = {
+        'content-type': responseType || 'application/octet-stream',
+      };
+      const cacheControl = apiRes.headers.get('cache-control');
+      if (cacheControl) passthrough['cache-control'] = cacheControl;
+      return new NextResponse(bytes, { status: apiRes.status, headers: passthrough });
+    }
+
     const text = await apiRes.text();
     let data: unknown;
     try {
@@ -62,7 +76,7 @@ async function handler(
     } catch {
       return new NextResponse(text, {
         status: apiRes.status,
-        headers: { 'content-type': apiRes.headers.get('content-type') || 'text/plain' },
+        headers: { 'content-type': responseType || 'text/plain' },
       });
     }
 
