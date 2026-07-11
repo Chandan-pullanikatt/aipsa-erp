@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: aipsaerp
@@ -26,6 +26,10 @@ services:
     env_file: ./apps/api/.env
     environment:
       DATABASE_URL: postgresql://aipsaerp:${POSTGRES_PASSWORD:-password}@postgres:5432/aipsaerp
+      # Prisma uses directUrl for migrations. Pin it to the internal DB too, or the
+      # .env's Neon DIRECT_URL (injected via env_file) would send migrations to the
+      # cloud while the app runs against local Postgres — a split-brain setup.
+      DIRECT_URL: postgresql://aipsaerp:${POSTGRES_PASSWORD:-password}@postgres:5432/aipsaerp
       STORAGE_DRIVER: local
       UPLOAD_DIR: /app/uploads
     volumes:
