@@ -35,6 +35,7 @@ import {
   Award,
   Users,
   Briefcase,
+  Megaphone,
 } from 'lucide-react';
 
 interface NavItem {
@@ -81,6 +82,7 @@ const ICON_MAP = {
   'My Teachers': Users,
   Programs: Award,
   'Daily Reports': ClipboardList,
+  Marketing: Megaphone,
 };
 
 function getIcon(label: string) {
@@ -106,6 +108,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Events', href: '/school/events', available: true },
       { label: 'Programs', href: '/school/programs', available: true },
       { label: 'Daily Reports', href: '/school/reports', available: true },
+      { label: 'Marketing', href: '/school/marketing', available: true },
       { label: 'Communication', href: '/school/communication', available: true },
       { label: 'LMS / Curriculum', href: '/school/curriculum', available: true },
       { label: 'Staff', href: '/school/staff', available: true },
@@ -163,6 +166,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Purchases', href: '/parent/purchases', available: true },
       { label: 'Library', href: '/parent/library', available: true },
       { label: 'Events', href: '/parent/events', available: true },
+      { label: 'Programs', href: '/parent/programs', available: true },
       { label: 'Announcements', href: '/parent?tab=announcements', available: true },
     ];
   }
@@ -194,7 +198,7 @@ function groupNavItems(items: NavItem[], role: AuthUser['role']): { standalone: 
   const academicsList = ['Students', 'Manage Classes', 'Attendance', 'LMS / Curriculum', 'Examinations', 'Co-Curricular', 'Timetable'];
   const financeList = ['Fee Management', 'Store'];
   const operationsList = ['Staff', 'HR', 'Transport', 'Hostel', 'Library'];
-  const managementList = ['Communication', 'Events', 'Programs', 'Daily Reports', 'School Profile'];
+  const managementList = ['Communication', 'Events', 'Programs', 'Daily Reports', 'Marketing', 'School Profile'];
 
   const groups: NavGroup[] = [
     {
