@@ -52,6 +52,24 @@ available by changing the env var.
 4. App is available at `http://<server-ip>:3121`. Put a reverse proxy (nginx /
    Caddy) with TLS in front of 3121 for a public domain.
 
+## Database migrations
+
+The migration files in `apps/api/prisma/migrations` now fully reproduce
+`schema.prisma`, so a **fresh** database is built correctly by `prisma migrate
+deploy` alone (it runs automatically on API start) — no Neon dump needed.
+
+For an **existing** database that already has the current schema via `prisma db
+push` (e.g. the Neon cloud DB), the `20260711000000_backfill_schema_drift`
+migration would fail if re-run, because its objects already exist. Mark it as
+already-applied once, per such database, before deploying:
+
+```bash
+docker compose exec api npx prisma migrate resolve \
+  --applied 20260711000000_backfill_schema_drift
+```
+
+(Point `DATABASE_URL`/`DIRECT_URL` at the target DB when running this.)
+
 ## Common commands
 
 ```bash
