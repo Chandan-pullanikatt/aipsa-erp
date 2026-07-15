@@ -22,7 +22,8 @@ const libraryRoutes = require('./routes/library.routes');
 const eventRoutes = require('./routes/event.routes');
 const progressRoutes = require('./routes/progress.routes');
 const hrRoutes = require('./routes/hr.routes');
-const homeschoolRoutes = require('./routes/homeschool.routes');
+// Home-Schooling is a standalone service now; this is a thin SUPER_ADMIN-authorized
+// proxy to its catalog admin (the ERP no longer serves families or the HS database).
 const hsCatalogRoutes = require('./routes/hsCatalog.routes');
 const programRoutes = require('./routes/program.routes');
 const kpiRoutes = require('./routes/kpi.routes');
@@ -90,7 +91,6 @@ app.use('/api/library', libraryRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/hr', hrRoutes);
-app.use('/api/homeschool', homeschoolRoutes);
 app.use('/api/hs-catalog', hsCatalogRoutes);
 app.use('/api/programs', programRoutes);
 app.use('/api/kpi', kpiRoutes);

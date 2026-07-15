@@ -1,6 +1,6 @@
-// Shared Razorpay helpers. The existing hsSubscription / premiumLms services each
-// inline their own copy of this one-time-order + HMAC-verify flow; new modules
-// (Programs, Store) reuse this single helper instead of duplicating it again.
+// Shared Razorpay helpers. The premiumLms service inlines its own copy of this
+// one-time-order + HMAC-verify flow; new modules (Programs, Store) reuse this
+// single helper instead of duplicating it again.
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 

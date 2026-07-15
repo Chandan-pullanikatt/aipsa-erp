@@ -1,60 +1,44 @@
 const { Router } = require('express');
-const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
-const catalog = require('../services/hsCatalog.service');
 
-// Global Home-Schooling catalog admin. SUPER_ADMIN only; no requireTenant since
-// the catalog is AIPSA-owned, not scoped to any tenant.
+// Home-Schooling catalog admin. The catalog now lives in the standalone
+// Home-Schooling service (its own repo + database) — the ERP no longer touches
+// the HS database. AIPSA staff still manage the catalog from this super-admin
+// panel; this route authorizes SUPER_ADMIN (the ERP is the identity authority)
+// and forwards the request to the HS service with the shared admin token.
 const router = Router();
 router.use(authenticate, authorize('SUPER_ADMIN'));
 
-function validate(req, res, next) {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
-  next();
+function hsBase() {
+  return (process.env.HS_API_URL || 'http://localhost:5099/api').replace(/\/$/, '');
 }
 
-// Courses
-router.get('/courses', async (req, res, next) => {
-  try { res.json(await catalog.listCourses()); } catch (err) { next(err); }
-});
-router.get('/courses/:id', async (req, res, next) => {
-  try { res.json(await catalog.getCourse(req.params.id)); } catch (err) { next(err); }
-});
-router.post('/courses', [
-  body('title').trim().notEmpty(),
-  body('subject').trim().notEmpty(),
-  body('gradeLevel').trim().notEmpty(),
-], validate, async (req, res, next) => {
-  try { res.status(201).json(await catalog.createCourse(req.body)); } catch (err) { next(err); }
-});
-router.put('/courses/:id', async (req, res, next) => {
-  try { res.json(await catalog.updateCourse(req.params.id, req.body)); } catch (err) { next(err); }
-});
-router.delete('/courses/:id', async (req, res, next) => {
-  try { res.json(await catalog.deleteCourse(req.params.id)); } catch (err) { next(err); }
-});
+// Catch-all: proxy every method/subpath under /api/hs-catalog to the HS service.
+router.use(async (req, res) => {
+  const adminToken = process.env.HS_ADMIN_TOKEN;
+  if (!adminToken) {
+    return res.status(503).json({ error: 'Home-Schooling catalog admin is not configured (HS_ADMIN_TOKEN unset)' });
+  }
 
-// Modules
-router.post('/courses/:courseId/modules', [body('title').trim().notEmpty()], validate, async (req, res, next) => {
-  try { res.status(201).json(await catalog.createModule(req.params.courseId, req.body)); } catch (err) { next(err); }
-});
-router.put('/modules/:id', async (req, res, next) => {
-  try { res.json(await catalog.updateModule(req.params.id, req.body)); } catch (err) { next(err); }
-});
-router.delete('/modules/:id', async (req, res, next) => {
-  try { res.json(await catalog.deleteModule(req.params.id)); } catch (err) { next(err); }
-});
+  // req.url is the path (with query) after the /api/hs-catalog mount.
+  const target = `${hsBase()}/hs-catalog${req.url}`;
+  const headers = { 'x-admin-token': adminToken };
+  let body;
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    headers['content-type'] = 'application/json';
+    body = JSON.stringify(req.body ?? {});
+  }
 
-// Lessons
-router.post('/modules/:moduleId/lessons', [body('title').trim().notEmpty()], validate, async (req, res, next) => {
-  try { res.status(201).json(await catalog.createLesson(req.params.moduleId, req.body)); } catch (err) { next(err); }
-});
-router.put('/lessons/:id', async (req, res, next) => {
-  try { res.json(await catalog.updateLesson(req.params.id, req.body)); } catch (err) { next(err); }
-});
-router.delete('/lessons/:id', async (req, res, next) => {
-  try { res.json(await catalog.deleteLesson(req.params.id)); } catch (err) { next(err); }
+  try {
+    const apiRes = await fetch(target, { method: req.method, headers, body });
+    const text = await apiRes.text();
+    const contentType = apiRes.headers.get('content-type');
+    if (contentType) res.set('content-type', contentType);
+    res.status(apiRes.status).send(text);
+  } catch (err) {
+    console.error('HS catalog proxy failed:', target, err);
+    res.status(503).json({ error: 'Home-Schooling service unavailable' });
+  }
 });
 
 module.exports = router;

@@ -8,14 +8,12 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "postinstall": "prisma generate && prisma generate --schema=prisma/homeschool/schema.prisma",
+    "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:demo": "node prisma/demo_seed.js",
-    "db:hs:deploy": "prisma migrate deploy --schema=prisma/homeschool/schema.prisma",
-    "db:hs:seed": "node prisma/homeschool/seed.js",
     "test:isolation": "node tests/tenant-isolation.test.js"
   },
   "dependencies": {
