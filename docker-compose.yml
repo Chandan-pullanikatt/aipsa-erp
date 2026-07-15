@@ -23,20 +23,19 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: ./apps/api/.env
+    # Single project-level env file (./.env, next to this compose file). Holds all
+    # app secrets (JWT, SMTP, Razorpay, Firebase, MSG91, HS_API_URL/HS_ADMIN_TOKEN,
+    # etc.) — see .env.example. The container-network values below are set explicitly
+    # so they always win over anything in .env.
+    env_file: .env
     environment:
+      # Point Prisma at the internal postgres service (built from POSTGRES_PASSWORD
+      # in ./.env). directUrl is pinned to the same internal DB so migrations and the
+      # app never split-brain across two databases.
       DATABASE_URL: postgresql://aipsaerp:${POSTGRES_PASSWORD:-password}@postgres:5432/aipsaerp
-      # Prisma uses directUrl for migrations. Pin it to the internal DB too, or the
-      # .env's Neon DIRECT_URL (injected via env_file) would send migrations to the
-      # cloud while the app runs against local Postgres — a split-brain setup.
       DIRECT_URL: postgresql://aipsaerp:${POSTGRES_PASSWORD:-password}@postgres:5432/aipsaerp
       STORAGE_DRIVER: local
       UPLOAD_DIR: /app/uploads
-      # Home-Schooling is a standalone service (its own repo/compose). These wire the
-      # SUPER_ADMIN catalog-admin proxy (apps/api/src/routes/hsCatalog.routes.js) to it.
-      # HS_API_URL points at the HS service's API; HS_ADMIN_TOKEN must match its value there.
-      HS_API_URL: ${HS_API_URL:-http://host.docker.internal:5000/api}
-      HS_ADMIN_TOKEN: ${HS_ADMIN_TOKEN:-}
     volumes:
       # Persist uploaded files (STORAGE_DRIVER=local) across container rebuilds.
       - uploads_data:/app/uploads
@@ -53,7 +52,8 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: ./apps/web/.env.local
+    # The web container only needs API_URL — the browser calls /api/proxy on this
+    # app, which forwards to the internal api service. No env file needed here.
     environment:
       API_URL: http://api:5000/api
     # Public entry point for the school ERP. Caddy on the host reverse-proxies the
