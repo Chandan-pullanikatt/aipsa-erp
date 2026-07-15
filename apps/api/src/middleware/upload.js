@@ -1,7 +1,7 @@
 const multer = require('multer');
 
-// In-memory storage: the file buffer is streamed straight to the storage adapter
-// (Cloudinary/Spaces). Render's filesystem is ephemeral, so we never touch disk.
+// In-memory storage: the file buffer is handed straight to the storage adapter,
+// which writes it to the server's upload directory. Multer itself never writes to disk.
 
 const ALLOWED = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
