@@ -380,7 +380,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (!item.available) {
       return (
-        <div key={item.href} className="flex items-center justify-between h-11 px-4 rounded-md mx-2 text-[14px] text-white/30 cursor-not-allowed select-none">
+        <div key={item.href} className="flex items-center justify-between h-11 px-4 text-[14px] text-white/30 cursor-not-allowed select-none">
           <div className="flex items-center gap-2">
             <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={1.75} />
             <span>{item.label}</span>
@@ -395,7 +395,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         key={item.href}
         href={item.href}
         onClick={() => setSidebarOpen(false)}
-        className={`flex items-center h-11 px-4 rounded-md mx-2 text-[14px] font-body font-medium transition-all gap-2 ${
+        className={`flex items-center h-11 px-4 text-[14px] font-body font-medium transition-all gap-2 ${
           isActive
             ? 'bg-white/10 text-white border-l-[3px] border-[#26A96B] pl-[13px]'
             : 'text-white/70 hover:text-white hover:bg-white/5'
@@ -410,7 +410,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
       {/* Sidebar */}
-      <aside className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[70%] max-w-[320px] lg:w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
+      <aside className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[70%] max-w-[320px] lg:w-[30%] lg:max-w-none bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
           <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">EduBridge</p>
@@ -468,12 +468,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Header */}
-        <header className="lg:hidden bg-white border-b border-[#E5E7EB] h-[60px] px-4 flex items-center justify-between shrink-0 z-30">
+        <header className="lg:hidden bg-white border-b border-[#E5E7EB] h-[58px] px-4 flex items-center justify-between shrink-0 z-30">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100" aria-label="Menu">
-              <Menu className="w-5 h-5" strokeWidth={1.75} />
+            <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 flex items-center" aria-label="Menu">
+              <Menu className="w-6 h-6" strokeWidth={1.75} />
             </button>
-            <span className="font-display font-semibold text-gray-800 text-sm">EduBridge</span>
+            <span className="font-display font-semibold text-gray-800 text-[16px] leading-none">EduBridge</span>
           </div>
         </header>
 
