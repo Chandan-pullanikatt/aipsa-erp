@@ -1,6 +1,7 @@
 node_modules/
 .claude/
 .grill/
+apps/api/prisma/generated/
 .env
 .env.local
 .env.production

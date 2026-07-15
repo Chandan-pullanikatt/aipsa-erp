@@ -1,7 +1,8 @@
 // Home Schooling — global catalog administration (SUPER_ADMIN only). The catalog
 // (HsCourse → HsModule → HsLesson) is AIPSA-owned and NOT tenant-scoped, so these
 // run without the tenant guard. Families consume it read-only via homeschool.service.
-const prisma = require('../lib/prisma');
+// Catalog data lives in the separate home-schooling database (hsPrisma).
+const prisma = require('../lib/hsPrisma');
 
 // ── Courses ──
 function listCourses() {

@@ -1,76 +1,60 @@
-// Home Schooling (B2C) — core service: family signup, learners, catalog browse,
-// lesson access, and progress. A home-schooling family is a Tenant of type
-// INDIVIDUAL with a single HS_PARENT user; children are HsLearner rows. Content
-// (HsCourse → HsModule → HsLesson) is the global AIPSA catalog, read-only here.
+// Home Schooling (B2C) — core service: family signup/login, learners, catalog
+// browse, lesson access, and progress. Runs entirely on the SEPARATE home-schooling
+// database (hsPrisma). A family is a single HsAccount; children are HsLearner rows.
+// Content (HsCourse → HsModule → HsLesson) is the global AIPSA catalog, read-only here.
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
-const prisma = require('../lib/prisma');
+const hsPrisma = require('../lib/hsPrisma');
 const { signToken } = require('../lib/jwt');
 const { getAccess } = require('./hsSubscription.service');
 const { sendWelcome } = require('./email.service');
 
+function publicAccount(a) {
+  return { id: a.id, email: a.email, parentFirstName: a.parentFirstName, parentLastName: a.parentLastName };
+}
+
 // ─── Signup (public, self-service — no approval gate) ─────────────────────────
 
 async function signup({ parentFirstName, parentLastName, email, password, phone }) {
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await hsPrisma.hsAccount.findUnique({ where: { email } });
   if (existing) throw Object.assign(new Error('Email already registered'), { status: 409 });
 
-  const baseSlug = `family-${parentLastName || parentFirstName}`
-    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const slug = `${baseSlug}-${uuidv4().slice(0, 6)}`;
   const hashed = await bcrypt.hash(password, 12);
-
-  const { tenant, user } = await prisma.$transaction(async (tx) => {
-    const tenant = await tx.tenant.create({
-      data: {
-        name: `${parentFirstName} ${parentLastName}`.trim() || 'Home School',
-        slug,
-        type: 'INDIVIDUAL',
-        status: 'ACTIVE', // B2C is self-service: no super-admin approval needed
-      },
-    });
-    const user = await tx.user.create({
-      data: {
-        tenantId: tenant.id,
-        email,
-        password: hashed,
-        role: 'HS_PARENT',
-        firstName: parentFirstName,
-        lastName: parentLastName,
-        phone,
-        isActive: true,
-      },
-    });
-    return { tenant, user };
+  const account = await hsPrisma.hsAccount.create({
+    data: { email, password: hashed, parentFirstName, parentLastName, phone: phone || null },
   });
 
   if (process.env.WEB_URL_HOMESCHOOL) {
     sendWelcome(email, 'AIPSA Home Schooling', `${process.env.WEB_URL_HOMESCHOOL}/login`).catch(console.error);
   }
 
-  const token = signToken({ userId: user.id, tenantId: tenant.id, role: user.role });
-  return {
-    token,
-    user: {
-      id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName,
-      role: user.role, tenantId: tenant.id, tenantStatus: tenant.status,
-    },
-  };
+  const token = signToken({ accountId: account.id, kind: 'HS' });
+  return { token, account: publicAccount(account) };
+}
+
+// ─── Login (public) ───────────────────────────────────────────────────────────
+
+async function login({ email, password }) {
+  const account = await hsPrisma.hsAccount.findUnique({ where: { email } });
+  const ok = account && (await bcrypt.compare(password, account.password));
+  if (!ok) throw Object.assign(new Error('Invalid email or password'), { status: 401 });
+
+  const token = signToken({ accountId: account.id, kind: 'HS' });
+  return { token, account: publicAccount(account) };
 }
 
 // ─── Learners (children) ──────────────────────────────────────────────────────
 
-function listLearners(tenantId) {
-  return prisma.hsLearner.findMany({
-    where: { tenantId },
+function listLearners(accountId) {
+  return hsPrisma.hsLearner.findMany({
+    where: { accountId },
     orderBy: { createdAt: 'asc' },
   });
 }
 
-function createLearner(tenantId, { firstName, lastName, dateOfBirth, gradeLevel, avatarUrl }) {
-  return prisma.hsLearner.create({
+function createLearner(accountId, { firstName, lastName, dateOfBirth, gradeLevel, avatarUrl }) {
+  return hsPrisma.hsLearner.create({
     data: {
-      tenantId,
+      accountId,
       firstName,
       lastName,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
@@ -80,10 +64,10 @@ function createLearner(tenantId, { firstName, lastName, dateOfBirth, gradeLevel,
   });
 }
 
-async function updateLearner(tenantId, learnerId, data) {
-  await assertLearner(tenantId, learnerId);
+async function updateLearner(accountId, learnerId, data) {
+  await assertLearner(accountId, learnerId);
   const { firstName, lastName, dateOfBirth, gradeLevel, avatarUrl } = data;
-  return prisma.hsLearner.update({
+  return hsPrisma.hsLearner.update({
     where: { id: learnerId },
     data: {
       ...(firstName !== undefined && { firstName }),
@@ -95,14 +79,14 @@ async function updateLearner(tenantId, learnerId, data) {
   });
 }
 
-async function deleteLearner(tenantId, learnerId) {
-  await assertLearner(tenantId, learnerId);
-  await prisma.hsLearner.delete({ where: { id: learnerId } });
+async function deleteLearner(accountId, learnerId) {
+  await assertLearner(accountId, learnerId);
+  await hsPrisma.hsLearner.delete({ where: { id: learnerId } });
   return { message: 'Learner removed.' };
 }
 
-async function assertLearner(tenantId, learnerId) {
-  const learner = await prisma.hsLearner.findFirst({ where: { id: learnerId, tenantId } });
+async function assertLearner(accountId, learnerId) {
+  const learner = await hsPrisma.hsLearner.findFirst({ where: { id: learnerId, accountId } });
   if (!learner) throw Object.assign(new Error('Learner not found'), { status: 404 });
   return learner;
 }
@@ -110,7 +94,7 @@ async function assertLearner(tenantId, learnerId) {
 // ─── Catalog (global, read-only) ──────────────────────────────────────────────
 
 function listCatalog({ gradeLevel, subject, search } = {}) {
-  return prisma.hsCourse.findMany({
+  return hsPrisma.hsCourse.findMany({
     where: {
       isPublished: true,
       ...(gradeLevel && { gradeLevel }),
@@ -125,8 +109,8 @@ function listCatalog({ gradeLevel, subject, search } = {}) {
 // Full course tree for a learner. Lesson bodies are withheld unless the lesson is
 // a free preview or the family has an active subscription — the list of lessons
 // (titles) is always visible so families can see what they'd unlock.
-async function getCourse(tenantId, courseId, learnerId) {
-  const course = await prisma.hsCourse.findFirst({
+async function getCourse(accountId, courseId, learnerId) {
+  const course = await hsPrisma.hsCourse.findFirst({
     where: { id: courseId, isPublished: true },
     include: {
       modules: {
@@ -137,13 +121,13 @@ async function getCourse(tenantId, courseId, learnerId) {
   });
   if (!course) throw Object.assign(new Error('Course not found'), { status: 404 });
 
-  const access = await getAccess(tenantId);
+  const access = await getAccess(accountId);
 
   let completedIds = new Set();
   if (learnerId) {
-    await assertLearner(tenantId, learnerId);
-    const progress = await prisma.hsLessonProgress.findMany({
-      where: { tenantId, learnerId, status: 'COMPLETED' },
+    await assertLearner(accountId, learnerId);
+    const progress = await hsPrisma.hsLessonProgress.findMany({
+      where: { accountId, learnerId, status: 'COMPLETED' },
       select: { lessonId: true },
     });
     completedIds = new Set(progress.map((p) => p.lessonId));
@@ -170,8 +154,8 @@ async function getCourse(tenantId, courseId, learnerId) {
 
 // Single lesson with its full body — enforces the access gate server-side.
 // When a learnerId is supplied, includes whether that child has completed it.
-async function getLesson(tenantId, lessonId, learnerId) {
-  const lesson = await prisma.hsLesson.findUnique({
+async function getLesson(accountId, lessonId, learnerId) {
+  const lesson = await hsPrisma.hsLesson.findUnique({
     where: { id: lessonId },
     include: { module: { include: { course: { select: { id: true, title: true, isPublished: true } } } } },
   });
@@ -180,7 +164,7 @@ async function getLesson(tenantId, lessonId, learnerId) {
   }
 
   if (!lesson.isFreePreview) {
-    const access = await getAccess(tenantId);
+    const access = await getAccess(accountId);
     if (!access.active) {
       throw Object.assign(new Error('This lesson requires an active subscription'), { status: 402 });
     }
@@ -188,8 +172,8 @@ async function getLesson(tenantId, lessonId, learnerId) {
 
   let completed = false;
   if (learnerId) {
-    await assertLearner(tenantId, learnerId);
-    const p = await prisma.hsLessonProgress.findUnique({
+    await assertLearner(accountId, learnerId);
+    const p = await hsPrisma.hsLessonProgress.findUnique({
       where: { learnerId_lessonId: { learnerId, lessonId } },
       select: { status: true },
     });
@@ -206,21 +190,21 @@ async function getLesson(tenantId, lessonId, learnerId) {
 
 // ─── Enrollment + progress ────────────────────────────────────────────────────
 
-async function enrollLearner(tenantId, learnerId, courseId) {
-  await assertLearner(tenantId, learnerId);
-  const course = await prisma.hsCourse.findFirst({ where: { id: courseId, isPublished: true } });
+async function enrollLearner(accountId, learnerId, courseId) {
+  await assertLearner(accountId, learnerId);
+  const course = await hsPrisma.hsCourse.findFirst({ where: { id: courseId, isPublished: true } });
   if (!course) throw Object.assign(new Error('Course not found'), { status: 404 });
 
-  return prisma.hsEnrollment.upsert({
+  return hsPrisma.hsEnrollment.upsert({
     where: { learnerId_courseId: { learnerId, courseId } },
-    create: { tenantId, learnerId, courseId },
+    create: { accountId, learnerId, courseId },
     update: {},
   });
 }
 
-function listEnrollments(tenantId, learnerId) {
-  return prisma.hsEnrollment.findMany({
-    where: { tenantId, learnerId },
+function listEnrollments(accountId, learnerId) {
+  return hsPrisma.hsEnrollment.findMany({
+    where: { accountId, learnerId },
     include: { course: { include: { _count: { select: { modules: true } } } } },
     orderBy: { enrolledAt: 'desc' },
   });
@@ -228,33 +212,33 @@ function listEnrollments(tenantId, learnerId) {
 
 // Toggle a lesson complete/incomplete for a learner. Access is enforced when the
 // lesson is opened (getLesson); marking progress on a free preview is allowed.
-async function toggleLessonProgress(tenantId, learnerId, lessonId) {
-  await assertLearner(tenantId, learnerId);
-  const lesson = await prisma.hsLesson.findUnique({ where: { id: lessonId }, select: { id: true } });
+async function toggleLessonProgress(accountId, learnerId, lessonId) {
+  await assertLearner(accountId, learnerId);
+  const lesson = await hsPrisma.hsLesson.findUnique({ where: { id: lessonId }, select: { id: true } });
   if (!lesson) throw Object.assign(new Error('Lesson not found'), { status: 404 });
 
-  const existing = await prisma.hsLessonProgress.findUnique({
+  const existing = await hsPrisma.hsLessonProgress.findUnique({
     where: { learnerId_lessonId: { learnerId, lessonId } },
   });
 
   if (existing && existing.status === 'COMPLETED') {
-    await prisma.hsLessonProgress.update({
+    await hsPrisma.hsLessonProgress.update({
       where: { id: existing.id },
       data: { status: 'IN_PROGRESS', completedAt: null },
     });
     return { completed: false };
   }
 
-  await prisma.hsLessonProgress.upsert({
+  await hsPrisma.hsLessonProgress.upsert({
     where: { learnerId_lessonId: { learnerId, lessonId } },
-    create: { tenantId, learnerId, lessonId, status: 'COMPLETED', completedAt: new Date() },
+    create: { accountId, learnerId, lessonId, status: 'COMPLETED', completedAt: new Date() },
     update: { status: 'COMPLETED', completedAt: new Date() },
   });
   return { completed: true };
 }
 
 module.exports = {
-  signup,
+  signup, login,
   listLearners, createLearner, updateLearner, deleteLearner,
   listCatalog, getCourse, getLesson,
   enrollLearner, listEnrollments, toggleLessonProgress,

@@ -3,11 +3,8 @@ import Cookies from 'js-cookie';
 export interface AuthUser {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  tenantId: string | null;
-  tenantStatus: string | null;
+  parentFirstName: string;
+  parentLastName: string;
 }
 
 export function getUser(): AuthUser | null {

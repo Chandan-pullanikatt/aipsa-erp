@@ -1,11 +1,9 @@
 // Home Schooling — family subscription (B2C). v1 is TIME-BOXED access: one
 // Razorpay order grants the whole family catalog access until currentPeriodEnd;
-// renewing means paying again. This reuses the same one-time order + HMAC-verify
-// flow as premiumLms.service.js (no webhooks / Razorpay Plans needed). The clean
-// upgrade path later is the Razorpay Subscriptions API for true auto-debit.
+// renewing means paying again. Runs on the separate home-schooling database.
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const prisma = require('../lib/prisma');
+const hsPrisma = require('../lib/hsPrisma');
 
 const DEFAULT_PRICE = 999; // INR, per period — overridden by HS_SUBSCRIPTION_PRICE
 const DEFAULT_MONTHS = 12; // access window — overridden by HS_SUBSCRIPTION_MONTHS
@@ -32,32 +30,32 @@ function periodMonths() {
 
 // Single source of truth for "is this family unlocked right now?" — used by the
 // catalog/lesson gate in homeschool.service.js and by the status endpoint.
-async function getAccess(tenantId) {
-  const sub = await prisma.hsSubscription.findFirst({
-    where: { tenantId, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } },
+async function getAccess(accountId) {
+  const sub = await hsPrisma.hsSubscription.findFirst({
+    where: { accountId, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } },
     orderBy: { currentPeriodEnd: 'desc' },
     select: { currentPeriodEnd: true, plan: true },
   });
   return { active: !!sub, currentPeriodEnd: sub?.currentPeriodEnd ?? null, plan: sub?.plan ?? null };
 }
 
-async function getStatus(tenantId) {
-  const access = await getAccess(tenantId);
+async function getStatus(accountId) {
+  const access = await getAccess(accountId);
   return { ...access, price: priceInr(), months: periodMonths() };
 }
 
-async function initiatePayment(tenantId) {
+async function initiatePayment(accountId) {
   const price = priceInr();
   const amountPaise = Math.round(price * 100);
 
   const order = await getRazorpay().orders.create({
     amount: amountPaise,
     currency: 'INR',
-    receipt: `hs_${tenantId}_${Date.now()}`.slice(0, 40),
+    receipt: `hs_${accountId}_${Date.now()}`.slice(0, 40),
   });
 
-  await prisma.hsSubscription.create({
-    data: { tenantId, plan: 'FAMILY', amount: price, status: 'PENDING', razorpayOrderId: order.id },
+  await hsPrisma.hsSubscription.create({
+    data: { accountId, plan: 'FAMILY', amount: price, status: 'PENDING', razorpayOrderId: order.id },
   });
 
   return {
@@ -69,7 +67,7 @@ async function initiatePayment(tenantId) {
   };
 }
 
-async function verifyPayment(tenantId, { razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
+async function verifyPayment(accountId, { razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
   const expected = crypto
     .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -78,17 +76,17 @@ async function verifyPayment(tenantId, { razorpay_order_id, razorpay_payment_id,
     throw Object.assign(new Error('Payment verification failed: invalid signature'), { status: 400 });
   }
 
-  const sub = await prisma.hsSubscription.findUnique({ where: { razorpayOrderId: razorpay_order_id } });
+  const sub = await hsPrisma.hsSubscription.findUnique({ where: { razorpayOrderId: razorpay_order_id } });
   if (!sub) throw Object.assign(new Error('Order not found'), { status: 404 });
-  if (sub.tenantId !== tenantId) throw Object.assign(new Error('Order does not belong to this account'), { status: 403 });
+  if (sub.accountId !== accountId) throw Object.assign(new Error('Order does not belong to this account'), { status: 403 });
 
   // Extend from the later of "now" or any still-valid current period.
-  const current = await getAccess(tenantId);
+  const current = await getAccess(accountId);
   const base = current.active && current.currentPeriodEnd ? new Date(current.currentPeriodEnd) : new Date();
   const periodEnd = new Date(base);
   periodEnd.setMonth(periodEnd.getMonth() + periodMonths());
 
-  await prisma.hsSubscription.update({
+  await hsPrisma.hsSubscription.update({
     where: { id: sub.id },
     data: { status: 'ACTIVE', razorpayPaymentId: razorpay_payment_id, currentPeriodEnd: periodEnd },
   });

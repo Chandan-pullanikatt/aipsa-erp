@@ -23,7 +23,7 @@ export default function SignupPage() {
     setError('');
     try {
       const { data } = await api.post('/homeschool/signup', form);
-      setAuth(data.user);
+      setAuth(data.account);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Could not create your account.');

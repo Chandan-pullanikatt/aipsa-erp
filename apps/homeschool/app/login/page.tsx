@@ -18,13 +18,8 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.post('/auth/login', form);
-      if (data.user?.role !== 'HS_PARENT') {
-        setError('This login is for home-schooling families. Please use the correct app.');
-        setLoading(false);
-        return;
-      }
-      setAuth(data.user);
+      const { data } = await api.post('/homeschool/login', form);
+      setAuth(data.account);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed. Check your details.');

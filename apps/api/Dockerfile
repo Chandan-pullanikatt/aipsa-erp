@@ -10,4 +10,5 @@ COPY src ./src
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
+# Apply migrations to both databases (ERP + home-schooling) before starting.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma migrate deploy --schema=prisma/homeschool/schema.prisma && node src/server.js"]

@@ -14,7 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const u = getUser();
-    if (!u || u.role !== 'HS_PARENT') {
+    if (!u) {
       router.replace('/login');
       return;
     }

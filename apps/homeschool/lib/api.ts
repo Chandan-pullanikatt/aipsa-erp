@@ -10,7 +10,7 @@ const api = axios.create({
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const publicEndpoints = ['/auth/login', '/homeschool/signup'];
+    const publicEndpoints = ['/homeschool/login', '/homeschool/signup'];
     const isPublic = publicEndpoints.some((r) => err.config?.url?.includes(r));
     if (err.response?.status === 401 && !isPublic) {
       Cookies.remove('user');

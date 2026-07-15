@@ -1,0 +1,175 @@
+// ─── Home-schooling database (separate from the ERP) ────────────────────────────
+//
+// Home-schooling is a standalone B2C product. It runs on its OWN Postgres so a
+// problem in the ERP database cannot affect it (and vice-versa). It shares nothing
+// with the ERP schema — not even users. A family logs in with an `HsAccount`; the
+// old ERP pairing of User(HS_PARENT) + Tenant(INDIVIDUAL) collapses into that one
+// row, since home-schooling only ever had a single role and one "tenant" per family.
+//
+// This client is generated to a custom path (see generator.output) so it never
+// collides with the ERP client.
+
+generator hsClient {
+  provider = "prisma-client-js"
+  output   = "../generated/hs-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("HS_DATABASE_URL")
+}
+
+// ── Family account (login) ──
+// One row per family. Replaces the ERP User(HS_PARENT) + Tenant(INDIVIDUAL) pair.
+model HsAccount {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  password        String
+  parentFirstName String
+  parentLastName  String
+  phone           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  learners      HsLearner[]
+  enrollments   HsEnrollment[]
+  progress      HsLessonProgress[]
+  subscriptions HsSubscription[]
+
+  @@map("hs_accounts")
+}
+
+// ── Catalog content ──
+model HsCourse {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  subject     String
+  gradeLevel  String
+  board       String? // optional NIOS / CBSE mapping (future accreditation path)
+  coverUrl    String?
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modules     HsModule[]
+  enrollments HsEnrollment[]
+
+  @@index([gradeLevel])
+  @@index([subject])
+  @@map("hs_courses")
+}
+
+model HsModule {
+  id        String   @id @default(cuid())
+  courseId  String
+  title     String
+  sequence  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course  HsCourse   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons HsLesson[]
+
+  @@index([courseId])
+  @@map("hs_modules")
+}
+
+model HsLesson {
+  id            String   @id @default(cuid())
+  moduleId      String
+  title         String
+  description   String?
+  content       String? // markdown / rich lesson text
+  videoUrl      String? // YouTube link (never host raw video)
+  attachmentUrl String?
+  durationMin   Int?
+  sequence      Int      @default(0)
+  isFreePreview Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  module   HsModule           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress HsLessonProgress[]
+
+  @@index([moduleId])
+  @@map("hs_lessons")
+}
+
+// ── Family data ──
+// A child learner managed by the family account. Identity + grade level only.
+model HsLearner {
+  id          String    @id @default(cuid())
+  accountId   String
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime? @db.Date
+  gradeLevel  String?
+  avatarUrl   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  account     HsAccount          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  enrollments HsEnrollment[]
+  progress    HsLessonProgress[]
+
+  @@index([accountId])
+  @@map("hs_learners")
+}
+
+model HsEnrollment {
+  id         String   @id @default(cuid())
+  accountId  String
+  learnerId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+
+  account HsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  learner HsLearner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  course  HsCourse  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, courseId])
+  @@index([accountId])
+  @@map("hs_enrollments")
+}
+
+model HsLessonProgress {
+  id          String    @id @default(cuid())
+  accountId   String
+  learnerId   String
+  lessonId    String
+  status      String    @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  account HsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  learner HsLearner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  lesson  HsLesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, lessonId])
+  @@index([accountId, learnerId])
+  @@map("hs_lesson_progress")
+}
+
+// Family-level subscription that unlocks the whole catalog for all the family's
+// learners. v1 = time-boxed access (one Razorpay order grants access until
+// currentPeriodEnd); renew = pay again.
+model HsSubscription {
+  id                String    @id @default(cuid())
+  accountId         String
+  plan              String    @default("FAMILY")
+  amount            Float
+  status            String    @default("PENDING") // PENDING | ACTIVE | EXPIRED | CANCELLED
+  razorpayOrderId   String?   @unique
+  razorpayPaymentId String?
+  currentPeriodEnd  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  account HsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("hs_subscriptions")
+}
