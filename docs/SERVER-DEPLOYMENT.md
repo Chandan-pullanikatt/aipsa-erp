@@ -1,37 +1,43 @@
 # Server Deployment (Docker Compose)
 
-Self-hosted deployment for the EduBridge / AIPSA ERP platform. One public port,
-an internal-only database, and file uploads stored on the server's own disk — no
-external cloud storage required.
+Self-hosted deployment for the EduBridge / AIPSA ERP platform. Each frontend runs
+as its own container, an internal-only database, and file uploads stored on the
+server's own disk — no external cloud storage required.
 
 ## Topology
 
 ```
-                 :3121  (the only published port)
-  browser ──────────────►  web  (Next.js)
-                             │  server-side proxy  /api/proxy/*
-                             ▼
-                           api  (Express)  ──►  postgres
-                             │                   (internal only)
-                             ▼
-                        uploads_data volume  (/app/uploads)
+                 :3121  ──►  web        (Next.js, school ERP)
+  Caddy (host)                 │  proxy /api/proxy/*
+   TLS + domain                ▼
+   routing        :5000 ──►  api        (Express)  ──►  postgres
+                 :3122  ──►  homeschool (Next.js, B2C)      (internal only)
+                               │  proxy /api/proxy/*             │
+                               └──────────────────►             ▼
+                                                          uploads_data (/app/uploads)
 ```
 
-- **web** — the single public entry point, published on host port **3121**.
+- **web** — the school ERP frontend, published on host port **3121**.
+- **homeschool** — the B2C home-schooling frontend, published on host port
+  **3122**. A separate container, so a crash here cannot take the ERP down (and
+  vice-versa). It shares the same **api** and **postgres**.
 - **api** — internal only (`expose: 5000`). The browser never calls it directly;
-  the Next.js app proxies every `/api/*` request over the compose network.
+  each frontend proxies its `/api/*` requests over the compose network.
 - **postgres** — internal only (`expose: 5432`, no host port). Reachable by the
   API as `postgres:5432`, never from outside the host.
-- **uploads_data** — a named volume mounted at `/app/uploads`, so files uploaded
-  with `STORAGE_DRIVER=local` survive container rebuilds.
+- **uploads_data** — a named volume mounted at `/app/uploads`, so uploaded files
+  survive container rebuilds.
+
+Caddy runs on the host (not in compose) and terminates TLS, routing the ERP
+domain to `:3121` and the home-schooling domain to `:3122`.
 
 ## File storage
 
-`STORAGE_DRIVER=local` (set in `docker-compose.yml`) writes uploads to the
-`uploads_data` volume. The API serves them back statically at `/api/files/<key>`;
-the browser loads them through the proxy path `/api/proxy/files/<key>`, so the API
-still needs no public port. Cloud drivers (`cloudinary`, `spaces`) remain
-available by changing the env var.
+Uploads are written to the `uploads_data` volume on the server's own disk. The
+API serves them back statically at `/api/files/<key>`; the browser loads them
+through the proxy path `/api/proxy/files/<key>`, so the API still needs no public
+port. There is no external object store — if a hosted store (S3/Spaces) is needed
+in production later, add a driver in `apps/api/src/lib/storage.js`.
 
 ## First-time setup
 
@@ -49,8 +55,37 @@ available by changing the env var.
    The API runs `prisma migrate deploy` on start and auto-seeds the super admin
    (from `SUPER_ADMIN_PASSWORD`).
 
-4. App is available at `http://<server-ip>:3121`. Put a reverse proxy (nginx /
-   Caddy) with TLS in front of 3121 for a public domain.
+4. Apps are available at `http://<server-ip>:3121` (ERP) and
+   `http://<server-ip>:3122` (home-schooling). Point Caddy on the host at each
+   port for its domain, e.g.:
+
+   ```
+   erp.example.com          { reverse_proxy localhost:3121 }
+   homeschool.example.com   { reverse_proxy localhost:3122 }
+   ```
+
+## Backups
+
+`scripts/backup-db.sh` dumps the `postgres` service to a gzipped file and keeps
+the last 7 days. It is a plain host-cron script (no running container, so no
+standing memory cost). Add it to root's crontab to run nightly:
+
+```bash
+chmod +x scripts/backup-db.sh
+crontab -e
+# 0 3 * * *  /path/to/aipsaerp/scripts/backup-db.sh >> /var/log/aipsa-backup.log 2>&1
+```
+
+Restore a dump:
+
+```bash
+gunzip -c /var/backups/aipsa-db/aipsaerp_YYYYMMDD_HHMMSS.sql.gz \
+  | docker compose exec -T postgres psql -U aipsaerp aipsaerp
+```
+
+This protects against a bad command or migration. It does **not** survive a
+droplet disk failure — for that, copy the dumps off-box (e.g. to Spaces). That
+off-box step is future scope.
 
 ## Database migrations
 

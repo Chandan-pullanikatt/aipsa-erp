@@ -51,9 +51,28 @@ services:
     env_file: ./apps/web/.env.local
     environment:
       API_URL: http://api:5000/api
-    # The single public entry point for the whole project.
+    # Public entry point for the school ERP. Caddy on the host reverse-proxies the
+    # ERP domain to this port.
     ports:
       - "3121:3000"
+    depends_on:
+      - api
+
+  # Home-schooling frontend — a separate B2C app. Runs as its own container so a
+  # crash here cannot take the ERP web container down (and vice-versa). It shares
+  # the same API and database; Caddy on the host routes the home-schooling domain
+  # to this port.
+  homeschool:
+    build:
+      context: ./apps/homeschool
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Server-side proxy target (apps/homeschool/app/api/proxy). The browser only
+      # ever calls /api/proxy/* on this app; it forwards to the internal API.
+      API_URL: http://api:5000/api
+    ports:
+      - "3122:3000"
     depends_on:
       - api
 
