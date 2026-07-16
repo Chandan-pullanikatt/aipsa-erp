@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { body } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { authenticate, authorize } = require('../middleware/auth');
@@ -10,7 +11,10 @@ const router = Router();
 router.use(authenticate, authorize('SUPER_ADMIN'));
 
 // POST /api/superadmin/schools — super admin creates a school (goes live immediately)
-router.post('/schools', async (req, res, next) => {
+// `adminEmail` must be normalized with the same sanitizer POST /api/auth/login uses on
+// `email`. Storing it raw meant a Gmail address with dots or a +tag was stored verbatim but
+// normalized at login, so the two never matched and the admin could never sign in.
+router.post('/schools', body('adminEmail').normalizeEmail(), async (req, res, next) => {
   try {
     const { schoolName, city, state, phone, adminFirstName, adminLastName, adminEmail, adminPassword } = req.body;
 

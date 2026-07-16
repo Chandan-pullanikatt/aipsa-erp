@@ -1,4 +1,5 @@
 ﻿const prisma = require('../lib/prisma');
+const { assertStudentsInTenant, assertClassInTenant, assertSectionInTenant } = require('../lib/tenantScope');
 const { sendAttendanceSummary } = require('./email.service');
 const notify = require('./notify.service');
 
@@ -7,6 +8,14 @@ const notify = require('./notify.service');
 async function markStudentAttendance(tenantId, markedById, { date, classId, sectionId, records }) {
   const d = new Date(date);
   d.setUTCHours(0, 0, 0, 0);
+
+  // classId/sectionId and every studentId come from the request body, so they must be proven to
+  // belong to this tenant before the upsert writes them under this tenant's id.
+  await Promise.all([
+    assertClassInTenant(tenantId, classId),
+    assertSectionInTenant(tenantId, sectionId),
+    assertStudentsInTenant(tenantId, records.map((r) => r.studentId)),
+  ]);
 
   const ops = records.map(({ studentId, status, note }) =>
     prisma.attendance.upsert({

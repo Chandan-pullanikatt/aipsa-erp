@@ -17,6 +17,10 @@ function validate(req, res, next) {
 const adminOnly = authorize('SUPER_ADMIN', 'SCHOOL_ADMIN');
 const opts = (req) => ({ isSuperAdmin: req.user.role === 'SUPER_ADMIN' });
 
+// Mirrors `enum ProgramType` in schema.prisma. Checked here so an unknown value is a 422 naming
+// the field, rather than reaching Prisma and surfacing as a 500.
+const PROGRAM_TYPES = ['COMPETITION', 'TUITION', 'TRAINING', 'COUNSELING', 'EVENT'];
+
 // ─── Catalog (read) ─────────────────────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
@@ -33,7 +37,7 @@ router.get('/:id', async (req, res, next) => {
 
 // ─── Catalog (admin write) ────────────────────────────────────────────────────
 router.post('/', adminOnly,
-  [body('title').trim().notEmpty(), body('type').trim().notEmpty(), body('fee').optional().isFloat({ gte: 0 })],
+  [body('title').trim().notEmpty(), body('type').trim().isIn(PROGRAM_TYPES), body('fee').optional().isFloat({ gte: 0 })],
   validate,
   async (req, res, next) => {
     try {
@@ -43,9 +47,12 @@ router.post('/', adminOnly,
     } catch (e) { next(e); }
   });
 
-router.put('/:id', adminOnly, async (req, res, next) => {
-  try { res.json(await program.updateProgram(req.tenant.id, req.params.id, req.body, opts(req))); } catch (e) { next(e); }
-});
+router.put('/:id', adminOnly,
+  [body('type').optional().trim().isIn(PROGRAM_TYPES), body('fee').optional().isFloat({ gte: 0 })],
+  validate,
+  async (req, res, next) => {
+    try { res.json(await program.updateProgram(req.tenant.id, req.params.id, req.body, opts(req))); } catch (e) { next(e); }
+  });
 
 router.delete('/:id', adminOnly, async (req, res, next) => {
   try { await program.deleteProgram(req.tenant.id, req.params.id, opts(req)); res.json({ message: 'Deleted.' }); } catch (e) { next(e); }

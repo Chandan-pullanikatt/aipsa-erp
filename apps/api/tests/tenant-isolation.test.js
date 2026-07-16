@@ -15,6 +15,7 @@ const sis = require('../src/services/sis.service');
 const fee = require('../src/services/fee.service');
 const exam = require('../src/services/exam.service');
 const hostel = require('../src/services/hostel.service');
+const attendance = require('../src/services/attendance.service');
 
 let pass = 0;
 let fail = 0;
@@ -67,6 +68,36 @@ async function expectMutationDenied(label, fn, stillThere) {
   }
 }
 
+/**
+ * A cross-tenant CREATE is isolated if it throws AND writes nothing.
+ *
+ * expectMutationDenied() cannot cover this shape. These calls do not touch an existing row —
+ * they create one from a body-supplied studentId, so the new row carries the *caller's*
+ * tenantId while pointing at the victim's student. Checking the victim's rows finds them
+ * untouched and the leak passes unnoticed; the row has to be counted by studentId instead.
+ */
+async function expectCreateDenied(label, fn, countRows) {
+  const before = await countRows();
+  let threw = false;
+  try {
+    await fn();
+  } catch {
+    threw = true;
+  }
+  const after = await countRows();
+
+  if (!threw) {
+    fail++;
+    console.error(`  ❌ LEAK: ${label} — cross-tenant create was allowed`);
+  } else if (after !== before) {
+    fail++;
+    console.error(`  ❌ LEAK: ${label} — threw but a row was written anyway`);
+  } else {
+    pass++;
+    console.log(`  ✅ ${label} — threw & nothing written (denied)`);
+  }
+}
+
 async function expectAllowed(label, fn) {
   try {
     await fn();
@@ -109,6 +140,15 @@ async function main() {
   console.log('\n🔐  Multi-tenant isolation test\n');
   const A = await makeTenant('iso-test-a', true);
   const B = await makeTenant('iso-test-b', false);
+
+  // A class/exam/subject that B genuinely owns. markStudentAttendance and saveMarks check the
+  // parent record (class, exam) before the studentIds, so B has to own the parent or that check
+  // fires first and the studentId check — the thing under test — is never reached.
+  const bClass = await prisma.class.create({ data: { tenantId: B.tenant.id, name: 'B Class' } });
+  const bExam = await prisma.exam.create({
+    data: { tenantId: B.tenant.id, name: 'B Exam', classId: bClass.id, academicYear: '2026-2027', startDate: new Date('2026-05-01') },
+  });
+  const bSubject = await prisma.subject.create({ data: { tenantId: B.tenant.id, classId: bClass.id, name: 'B Math' } });
 
   console.log('Cross-tenant reads (tenant B trying to read tenant A\'s data):');
   await expectDenied('sis.getStudent(B, A.studentId)',          () => sis.getStudent(B.tenant.id, A.student.id));
@@ -164,8 +204,29 @@ async function main() {
     () => hostel.deleteHostel(B.tenant.id, A.hostel.id),
     found('hostel', A.hostel.id));
 
+  console.log('\nCross-tenant creates (tenant B writing rows against tenant A\'s student):');
+  await expectCreateDenied('attendance.markStudentAttendance(B, A.studentId)',
+    () => attendance.markStudentAttendance(B.tenant.id, B.admin.id, {
+      date: '2026-05-02',
+      classId: bClass.id,
+      records: [{ studentId: A.student.id, status: 'ABSENT' }],
+    }),
+    () => prisma.attendance.count({ where: { studentId: A.student.id } }));
+  await expectCreateDenied('exam.saveMarks(B, A.studentId)',
+    () => exam.saveMarks(B.tenant.id, bExam.id, bSubject.id, [
+      { studentId: A.student.id, marksObtained: 1 },
+    ]),
+    () => prisma.examResult.count({ where: { studentId: A.student.id } }));
+
   console.log('\nControl — tenant A reading/mutating its OWN data (must succeed):');
   await expectAllowed('sis.getStudent(A, A.studentId)', () => sis.getStudent(A.tenant.id, A.student.id));
+  await expectAllowed('attendance.markStudentAttendance(A, A.studentId)',
+    () => attendance.markStudentAttendance(A.tenant.id, A.admin.id, {
+      date: '2026-05-03',
+      classId: A.student.classId,
+      sectionId: A.student.sectionId,
+      records: [{ studentId: A.student.id, status: 'PRESENT' }],
+    }));
   await expectAllowed('sis.deleteClass(A, A.emptyClassId)', () => sis.deleteClass(A.tenant.id, A.emptyClass.id));
 
   // cleanup

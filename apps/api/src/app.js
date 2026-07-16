@@ -101,10 +101,16 @@ app.use((req, res) => {
 });
 
 // Global error handler
+//
+// Only errors we raised deliberately carry a `status`, and only those messages are written to
+// be read by a client. Anything else reaching here is a bug or a driver error, whose message
+// is not safe to echo: Prisma's includes the failing source file, a snippet of the query and
+// the constraint name. Those go to the log, never the response.
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
+  const status = err.status || 500;
+  res.status(status).json({
+    error: status < 500 ? err.message : 'Internal server error',
   });
 });
 

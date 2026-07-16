@@ -16,6 +16,10 @@ function validate(req, res, next) {
 const adminOrTeacher = authorize('SCHOOL_ADMIN', 'TEACHER');
 const adminOnly = authorize('SCHOOL_ADMIN');
 
+// Mirrors `enum AttendanceStatus` in schema.prisma. Checked here so an unknown value is a 422
+// naming the field, rather than reaching Prisma and surfacing as a 500.
+const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY'];
+
 // ─── Student Attendance ──────────────────────────────────────────────────────
 
 // POST /api/attendance/students/mark
@@ -23,6 +27,8 @@ router.post('/students/mark', adminOrTeacher, [
   body('date').isISO8601(),
   body('classId').notEmpty(),
   body('records').isArray({ min: 1 }),
+  body('records.*.studentId').notEmpty(),
+  body('records.*.status').isIn(ATTENDANCE_STATUSES),
 ], validate, async (req, res, next) => {
   try {
     const result = await svc.markStudentAttendance(req.tenant.id, req.user.id, req.body);
@@ -61,7 +67,7 @@ router.get('/students/summary', adminOrTeacher, async (req, res, next) => {
 router.post('/teachers/mark', adminOnly, [
   body('userId').notEmpty(),
   body('date').isISO8601(),
-  body('status').isIn(['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY']),
+  body('status').isIn(ATTENDANCE_STATUSES),
 ], validate, async (req, res, next) => {
   try {
     res.json(await svc.markTeacherAttendance(req.tenant.id, req.user.id, req.body));
