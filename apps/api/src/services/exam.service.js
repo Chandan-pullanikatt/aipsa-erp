@@ -1,4 +1,5 @@
 ﻿const prisma = require('../lib/prisma');
+const { assertStudentsInTenant } = require('../lib/tenantScope');
 
 function calculateGrade(marks, maxMarks) {
   const pct = (marks / maxMarks) * 100;
@@ -172,6 +173,10 @@ async function getMarksEntry(tenantId, examId, subjectId) {
 async function saveMarks(tenantId, examId, subjectId, records) {
   const exam = await prisma.exam.findFirst({ where: { id: examId, tenantId } });
   if (!exam) throw Object.assign(new Error('Exam not found'), { status: 404 });
+
+  // The exam being in-tenant does not vouch for the studentIds in `records` — those come
+  // straight from the request body and are written into examResult rows under this tenant.
+  await assertStudentsInTenant(tenantId, records.map((r) => r.studentId));
 
   const ops = records.map(({ studentId, marksObtained, isAbsent, remarks }) => {
     const marks = isAbsent ? null : (marksObtained !== '' && marksObtained !== null && marksObtained !== undefined ? parseFloat(marksObtained) : null);
