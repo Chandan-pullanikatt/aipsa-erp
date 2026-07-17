@@ -339,7 +339,10 @@ export default function SchoolDetailPage() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+      {/* overflow-x-auto, not -hidden: the Role/Status/Joined columns are fixed-width, so below
+          ~640px the row cannot shrink to fit and -hidden silently cut it off with no way to
+          scroll to the rest. The rows carry the matching min-w. */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-x-auto">
         <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#6B7280]" strokeWidth={1.75} />
@@ -358,7 +361,7 @@ export default function SchoolDetailPage() {
         ) : (
           <>
             {/* Header */}
-            <div className="bg-[#F7F8FA] border-b border-[#E5E7EB] px-5 py-2.5 grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center">
+            <div className="bg-[#F7F8FA] border-b border-[#E5E7EB] px-5 py-2.5 grid min-w-[640px] grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center">
               <div className="w-8" />
               <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Name</span>
               <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] w-28">Role</span>
@@ -372,7 +375,7 @@ export default function SchoolDetailPage() {
                 return (
                   <div
                     key={u.id}
-                    className="px-5 py-3.5 grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center hover:bg-[#F9FAFB] transition-colors"
+                    className="px-5 py-3.5 grid min-w-[640px] grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center hover:bg-[#F9FAFB] transition-colors"
                   >
                     {/* Avatar */}
                     <div className="w-8 h-8 rounded-lg bg-[#F3F4F6] text-[#6B7280] flex items-center justify-center font-display font-bold text-xs">

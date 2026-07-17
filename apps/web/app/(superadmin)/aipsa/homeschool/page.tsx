@@ -78,8 +78,8 @@ export default function HomeschoolCatalogPage() {
           <p className="text-[14px] text-[#6B7280] mt-1">Create your first course to build the catalog.</p>
         </div>
       ) : (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
-          <table className="w-full text-[13px]">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[720px] text-[13px]">
             <thead className="bg-[#F7F8FA] text-[#6B7280] text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Course</th>
