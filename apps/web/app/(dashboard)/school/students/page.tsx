@@ -10,7 +10,8 @@ import {
   Eye,
   Plus,
   ChevronLeft,
-  IdCard
+  IdCard,
+  Upload
 } from 'lucide-react';
 
 interface Student {
@@ -88,6 +89,13 @@ export default function StudentsPage() {
           >
             <SlidersHorizontal className="w-4 h-4 mr-2" strokeWidth={1.75} />
             Manage Classes
+          </Link>
+          <Link
+            href="/school/students/import"
+            className="h-[38px] px-4 rounded-lg bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] transition-colors inline-flex items-center justify-center font-medium text-[14px]"
+          >
+            <Upload className="w-4 h-4 mr-2" strokeWidth={1.75} />
+            Import CSV
           </Link>
           <Link
             href="/school/students/new"
