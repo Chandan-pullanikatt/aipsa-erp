@@ -16,4 +16,21 @@ const upload = multer({
   },
 });
 
-module.exports = { upload };
+// Student-register imports. Kept separate from `upload` because the allowed types
+// and size are different, and a CSV is parsed in the request — never stored.
+// Browsers and Excel disagree on the CSV mime type, hence the spread.
+const CSV_TYPES = new Set([
+  'text/csv', 'application/csv', 'text/plain',
+  'application/vnd.ms-excel', 'application/octet-stream',
+]);
+
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1024 * 1024 }, // 1 MB — a class register is a few KB
+  fileFilter(req, file, cb) {
+    if (CSV_TYPES.has(file.mimetype) || /\.csv$/i.test(file.originalname)) return cb(null, true);
+    cb(Object.assign(new Error('Please upload a .csv file.'), { status: 415 }));
+  },
+});
+
+module.exports = { upload, csvUpload };

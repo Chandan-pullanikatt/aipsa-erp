@@ -2,7 +2,9 @@ const { Router } = require('express');
 const { body, query, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
+const { csvUpload } = require('../middleware/upload');
 const sis = require('../services/sis.service');
+const studentImport = require('../services/studentImport.service');
 
 const router = Router();
 router.use(authenticate, authorize('SCHOOL_ADMIN', 'TEACHER', 'STUDENT', 'PARENT'), requireTenant);
@@ -91,6 +93,38 @@ router.post('/students', adminOnly, [
 ], validate, async (req, res, next) => {
   try {
     res.status(201).json(await sis.createStudent(req.tenant.id, req.body));
+  } catch (err) { next(err); }
+});
+
+// ─── Bulk import (class register CSV) ────────────────────────────────────────
+
+// GET /api/sis/students/import/template — the CSV shape the school should fill
+router.get('/students/import/template', adminOnly, (req, res) => {
+  res.type('text/csv').attachment('student-import-template.csv').send(studentImport.templateCsv());
+});
+
+// POST /api/sis/students/import/preview — validate only, writes nothing
+router.post('/students/import/preview', adminOnly, csvUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+    if (!req.body.classId) return res.status(400).json({ error: 'Pick a class first.' });
+    res.json(await studentImport.previewImport(req.tenant.id, {
+      classId: req.body.classId,
+      csv: req.file.buffer.toString('utf8'),
+    }));
+  } catch (err) { next(err); }
+});
+
+// POST /api/sis/students/import — apply it; returns one-time portal PINs
+router.post('/students/import', adminOnly, csvUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+    if (!req.body.classId) return res.status(400).json({ error: 'Pick a class first.' });
+    res.status(201).json(await studentImport.commitImport(req.tenant.id, {
+      classId: req.body.classId,
+      sectionId: req.body.sectionId || null,
+      csv: req.file.buffer.toString('utf8'),
+    }));
   } catch (err) { next(err); }
 });
 
