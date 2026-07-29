@@ -4,6 +4,8 @@ const authService = require('../services/auth.service');
 const sisService = require('../services/sis.service');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
+const { joinPhotoUpload } = require('../middleware/upload');
+const { storage } = require('../lib/storage');
 
 const router = Router();
 
@@ -166,6 +168,27 @@ router.get('/class-code/:code', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/auth/student-join/photo — public, passport photo for the self-registration
+// form. No login exists yet at this point, so instead of tenant auth we require a
+// valid, active class join code (same check the details step already passed) to
+// keep this from being an open anonymous upload endpoint.
+router.post('/student-join/photo', joinPhotoUpload.single('file'), async (req, res, next) => {
+  try {
+    const joinCode = (req.body.joinCode || '').trim().toUpperCase();
+    if (!joinCode) return res.status(400).json({ error: 'joinCode is required.' });
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+
+    const cls = await sisService.lookupClassByJoinCode(joinCode);
+    const folder = `aipsa/join-requests/${cls.classId}`;
+    const result = await storage.upload(req.file.buffer, {
+      folder,
+      resourceType: 'image',
+      contentType: req.file.mimetype,
+    });
+    res.status(201).json(result);
+  } catch (err) { next(err); }
+});
+
 // POST /api/auth/student-join — public, submit self-registration request
 router.post('/student-join', [
   body('joinCode').trim().notEmpty(),
@@ -173,6 +196,14 @@ router.post('/student-join', [
   body('lastName').trim().notEmpty(),
   body('parentPhone').trim().notEmpty(),
   body('email').isEmail().normalizeEmail(),
+  body('dateOfBirth').optional({ checkFalsy: true }).isISO8601(),
+  body('gender').optional({ checkFalsy: true }).isIn(['MALE', 'FEMALE', 'OTHER']),
+  body('bloodGroup').optional({ checkFalsy: true }).trim(),
+  body('phone').optional({ checkFalsy: true }).trim(),
+  body('address').optional({ checkFalsy: true }).trim(),
+  body('city').optional({ checkFalsy: true }).trim(),
+  body('state').optional({ checkFalsy: true }).trim(),
+  body('photoUrl').optional({ checkFalsy: true }).trim(),
 ], validate, async (req, res, next) => {
   try {
     const { joinCode, ...data } = req.body;

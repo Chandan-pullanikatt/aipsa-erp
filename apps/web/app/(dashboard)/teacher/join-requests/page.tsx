@@ -13,6 +13,13 @@ interface JoinRequest {
   email: string;
   parentPhone: string;
   dateOfBirth: string | null;
+  gender: string | null;
+  bloodGroup: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  photoUrl: string | null;
   status: RequestStatus;
   createdAt: string;
   class: { id: string; name: string };
@@ -140,12 +147,28 @@ export default function JoinRequestsPage() {
                 {requests.map(req => (
                   <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">
-                      {req.firstName} {req.lastName}
-                      {req.dateOfBirth && (
-                        <span className="block text-xs text-gray-400 font-normal">
-                          DOB: {new Date(req.dateOfBirth).toLocaleDateString('en-IN')}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-11 rounded border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
+                          {req.photoUrl
+                            ? <img src={req.photoUrl} alt="" className="w-full h-full object-cover" />
+                            : <span className="text-[10px] text-gray-300">No photo</span>}
+                        </div>
+                        <div>
+                          {req.firstName} {req.lastName}
+                          <span className="block text-xs text-gray-400 font-normal">
+                            {[
+                              req.dateOfBirth && `DOB: ${new Date(req.dateOfBirth).toLocaleDateString('en-IN')}`,
+                              req.gender && req.gender[0] + req.gender.slice(1).toLowerCase(),
+                              req.bloodGroup,
+                            ].filter(Boolean).join(' · ')}
+                          </span>
+                          {(req.address || req.city || req.state) && (
+                            <span className="block text-xs text-gray-400 font-normal">
+                              {[req.address, req.city, req.state].filter(Boolean).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{req.class.name}</td>
                     <td className="px-4 py-3 text-gray-600">{req.email}</td>

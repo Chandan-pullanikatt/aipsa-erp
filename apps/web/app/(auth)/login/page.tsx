@@ -109,10 +109,6 @@ export default function LoginPage() {
             Teacher or Parent?{' '}
             <Link href="/join" className="text-blue-600 hover:underline font-medium">Join with school code</Link>
           </p>
-          <p className="text-center text-sm text-gray-500 mt-2">
-            New Student?{' '}
-            <Link href="/student-join" className="text-blue-600 hover:underline font-medium">Register with class code</Link>
-          </p>
         </div>
 
         {/* Documentation — for prospects evaluating the product before sign-in */}

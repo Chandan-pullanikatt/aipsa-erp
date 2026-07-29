@@ -33,4 +33,17 @@ const csvUpload = multer({
   },
 });
 
-module.exports = { upload, csvUpload };
+// Public self-registration photo (student-join flow, no logged-in user yet).
+// Images only, tighter size cap than the authenticated `upload` above.
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+const joinPhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
+  fileFilter(req, file, cb) {
+    if (IMAGE_TYPES.has(file.mimetype)) return cb(null, true);
+    cb(Object.assign(new Error('Unsupported file type. Allowed: JPG, PNG, WEBP.'), { status: 415 }));
+  },
+});
+
+module.exports = { upload, csvUpload, joinPhotoUpload };

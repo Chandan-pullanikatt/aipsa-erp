@@ -429,7 +429,10 @@ async function lookupClassByJoinCode(joinCode) {
 
 // ─── Class Join Requests ──────────────────────────────────────────────────────
 
-async function createStudentJoinRequest(joinCode, { firstName, lastName, dateOfBirth, parentPhone, email }) {
+async function createStudentJoinRequest(joinCode, {
+  firstName, lastName, dateOfBirth, gender, bloodGroup, phone,
+  address, city, state, photoUrl, parentPhone, email,
+}) {
   const cls = await prisma.class.findUnique({
     where: { joinCode },
     include: { tenant: { select: { id: true, status: true } } },
@@ -454,11 +457,19 @@ async function createStudentJoinRequest(joinCode, { firstName, lastName, dateOfB
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      gender: gender || undefined,
+      bloodGroup: bloodGroup?.trim() || undefined,
+      phone: phone?.trim() || undefined,
+      address: address?.trim() || undefined,
+      city: city?.trim() || undefined,
+      state: state?.trim() || undefined,
+      photoUrl: photoUrl?.trim() || undefined,
       parentPhone: parentPhone.trim(),
       email: email.trim().toLowerCase(),
     },
     select: {
       id: true, firstName: true, lastName: true, email: true, status: true, createdAt: true,
+      gender: true, bloodGroup: true, phone: true, address: true, city: true, state: true, photoUrl: true,
       class: { select: { name: true } },
     },
   });
@@ -548,7 +559,15 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
         firstName: req.firstName,
         lastName: req.lastName,
         dateOfBirth: req.dateOfBirth || undefined,
-        phone: req.parentPhone,
+        gender: req.gender || undefined,
+        bloodGroup: req.bloodGroup || undefined,
+        // The request's own "phone" field is the student's contact number, kept
+        // distinct from parentPhone (used only to reach a guardian pre-admission).
+        phone: req.phone || req.parentPhone,
+        address: req.address || undefined,
+        city: req.city || undefined,
+        state: req.state || undefined,
+        photoUrl: req.photoUrl || undefined,
         classId: req.classId,
         userId: user.id,
         status: 'ACTIVE',

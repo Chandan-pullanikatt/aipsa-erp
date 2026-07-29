@@ -58,24 +58,39 @@ router.get('/my-classes', authorize('TEACHER'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/homework/:id/submit — student submits homework
-router.post('/:id/submit', authorize('STUDENT'), async (req, res, next) => {
-  try {
-    const student = await prisma.student.findFirst({
-      where: { tenantId: req.tenant.id, userId: req.user.id },
+// Resolve the student a homework action applies to. A STUDENT acts as themselves;
+// a PARENT acts on behalf of a linked child, identified by studentId (body/query)
+// and validated against their guardian link. Mirrors the pattern in library/
+// transport/hostel/purchase services.
+async function resolveStudent(req, studentId) {
+  if (req.user.role === 'PARENT') {
+    return prisma.student.findFirst({
+      where: {
+        tenantId: req.tenant.id,
+        ...(studentId ? { id: studentId } : {}),
+        guardians: { some: { userId: req.user.id } },
+      },
     });
+  }
+  return prisma.student.findFirst({
+    where: { tenantId: req.tenant.id, userId: req.user.id },
+  });
+}
+
+// POST /api/homework/:id/submit — student (or parent on a child's behalf) submits homework
+router.post('/:id/submit', authorize('STUDENT', 'PARENT'), async (req, res, next) => {
+  try {
+    const student = await resolveStudent(req, req.body.studentId);
     if (!student) return res.status(403).json({ error: 'No student profile linked.' });
     const result = await svc.submitHomework(req.tenant.id, req.params.id, student.id, req.body);
     res.status(201).json(result);
   } catch (e) { next(e); }
 });
 
-// GET /api/homework/:id/my-submission — student views their own submission
-router.get('/:id/my-submission', authorize('STUDENT'), async (req, res, next) => {
+// GET /api/homework/:id/my-submission — view a submission (student's own, or a parent's child's)
+router.get('/:id/my-submission', authorize('STUDENT', 'PARENT'), async (req, res, next) => {
   try {
-    const student = await prisma.student.findFirst({
-      where: { tenantId: req.tenant.id, userId: req.user.id },
-    });
+    const student = await resolveStudent(req, req.query.studentId);
     if (!student) return res.json(null);
     const sub = await svc.getMySubmission(req.tenant.id, req.params.id, student.id);
     res.json(sub);

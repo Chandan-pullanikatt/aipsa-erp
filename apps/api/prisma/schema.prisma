@@ -1080,6 +1080,13 @@ model ClassJoinRequest {
   firstName    String
   lastName     String
   dateOfBirth  DateTime?         @db.Date
+  gender       Gender?
+  bloodGroup   String?
+  phone        String?
+  address      String?
+  city         String?
+  state        String?
+  photoUrl     String?
   parentPhone  String
   email        String
   status       JoinRequestStatus @default(PENDING)

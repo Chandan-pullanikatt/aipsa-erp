@@ -161,6 +161,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'Progress Card', href: '/parent/progress', available: true },
       { label: 'My Teachers', href: '/parent/teachers', available: true },
       { label: 'Homework', href: '/parent?tab=homework', available: true },
+      { label: 'LMS', href: '/parent/lms', available: true },
       { label: 'Transport', href: '/parent/transport', available: true },
       { label: 'Hostel', href: '/parent/hostel', available: true },
       { label: 'Purchases', href: '/parent/purchases', available: true },
