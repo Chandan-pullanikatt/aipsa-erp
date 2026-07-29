@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
+import Stepper from '@/components/Stepper';
 import {
   Plus, Pencil, Trash2, X, Search, Briefcase, Users, CalendarCheck,
   Building2, Check, KeyRound, Copy,
@@ -109,6 +110,9 @@ export default function HrPage() {
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  // New-staff creation is a 2-step wizard (Account → Employment). Editing shows
+  // only the employment record, so it stays single-view.
+  const [staffStep, setStaffStep] = useState(0);
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
 
   // Department form
@@ -178,6 +182,7 @@ export default function HrPage() {
     setEditingStaff(null);
     setForm(emptyForm);
     setTempPassword(null);
+    setStaffStep(0);
     setShowStaffForm(true);
   }
 
@@ -196,6 +201,17 @@ export default function HrPage() {
 
   async function handleStaffSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // On the first step of new-staff creation, validate the account fields and
+    // advance to the employment step rather than submitting.
+    if (!editingStaff && staffStep === 0) {
+      if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
+        setError('First name, last name and email are required.');
+        return;
+      }
+      setError('');
+      setStaffStep(1);
+      return;
+    }
     setSubmitting(true);
     setError('');
     const profile = {
@@ -615,8 +631,16 @@ export default function HrPage() {
               <button onClick={() => setShowStaffForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" strokeWidth={1.75} /></button>
             </div>
 
+            {/* Step indicator only for the multi-step creation flow. */}
+            {!editingStaff && (
+              <div className="mt-4">
+                <Stepper steps={['Account', 'Employment']} current={staffStep} onStepClick={(i) => { setError(''); setStaffStep(i); }} />
+              </div>
+            )}
+
             <form onSubmit={handleStaffSubmit} className="space-y-4 mt-4">
-              {!editingStaff && (
+              {/* STEP 1 — Account (creation only) */}
+              {!editingStaff && staffStep === 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <LabeledInput label="First Name" required value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} />
@@ -637,49 +661,57 @@ export default function HrPage() {
                     </div>
                     <p className="text-[11px] text-[#6B7280] mt-1.5">A login is created with a temporary password the member changes on first sign-in.</p>
                   </div>
-                  <div className="border-t border-[#E5E7EB] pt-1" />
                 </>
               )}
 
-              {editingStaff && (
-                <div className="bg-[#F7F8FA] border border-[#E5E7EB] rounded-lg p-3 text-[13px] text-[#374151]">
-                  <span className="font-medium text-[#1A1D23]">{editingStaff.firstName} {editingStaff.lastName}</span> · {editingStaff.email}
-                </div>
+              {/* STEP 2 — Employment record (also the sole view when editing) */}
+              {(editingStaff || staffStep === 1) && (
+                <>
+                  {editingStaff && (
+                    <div className="bg-[#F7F8FA] border border-[#E5E7EB] rounded-lg p-3 text-[13px] text-[#374151]">
+                      <span className="font-medium text-[#1A1D23]">{editingStaff.firstName} {editingStaff.lastName}</span> · {editingStaff.email}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <LabeledInput label="Employee ID" value={form.employeeId} onChange={(v) => setForm({ ...form, employeeId: v })} placeholder="EMP-001" />
+                    <div>
+                      <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Department</label>
+                      <select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} className="w-full">
+                        <option value="">— None —</option>
+                        {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <LabeledInput label="Designation" value={form.designation} onChange={(v) => setForm({ ...form, designation: v })} placeholder="e.g. Accountant" />
+                    <div>
+                      <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Employment Type</label>
+                      <select value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value as EmploymentType })} className="w-full">
+                        {(Object.keys(EMPLOYMENT_LABELS) as EmploymentType[]).map((t) => <option key={t} value={t}>{EMPLOYMENT_LABELS[t]}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Joining Date</label>
+                      <input type="date" value={form.joiningDate} max={todayISO()} onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} className="w-full" />
+                    </div>
+                    <LabeledInput label="Emergency Contact" value={form.emergencyContact} onChange={(v) => setForm({ ...form, emergencyContact: v })} placeholder="Name / phone" />
+                  </div>
+                </>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <LabeledInput label="Employee ID" value={form.employeeId} onChange={(v) => setForm({ ...form, employeeId: v })} placeholder="EMP-001" />
-                <div>
-                  <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Department</label>
-                  <select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} className="w-full">
-                    <option value="">— None —</option>
-                    {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <LabeledInput label="Designation" value={form.designation} onChange={(v) => setForm({ ...form, designation: v })} placeholder="e.g. Accountant" />
-                <div>
-                  <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Employment Type</label>
-                  <select value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value as EmploymentType })} className="w-full">
-                    {(Object.keys(EMPLOYMENT_LABELS) as EmploymentType[]).map((t) => <option key={t} value={t}>{EMPLOYMENT_LABELS[t]}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Joining Date</label>
-                  <input type="date" value={form.joiningDate} max={todayISO()} onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} className="w-full" />
-                </div>
-                <LabeledInput label="Emergency Contact" value={form.emergencyContact} onChange={(v) => setForm({ ...form, emergencyContact: v })} placeholder="Name / phone" />
-              </div>
-
               <div className="flex justify-end gap-3 pt-5 border-t border-[#E5E7EB] mt-2">
-                <button type="button" onClick={() => setShowStaffForm(false)} className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-[38px] px-4 rounded-lg font-medium text-[14px]">Cancel</button>
+                {!editingStaff && staffStep === 1 ? (
+                  <button type="button" onClick={() => { setError(''); setStaffStep(0); }} className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-[38px] px-4 rounded-lg font-medium text-[14px]">Back</button>
+                ) : (
+                  <button type="button" onClick={() => setShowStaffForm(false)} className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-[38px] px-4 rounded-lg font-medium text-[14px]">Cancel</button>
+                )}
                 <button type="submit" disabled={submitting} className="inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium text-[14px] disabled:opacity-50">
-                  {submitting ? 'Saving...' : editingStaff ? 'Save Record' : 'Create Staff'}
+                  {submitting ? 'Saving...' : editingStaff ? 'Save Record' : staffStep === 0 ? 'Continue' : 'Create Staff'}
                 </button>
               </div>
             </form>

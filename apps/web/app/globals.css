@@ -121,9 +121,37 @@ h3, .h3 {
   background-image: none !important;
 }
 
-/* Limit border radius to 8px max except circular/modals */
-*:not(img):not(.rounded-full):not(.w-10):not(.h-10):not(.w-12):not(.h-12):not(.w-8):not(.h-8):not(.w-6):not(.h-6):not(.modal-content):not(.modal):not(.rounded-2xl):not(.rounded-3xl) {
+/* Cap general elements (cards, panels, inputs) at 8px. Buttons and anchors are
+   excluded from the cap so their own rules below own the radius; any element can
+   opt out entirely with `rounded-none`. This selector is intentionally very
+   specific — nothing with lower specificity can override it, which is why
+   buttons/anchors must be excluded here rather than fought elsewhere. The
+   sidebar rail itself is excluded here; the `#app-sidebar` rule below wins for
+   everything inside it via ID specificity. */
+*:not(img):not(button):not(a):not(.rounded-none):not(.rounded-full):not(.w-10):not(.h-10):not(.w-12):not(.h-12):not(.w-8):not(.h-8):not(.w-6):not(.h-6):not(.modal-content):not(.modal):not(.rounded-2xl):not(.rounded-3xl):not(.app-sidebar) {
   border-radius: 8px !important;
+}
+
+/* Every action control is a full pill: real <button>s, plus the anchor-buttons
+   this app builds with `inline-flex`. Sidebar/nav links use plain `flex` and
+   inline text links carry no radius, so neither is affected. Icon-only square
+   buttons become circular. Opt out per-element with `rounded-none`. */
+button:not(.rounded-none),
+a.btn:not(.rounded-none),
+a.inline-flex:not(.rounded-none) {
+  border-radius: 9999px !important;
+}
+
+/* The left sidebar keeps hard, square edges everywhere — the rail itself, every
+   nav link's active/hover highlight, the logo/footer blocks, and the footer
+   controls (sign-out button, notification bell). This is keyed off the
+   `#app-sidebar` id so its ID-level specificity beats the high-specificity 8px
+   cap above, which a plain `.app-sidebar` selector cannot do. */
+#app-sidebar,
+#app-sidebar *,
+#app-sidebar a,
+#app-sidebar button {
+  border-radius: 0 !important;
 }
 
 /* Ensure no inline styles override */

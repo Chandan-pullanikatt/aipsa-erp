@@ -35,9 +35,10 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   if (!user) return null;
 
   return (
-    <div className="h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
+    <div className="rounded-none h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
       {/* Sidebar */}
       <aside
+        id="app-sidebar"
         className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[70%] max-w-[320px] lg:w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:relative lg:translate-x-0`}
@@ -61,7 +62,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                 key={item.href}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center h-11 px-4 rounded-md mx-2 text-[14px] font-medium transition-all gap-2 ${
+                className={`flex items-center h-11 px-4 text-[14px] font-medium transition-all gap-2 ${
                   isActive
                     ? 'bg-white/10 text-white border-l-[3px] border-[#26A96B] pl-[13px]'
                     : 'text-white/70 hover:text-white hover:bg-white/5'

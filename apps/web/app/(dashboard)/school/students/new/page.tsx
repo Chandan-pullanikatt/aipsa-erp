@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
-import { 
-  User, 
-  GraduationCap, 
-  Users, 
-  ArrowLeft, 
+import Stepper from '@/components/Stepper';
+import {
+  User,
+  GraduationCap,
+  Users,
+  ArrowLeft,
+  ArrowRight,
   Calendar, 
   MapPin, 
   Mail, 
@@ -45,6 +47,25 @@ export default function NewStudentPage() {
   const [addGuardian, setAddGuardian] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [step, setStep] = useState(0);
+
+  const STEPS = ['Personal', 'Classroom', 'Guardian'];
+  const isLastStep = step === STEPS.length - 1;
+
+  function goNext() {
+    // Step 1 gates on the two required identity fields before advancing.
+    if (step === 0 && (!form.firstName.trim() || !form.lastName.trim())) {
+      setError('First and last name are required.');
+      return;
+    }
+    setError('');
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  }
+
+  function goBack() {
+    setError('');
+    setStep((s) => Math.max(s - 1, 0));
+  }
 
   useEffect(() => { api.get('/sis/classes').then((r) => setClasses(r.data)).catch(console.error); }, []);
 
@@ -83,6 +104,11 @@ export default function NewStudentPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Pressing Enter on an earlier step advances rather than submitting.
+    if (!isLastStep) {
+      goNext();
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -136,6 +162,11 @@ export default function NewStudentPage() {
         </div>
       </div>
 
+      {/* Step progress */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] px-5 py-4">
+        <Stepper steps={STEPS} current={step} onStepClick={(i) => { setError(''); setStep(i); }} />
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <div className="bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-sm rounded-lg px-4 py-3 flex gap-2 items-center shadow-sm animate-pulse">
@@ -144,7 +175,8 @@ export default function NewStudentPage() {
           </div>
         )}
 
-        {/* Section 1: Personal Info */}
+        {/* Step 1: Personal Info */}
+        {step === 0 && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-5 shadow-sm">
           <div className="flex items-center gap-2 pb-2 border-b border-[#F3F4F6]">
             <User className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
@@ -207,8 +239,10 @@ export default function NewStudentPage() {
             {field('State / Province', 'state', 'text', 'Maharashtra')}
           </div>
         </div>
+        )}
 
-        {/* Section 2: Class & Admission */}
+        {/* Step 2: Class & Admission */}
+        {step === 1 && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-5 shadow-sm">
           <div className="flex items-center gap-2 pb-2 border-b border-[#F3F4F6]">
             <GraduationCap className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
@@ -260,8 +294,10 @@ export default function NewStudentPage() {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Section 3: Guardian */}
+        {/* Step 3: Guardian */}
+        {step === 2 && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 space-y-5 shadow-sm">
           <div className="flex items-center justify-between pb-2 border-b border-[#F3F4F6]">
             <div className="flex items-center gap-2">
@@ -335,17 +371,35 @@ export default function NewStudentPage() {
             </div>
           )}
         </div>
+        )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-4">
-          <button type="submit" disabled={loading} 
-            className="flex-1 bg-[#1D7A4A] hover:bg-[#155B37] text-white py-2.5 rounded-lg font-bold text-sm disabled:opacity-60 transition-all shadow-sm">
-            {loading ? 'Admitting New Student...' : 'Finalise Student Admission'}
-          </button>
-          <Link href="/school/students" 
-            className="px-5 py-2.5 border border-[#E5E7EB] bg-white text-[#4B5563] font-semibold hover:bg-gray-50 rounded-lg text-sm transition-all text-center">
-            Cancel
-          </Link>
+        {/* Step navigation */}
+        <div className="flex items-center gap-3">
+          {step > 0 ? (
+            <button type="button" onClick={goBack}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[#E5E7EB] bg-white text-[#4B5563] font-semibold hover:bg-gray-50 text-sm transition-all">
+              <ArrowLeft className="w-4 h-4" strokeWidth={2} /> Back
+            </button>
+          ) : (
+            <Link href="/school/students"
+              className="inline-flex items-center px-5 py-2.5 border border-[#E5E7EB] bg-white text-[#4B5563] font-semibold hover:bg-gray-50 text-sm transition-all text-center">
+              Cancel
+            </Link>
+          )}
+
+          <div className="flex-1" />
+
+          {!isLastStep ? (
+            <button type="button" onClick={goNext}
+              className="inline-flex items-center gap-1.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white px-6 py-2.5 font-bold text-sm transition-all shadow-sm">
+              Continue <ArrowRight className="w-4 h-4" strokeWidth={2} />
+            </button>
+          ) : (
+            <button type="submit" disabled={loading}
+              className="inline-flex items-center bg-[#1D7A4A] hover:bg-[#155B37] text-white px-6 py-2.5 font-bold text-sm disabled:opacity-60 transition-all shadow-sm">
+              {loading ? 'Admitting New Student...' : 'Finalise Admission'}
+            </button>
+          )}
         </div>
       </form>
     </div>

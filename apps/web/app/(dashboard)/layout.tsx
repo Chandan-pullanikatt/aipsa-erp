@@ -408,9 +408,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <div className="h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
+    <div className="rounded-none h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
       {/* Sidebar */}
-      <aside className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[70%] max-w-[320px] lg:w-[30%] lg:max-w-none bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
+      <aside id="app-sidebar" className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[72%] max-w-[280px] lg:w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
         {/* Logo */}
         <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
           <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">EduBridge</p>
