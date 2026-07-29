@@ -16,7 +16,8 @@ import {
   Activity,
   Sparkles,
   X,
-  RefreshCw
+  RefreshCw,
+  ChevronDown
 } from 'lucide-react';
 
 type Tab = 'class' | 'teacher' | 'generate';
@@ -339,21 +340,23 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
                       return (
                         <td key={day} className="p-2 border-r border-[#E5E7EB] last:border-0 min-w-[160px]">
                           <div className="space-y-1.5">
-                            <div className="relative flex items-center">
-                              <BookOpen className="absolute left-2 w-3.5 h-3.5 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+                            <div className="flex items-center gap-1.5 px-2 border border-[#E5E7EB] rounded-md bg-white transition-all focus-within:ring-1 focus-within:ring-[#1D7A4A] focus-within:border-[#1D7A4A]">
+                              <BookOpen className="w-3.5 h-3.5 shrink-0 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
                               <select value={cell.subjectId} onChange={e => setCell(day, pc.number, { subjectId: e.target.value })}
-                                className="w-full pl-7 pr-1.5 py-1 text-xs border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-1 focus:ring-[#1D7A4A] focus:border-[#1D7A4A] bg-white font-semibold text-[#1A1D23] transition-all cursor-pointer">
-                                <option value="">— Subject —</option>
+                                className="flex-1 min-w-0 py-1 text-xs bg-transparent focus:outline-none font-semibold text-[#1A1D23] cursor-pointer appearance-none truncate">
+                                <option value="">Subject</option>
                                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                               </select>
+                              <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
                             </div>
-                            <div className="relative flex items-center">
-                              <User className="absolute left-2 w-3.5 h-3.5 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+                            <div className="flex items-center gap-1.5 px-2 border border-[#E5E7EB] rounded-md bg-white transition-all focus-within:ring-1 focus-within:ring-[#1D7A4A] focus-within:border-[#1D7A4A]">
+                              <User className="w-3.5 h-3.5 shrink-0 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
                               <select value={cell.teacherId} onChange={e => setCell(day, pc.number, { teacherId: e.target.value })}
-                                className="w-full pl-7 pr-1.5 py-1 text-xs border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-1 focus:ring-[#1D7A4A] focus:border-[#1D7A4A] bg-white text-[#6B7280] font-medium hover:text-[#1A1D23] transition-all cursor-pointer">
-                                <option value="">— Teacher —</option>
+                                className="flex-1 min-w-0 py-1 text-xs bg-transparent focus:outline-none text-[#6B7280] font-medium hover:text-[#1A1D23] cursor-pointer appearance-none truncate">
+                                <option value="">Teacher</option>
                                 {teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
                               </select>
+                              <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
                             </div>
                           </div>
                         </td>
