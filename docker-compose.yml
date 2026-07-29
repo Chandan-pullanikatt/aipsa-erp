@@ -43,6 +43,16 @@ services:
     # proxies every /api/* call over the compose network as `api:5000`.
     expose:
       - "5000"
+    # The API runs `prisma migrate deploy` before it binds the port, so it isn't
+    # serving for the first few seconds. This gate lets `web` wait for the listener
+    # to be up (see its depends_on) instead of racing it and hitting ECONNREFUSED.
+    # Uses Node's built-in fetch — node:20-slim has no wget/curl.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,8 +70,11 @@ services:
     # ERP domain to this port.
     ports:
       - "3121:3000"
+    # Wait until the API is actually serving (migrations done, port bound), not just
+    # until its container has started — otherwise web's first requests get ECONNREFUSED.
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:
