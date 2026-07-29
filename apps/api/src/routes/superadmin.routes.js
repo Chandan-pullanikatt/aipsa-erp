@@ -145,6 +145,30 @@ router.patch('/schools/:id/suspend', async (req, res, next) => {
   }
 });
 
+// DELETE /api/superadmin/schools/:id — permanently delete a suspended school and all its data.
+// Guarded to SUSPENDED only so a live school can never be wiped by a mis-click; suspend first.
+// The tenant FKs cascade, EXCEPT users_tenantId_fkey which is ON DELETE SET NULL (User.tenantId
+// is nullable by design). So we must delete the tenant's users explicitly first — otherwise they
+// would be orphaned with a null tenantId — then delete the tenant, which cascades the rest.
+router.delete('/schools/:id', async (req, res, next) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
+    if (!tenant) return res.status(404).json({ error: 'School not found' });
+    if (tenant.status !== 'SUSPENDED') {
+      return res.status(409).json({ error: 'Only suspended schools can be deleted. Suspend the school first.' });
+    }
+
+    await prisma.$transaction([
+      prisma.user.deleteMany({ where: { tenantId: req.params.id } }),
+      prisma.tenant.delete({ where: { id: req.params.id } }),
+    ]);
+
+    res.json({ message: 'School deleted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/superadmin/stats
 router.get('/stats', async (req, res, next) => {
   try {

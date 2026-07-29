@@ -21,6 +21,9 @@ import {
   GraduationCap,
   UserCog,
   User,
+  Trash2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
 interface SchoolProfile {
@@ -103,6 +106,8 @@ export default function SchoolDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmSuspend, setConfirmSuspend] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSchool = useCallback(async () => {
@@ -136,6 +141,18 @@ export default function SchoolDetailPage() {
       await api.patch(`/superadmin/schools/${id}/suspend`);
       fetchSchool();
     } finally { setActionLoading(false); }
+  }
+
+  async function handleDelete() {
+    setActionLoading(true);
+    setDeleteError(null);
+    try {
+      await api.delete(`/superadmin/schools/${id}`);
+      router.push('/aipsa/schools');
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.error || 'Could not delete school.');
+      setActionLoading(false);
+    }
   }
 
   if (loading) {
@@ -173,6 +190,17 @@ export default function SchoolDetailPage() {
 
   return (
     <div className="space-y-6">
+      {showDelete && (
+        <DeleteSchoolModal
+          schoolName={displayName}
+          deleting={actionLoading}
+          userCount={school.users.length}
+          errorMsg={deleteError}
+          onConfirm={handleDelete}
+          onClose={() => { setShowDelete(false); setDeleteError(null); }}
+        />
+      )}
+
       {/* Back */}
       <Link
         href="/aipsa/schools"
@@ -250,14 +278,24 @@ export default function SchoolDetailPage() {
               )
             )}
             {school.status === 'SUSPENDED' && (
-              <button
-                onClick={handleApprove}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 h-[38px] px-4 bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white rounded-lg font-semibold text-[13px] transition-colors disabled:opacity-50"
-              >
-                <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} />
-                {actionLoading ? 'Reactivating…' : 'Reactivate School'}
-              </button>
+              <>
+                <button
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                  className="inline-flex items-center gap-2 h-[38px] px-4 bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white rounded-lg font-semibold text-[13px] transition-colors disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} />
+                  {actionLoading ? 'Reactivating…' : 'Reactivate School'}
+                </button>
+                <button
+                  onClick={() => setShowDelete(true)}
+                  disabled={actionLoading}
+                  className="inline-flex items-center gap-2 h-[38px] px-4 bg-white border border-[#E5E7EB] hover:bg-[#FCEBEB] hover:border-[#FCEBEB] hover:text-[#A32D2D] text-[#6B7280] rounded-lg font-semibold text-[13px] transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" strokeWidth={1.75} />
+                  Delete
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -419,6 +457,91 @@ export default function SchoolDetailPage() {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DeleteSchoolModal({
+  schoolName,
+  userCount,
+  deleting,
+  errorMsg,
+  onConfirm,
+  onClose,
+}: {
+  schoolName: string;
+  userCount: number;
+  deleting: boolean;
+  errorMsg: string | null;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [typed, setTyped] = useState('');
+  const canDelete = typed.trim() === schoolName.trim() && !deleting;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={deleting ? undefined : onClose}>
+      <div
+        className="modal-content bg-white rounded-xl w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E7EB]">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-[#A32D2D]" strokeWidth={1.75} />
+            <h2 className="font-display text-[18px] font-semibold text-[#1A1D23]">Delete School</h2>
+          </div>
+          <button onClick={onClose} disabled={deleting} className="p-1.5 rounded-lg text-[#6B7280] hover:bg-[#F3F4F6] disabled:opacity-50" aria-label="Close">
+            <X className="w-5 h-5" strokeWidth={1.75} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="bg-[#FCEBEB] border border-[#F5C6C6] text-[#A32D2D] text-[13px] rounded-lg px-4 py-3">
+            This permanently deletes <span className="font-semibold">{schoolName}</span> along with all
+            {userCount > 0 && <> {userCount} user{userCount === 1 ? '' : 's'} and</>} every record — students,
+            classes, fees, attendance and more. This cannot be undone.
+          </div>
+
+          {errorMsg && (
+            <div className="bg-[#FCEBEB] border border-[#F5C6C6] text-[#A32D2D] text-[13px] rounded-lg px-4 py-2.5 font-medium">
+              {errorMsg}
+            </div>
+          )}
+
+          <div>
+            <label className="block mb-1.5 text-[13px] text-[#374151]">
+              Type <span className="font-semibold text-[#1A1D23]">{schoolName}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              autoFocus
+              className="w-full px-3 h-[40px] rounded-lg border border-[#E5E7EB] bg-white text-[14px] text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/25 focus:border-[#DC2626] transition-colors"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="h-[40px] px-4 rounded-lg border border-[#E5E7EB] text-[#374151] font-semibold text-[13px] hover:bg-[#F7F8FA] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={!canDelete}
+              className="inline-flex items-center gap-2 h-[40px] px-4 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white font-semibold text-[13px] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
+              {deleting ? 'Deleting…' : 'Delete School'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
