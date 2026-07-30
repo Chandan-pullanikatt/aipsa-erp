@@ -2,10 +2,11 @@
 const { assertStudentsInTenant, assertClassInTenant, assertSectionInTenant } = require('../lib/tenantScope');
 const { sendAttendanceSummary } = require('./email.service');
 const notify = require('./notify.service');
+const { getTeacherClasses } = require('./homework.service');
 
 // ─── Student Attendance ──────────────────────────────────────────────────────
 
-async function markStudentAttendance(tenantId, markedById, { date, classId, sectionId, records }) {
+async function markStudentAttendance(tenantId, markedById, markedByRole, { date, classId, sectionId, records }) {
   const d = new Date(date);
   d.setUTCHours(0, 0, 0, 0);
 
@@ -16,6 +17,15 @@ async function markStudentAttendance(tenantId, markedById, { date, classId, sect
     assertSectionInTenant(tenantId, sectionId),
     assertStudentsInTenant(tenantId, records.map((r) => r.studentId)),
   ]);
+
+  // A teacher may only mark attendance for a class they're linked to (class/section
+  // incharge, subject teacher, or timetable period) — SCHOOL_ADMIN can mark any class.
+  if (markedByRole === 'TEACHER') {
+    const allowed = await getTeacherClasses(tenantId, markedById);
+    if (!allowed.some((c) => c.id === classId)) {
+      throw Object.assign(new Error('You are not assigned to this class'), { status: 403 });
+    }
+  }
 
   const ops = records.map(({ studentId, status, note }) =>
     prisma.attendance.upsert({

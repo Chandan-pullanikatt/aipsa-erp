@@ -31,7 +31,7 @@ router.post('/students/mark', adminOrTeacher, [
   body('records.*.status').isIn(ATTENDANCE_STATUSES),
 ], validate, async (req, res, next) => {
   try {
-    const result = await svc.markStudentAttendance(req.tenant.id, req.user.id, req.body);
+    const result = await svc.markStudentAttendance(req.tenant.id, req.user.id, req.user.role, req.body);
     res.json({ marked: result.length });
   } catch (err) { next(err); }
 });

@@ -206,7 +206,7 @@ async function main() {
 
   console.log('\nCross-tenant creates (tenant B writing rows against tenant A\'s student):');
   await expectCreateDenied('attendance.markStudentAttendance(B, A.studentId)',
-    () => attendance.markStudentAttendance(B.tenant.id, B.admin.id, {
+    () => attendance.markStudentAttendance(B.tenant.id, B.admin.id, 'SCHOOL_ADMIN', {
       date: '2026-05-02',
       classId: bClass.id,
       records: [{ studentId: A.student.id, status: 'ABSENT' }],
@@ -221,7 +221,7 @@ async function main() {
   console.log('\nControl — tenant A reading/mutating its OWN data (must succeed):');
   await expectAllowed('sis.getStudent(A, A.studentId)', () => sis.getStudent(A.tenant.id, A.student.id));
   await expectAllowed('attendance.markStudentAttendance(A, A.studentId)',
-    () => attendance.markStudentAttendance(A.tenant.id, A.admin.id, {
+    () => attendance.markStudentAttendance(A.tenant.id, A.admin.id, 'SCHOOL_ADMIN', {
       date: '2026-05-03',
       classId: A.student.classId,
       sectionId: A.student.sectionId,
