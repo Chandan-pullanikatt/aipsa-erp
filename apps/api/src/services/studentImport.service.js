@@ -108,8 +108,12 @@ async function previewImport(tenantId, { classId, csv }) {
   const holderByAdmission = new Map(
     (await prisma.student.findMany({
       where: { tenantId, admissionNumber: { in: [...seenAdmission.keys()] } },
-      select: { id: true, admissionNumber: true },
-    })).map((s) => [s.admissionNumber, s.id]),
+      select: {
+        id: true, admissionNumber: true, firstName: true, lastName: true, classId: true,
+        class: { select: { name: true } },
+        guardians: { select: { phone: true } },
+      },
+    })).map((s) => [s.admissionNumber, s]),
   );
 
   const existing = await prisma.student.findMany({
@@ -125,14 +129,28 @@ async function previewImport(tenantId, { classId, csv }) {
 
   const results = rows.map((row) => {
     const errors = validateRow(row);
-    const match = existingByName.get(`${row.firstName} ${row.lastName}`.trim().toLowerCase());
 
     const dupLine = fileDuplicates.get(row.line);
     if (dupLine) errors.push(`Admission number ${row.admissionNumber} is already used on line ${dupLine}`);
 
+    // The admission number is the student's identity, so it decides who a row
+    // refers to whenever the register carries one. Falling back to the name is
+    // only for registers without numbers — a class routinely holds four boys
+    // called Ayush Kumar, and matching those by name would skip three of them
+    // and hang the fourth's guardian on the wrong child.
     const holder = row.admissionNumber ? holderByAdmission.get(row.admissionNumber) : null;
-    if (holder && holder !== match?.id) {
-      errors.push(`Admission number ${row.admissionNumber} already belongs to another student`);
+    let match;
+    if (row.admissionNumber) {
+      if (holder && holder.classId !== classId) {
+        errors.push(
+          `Admission number ${row.admissionNumber} already belongs to `
+          + `${`${holder.firstName} ${holder.lastName}`.trim()} in ${holder.class?.name || 'another class'}`,
+        );
+      } else {
+        match = holder || undefined;
+      }
+    } else {
+      match = existingByName.get(`${row.firstName} ${row.lastName}`.trim().toLowerCase());
     }
 
     // Schools import names first and collect parent contacts later, so a second
@@ -211,13 +229,17 @@ async function commitImport(tenantId, { classId, sectionId, csv }) {
   for (const row of rows) {
     // Student already enrolled; the file only brings new parent contact details.
     if (byLine.get(row.line) === 'GUARDIAN') {
+      // Same identity rule as the preview: the admission number picks the child
+      // when the register has one, so a guardian never lands on a namesake.
       const student = await prisma.student.findFirst({
-        where: {
-          tenantId,
-          classId,
-          firstName: { equals: row.firstName, mode: 'insensitive' },
-          lastName: { equals: row.lastName, mode: 'insensitive' },
-        },
+        where: row.admissionNumber
+          ? { tenantId, admissionNumber: row.admissionNumber }
+          : {
+            tenantId,
+            classId,
+            firstName: { equals: row.firstName, mode: 'insensitive' },
+            lastName: { equals: row.lastName, mode: 'insensitive' },
+          },
         select: { id: true, phone: true },
       });
       if (!student) continue;
