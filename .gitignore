@@ -13,3 +13,4 @@ build/
 student-pins-*.csv
 # Real school registers: student PII must not enter git history.
 apps/api/prisma/data/*.csv
+apps/api/prisma/data/*-import/
