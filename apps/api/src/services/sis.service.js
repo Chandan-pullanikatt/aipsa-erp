@@ -490,7 +490,15 @@ async function listJoinRequests(tenantId, { classId, status = 'PENDING', page = 
       take: parseInt(limit),
       orderBy: { createdAt: 'desc' },
       include: {
-        class: { select: { id: true, name: true } },
+        class: {
+          select: {
+            id: true,
+            name: true,
+            // Sections travel with the request so the reviewer can pick one at approval
+            // time — the requesting student has no way to know their section.
+            sections: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
+          },
+        },
         reviewedBy: { select: { firstName: true, lastName: true } },
       },
     }),
@@ -510,7 +518,7 @@ function buildDefaultPassword(schoolName, admissionNumber) {
   return `aipsa${firstWord}${adm}`;
 }
 
-async function approveJoinRequest(tenantId, requestId, reviewerId) {
+async function approveJoinRequest(tenantId, requestId, reviewerId, { sectionId } = {}) {
   const req = await prisma.classJoinRequest.findFirst({
     where: { id: requestId, tenantId },
     include: {
@@ -521,6 +529,17 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
   if (!req) throw Object.assign(new Error('Request not found'), { status: 404 });
   if (req.status !== 'PENDING') {
     throw Object.assign(new Error(`Request is already ${req.status.toLowerCase()}`), { status: 409 });
+  }
+
+  // Section is optional, but if given it must belong to the class being joined.
+  let sectionName = null;
+  if (sectionId) {
+    const section = await prisma.section.findFirst({
+      where: { id: sectionId, tenantId, classId: req.classId },
+      select: { name: true },
+    });
+    if (!section) throw Object.assign(new Error('Section not found in this class'), { status: 404 });
+    sectionName = section.name;
   }
 
   // Check email not already used
@@ -569,6 +588,7 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
         state: req.state || undefined,
         photoUrl: req.photoUrl || undefined,
         classId: req.classId,
+        sectionId: sectionId || undefined,
         userId: user.id,
         status: 'ACTIVE',
       },
@@ -597,6 +617,8 @@ async function approveJoinRequest(tenantId, requestId, reviewerId) {
     admissionNumber,
     defaultPassword: result.defaultPassword,
     studentId: result.student.id,
+    className: req.class.name,
+    sectionName,
   };
 }
 

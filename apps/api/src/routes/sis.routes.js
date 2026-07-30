@@ -252,7 +252,8 @@ router.patch('/join-requests/:id/approve',
   authorize('SCHOOL_ADMIN', 'TEACHER'),
   async (req, res, next) => {
     try {
-      res.json(await sis.approveJoinRequest(req.tenant.id, req.params.id, req.user.id));
+      const { sectionId } = req.body || {};
+      res.json(await sis.approveJoinRequest(req.tenant.id, req.params.id, req.user.id, { sectionId }));
     } catch (err) { next(err); }
   }
 );

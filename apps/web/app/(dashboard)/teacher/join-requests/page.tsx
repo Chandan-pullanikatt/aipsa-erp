@@ -22,7 +22,7 @@ interface JoinRequest {
   photoUrl: string | null;
   status: RequestStatus;
   createdAt: string;
-  class: { id: string; name: string };
+  class: { id: string; name: string; sections: { id: string; name: string }[] };
   reviewedBy: { firstName: string; lastName: string } | null;
 }
 
@@ -38,7 +38,14 @@ export default function JoinRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<RequestStatus>('PENDING');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [approvalInfo, setApprovalInfo] = useState<{ admissionNumber: string; defaultPassword: string } | null>(null);
+  const [approvalInfo, setApprovalInfo] = useState<{
+    admissionNumber: string;
+    defaultPassword: string;
+    className: string;
+    sectionName: string | null;
+  } | null>(null);
+  // requestId -> chosen sectionId; '' means "assign later"
+  const [sectionChoice, setSectionChoice] = useState<Record<string, string>>({});
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -54,8 +61,15 @@ export default function JoinRequestsPage() {
   async function handleApprove(id: string) {
     setActionLoading(id);
     try {
-      const { data } = await api.patch(`/sis/join-requests/${id}/approve`);
-      setApprovalInfo({ admissionNumber: data.admissionNumber, defaultPassword: data.defaultPassword });
+      const { data } = await api.patch(`/sis/join-requests/${id}/approve`, {
+        sectionId: sectionChoice[id] || undefined,
+      });
+      setApprovalInfo({
+        admissionNumber: data.admissionNumber,
+        defaultPassword: data.defaultPassword,
+        className: data.className,
+        sectionName: data.sectionName,
+      });
       fetchRequests();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to approve request.');
@@ -97,6 +111,16 @@ export default function JoinRequestsPage() {
           <div className="space-y-1 font-mono text-xs bg-white border border-green-100 rounded-lg p-3">
             <p><span className="text-gray-500">Admission No:</span> <strong>{approvalInfo.admissionNumber}</strong></p>
             <p><span className="text-gray-500">Temp Password:</span> <strong>{approvalInfo.defaultPassword}</strong></p>
+            <p>
+              <span className="text-gray-500">Placed in:</span>{' '}
+              <strong>
+                {approvalInfo.className}
+                {approvalInfo.sectionName ? ` — Section ${approvalInfo.sectionName}` : ''}
+              </strong>
+              {!approvalInfo.sectionName && (
+                <span className="text-amber-600"> (no section — assign from the Students page)</span>
+              )}
+            </p>
           </div>
           <p className="text-xs text-green-600 mt-2">Share these login details with the student. They will be asked to change their password on first login.</p>
           <button onClick={() => setApprovalInfo(null)} className="text-xs text-green-700 underline mt-1">Dismiss</button>
@@ -189,6 +213,19 @@ export default function JoinRequestsPage() {
                     {statusFilter === 'PENDING' && (
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {req.class.sections.length > 0 && (
+                            <select
+                              value={sectionChoice[req.id] ?? ''}
+                              onChange={e => setSectionChoice(prev => ({ ...prev, [req.id]: e.target.value }))}
+                              disabled={actionLoading === req.id}
+                              className="border border-gray-200 rounded-lg text-xs px-2 py-1.5 text-gray-600 bg-white disabled:opacity-50"
+                            >
+                              <option value="">No section</option>
+                              {req.class.sections.map(s => (
+                                <option key={s.id} value={s.id}>Section {s.name}</option>
+                              ))}
+                            </select>
+                          )}
                           <button
                             onClick={() => handleApprove(req.id)}
                             disabled={actionLoading === req.id}
