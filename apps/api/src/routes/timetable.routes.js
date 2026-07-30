@@ -2,6 +2,7 @@
 const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
+const { assertSectionInTenant } = require('../lib/tenantScope');
 const svc = require('../services/timetable.service');
 
 const router = Router();
@@ -15,12 +16,13 @@ function validate(req, res, next) {
 const adminOrTeacher = authorize('SCHOOL_ADMIN', 'TEACHER');
 const adminOnly = authorize('SCHOOL_ADMIN');
 
-// GET  /api/timetable?classId=&academicYear=
+// GET  /api/timetable?classId=&sectionId=&academicYear=
 router.get('/', async (req, res, next) => {
   try {
-    const { classId, academicYear } = req.query;
+    const { classId, sectionId, academicYear } = req.query;
     if (!classId) return res.status(422).json({ error: 'classId required' });
-    res.json(await svc.getClassTimetable(req.tenant.id, classId, academicYear));
+    await assertSectionInTenant(req.tenant.id, sectionId);
+    res.json(await svc.getClassTimetable(req.tenant.id, classId, sectionId, academicYear));
   } catch (e) { next(e); }
 });
 
@@ -33,6 +35,7 @@ router.post('/period', adminOrTeacher, [
   body('endTime').matches(/^\d{2}:\d{2}$/),
 ], validate, async (req, res, next) => {
   try {
+    await assertSectionInTenant(req.tenant.id, req.body.sectionId);
     res.json(await svc.savePeriod(req.tenant.id, req.body));
   } catch (e) { next(e); }
 });
@@ -40,28 +43,31 @@ router.post('/period', adminOrTeacher, [
 // DELETE /api/timetable/period — clear a single period
 router.delete('/period', adminOnly, async (req, res, next) => {
   try {
-    const { classId, academicYear, dayOfWeek, periodNumber } = req.query;
-    await svc.clearPeriod(req.tenant.id, classId, academicYear, dayOfWeek, parseInt(periodNumber));
+    const { classId, sectionId, academicYear, dayOfWeek, periodNumber } = req.query;
+    await assertSectionInTenant(req.tenant.id, sectionId);
+    await svc.clearPeriod(req.tenant.id, classId, sectionId, academicYear, dayOfWeek, parseInt(periodNumber));
     res.json({ message: 'Cleared.' });
   } catch (e) { next(e); }
 });
 
-// POST /api/timetable/bulk — replace entire timetable for a class
+// POST /api/timetable/bulk — replace entire timetable for a class (or one section)
 router.post('/bulk', adminOnly, [
   body('classId').notEmpty(),
   body('periods').isArray(),
 ], validate, async (req, res, next) => {
   try {
-    const { classId, academicYear, periods } = req.body;
-    res.json(await svc.bulkSaveTimetable(req.tenant.id, classId, academicYear, periods));
+    const { classId, sectionId, academicYear, periods } = req.body;
+    await assertSectionInTenant(req.tenant.id, sectionId);
+    res.json(await svc.bulkSaveTimetable(req.tenant.id, classId, sectionId, academicYear, periods));
   } catch (e) { next(e); }
 });
 
-// DELETE /api/timetable/class — clear all periods for a class
+// DELETE /api/timetable/class — clear all periods for a class (or one section)
 router.delete('/class', adminOnly, async (req, res, next) => {
   try {
-    const { classId, academicYear } = req.query;
-    await svc.clearClassTimetable(req.tenant.id, classId, academicYear);
+    const { classId, sectionId, academicYear } = req.query;
+    await assertSectionInTenant(req.tenant.id, sectionId);
+    await svc.clearClassTimetable(req.tenant.id, classId, sectionId, academicYear);
     res.json({ message: 'Timetable cleared.' });
   } catch (e) { next(e); }
 });
@@ -75,12 +81,13 @@ router.get('/teacher', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/timetable/conflicts?classId=&academicYear=
+// GET /api/timetable/conflicts?classId=&sectionId=&academicYear=
 router.get('/conflicts', adminOnly, async (req, res, next) => {
   try {
-    const { classId, academicYear } = req.query;
+    const { classId, sectionId, academicYear } = req.query;
     if (!classId) return res.status(422).json({ error: 'classId required' });
-    res.json(await svc.checkConflicts(req.tenant.id, classId, academicYear));
+    await assertSectionInTenant(req.tenant.id, sectionId);
+    res.json(await svc.checkConflicts(req.tenant.id, classId, sectionId, academicYear));
   } catch (e) { next(e); }
 });
 

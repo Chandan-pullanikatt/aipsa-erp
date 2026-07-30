@@ -77,6 +77,12 @@ router.delete('/sections/:id', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.patch('/sections/:id', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.patchSection(req.tenant.id, req.params.id, req.body));
+  } catch (err) { next(err); }
+});
+
 // ─── Students ────────────────────────────────────────────────────────────────
 
 router.get('/students', async (req, res, next) => {

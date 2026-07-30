@@ -23,8 +23,22 @@ import {
 type Tab = 'class' | 'teacher' | 'generate';
 
 interface ClassItem { id: string; name: string; }
-interface Subject { id: string; name: string; code: string | null; }
+interface SubjectTeacherRow { teacherId: string; sectionId: string | null; isPrimary: boolean; }
+interface Subject { id: string; name: string; code: string | null; teacherId?: string | null; teachers?: SubjectTeacherRow[]; }
 interface Teacher { id: string; firstName: string; lastName: string; }
+interface SectionItem { id: string; name: string; }
+
+// Mirrors the backend's teachersForSection: a section-specific SubjectTeacher row
+// wins over the class-wide (sectionId null) ones for that section; falls back to
+// the subject's legacy single teacherId when there are no rows at all. Used only
+// to decide dropdown ordering, not as a source of truth.
+function assignedTeacherIds(subject: Subject, sectionId: string): string[] {
+  const rows = subject.teachers || [];
+  const scoped = sectionId ? rows.filter(r => r.sectionId === sectionId) : [];
+  const picked = scoped.length > 0 ? scoped : rows.filter(r => !r.sectionId);
+  if (picked.length > 0) return picked.map(r => r.teacherId);
+  return subject.teacherId ? [subject.teacherId] : [];
+}
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as const;
 const DAY_SHORT: Record<string, string> = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat' };
@@ -98,6 +112,8 @@ export default function TimetablePage() {
 
 function ClassTimetableTab({ classes, teachers, academicYear }: { classes: ClassItem[]; teachers: Teacher[]; academicYear: string }) {
   const [classId, setClassId] = useState('');
+  const [sections, setSections] = useState<SectionItem[]>([]);
+  const [sectionId, setSectionId] = useState('');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [periodConfig, setPeriodConfig] = useState<PeriodConfig[]>(DEFAULT_PERIODS);
   const [grid, setGrid] = useState<Record<string, CellData>>({});
@@ -108,15 +124,25 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
   const [editingConfig, setEditingConfig] = useState(false);
 
   useEffect(() => {
+    if (!classId) { setSections([]); setSectionId(''); return; }
+    api.get(`/sis/classes/${classId}/sections`).then(r => {
+      setSections(r.data);
+      setSectionId(r.data.length > 0 ? r.data[0].id : '');
+    }).catch(console.error);
+  }, [classId]);
+
+  useEffect(() => {
     if (!classId) return;
+    if (sections.length > 0 && !sectionId) return; // waiting for a section to be picked
     api.get('/exams/subjects', { params: { classId } }).then(r => setSubjects(r.data)).catch(console.error);
     loadTimetable();
-  }, [classId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId, sectionId]);
 
   async function loadTimetable() {
     if (!classId) return;
     try {
-      const { data } = await api.get('/timetable', { params: { classId, academicYear } });
+      const { data } = await api.get('/timetable', { params: { classId, sectionId: sectionId || undefined, academicYear } });
       const newGrid: Record<string, CellData> = {};
       const seenPeriods = new Set<number>();
 
@@ -171,8 +197,8 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
           });
         });
       });
-      await api.post('/timetable/bulk', { classId, academicYear, periods });
-      const conflictRes = await api.get('/timetable/conflicts', { params: { classId, academicYear } });
+      await api.post('/timetable/bulk', { classId, sectionId: sectionId || undefined, academicYear, periods });
+      const conflictRes = await api.get('/timetable/conflicts', { params: { classId, sectionId: sectionId || undefined, academicYear } });
       setConflicts(conflictRes.data);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -181,7 +207,7 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
 
   async function handleClear() {
     if (!confirm('Clear the entire timetable for this class?')) return;
-    await api.delete('/timetable/class', { params: { classId, academicYear } });
+    await api.delete('/timetable/class', { params: { classId, sectionId: sectionId || undefined, academicYear } });
     setGrid({});
     setConflicts([]);
   }
@@ -214,7 +240,17 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
             {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        
+
+        {classId && sections.length > 0 && (
+          <div className="min-w-[160px]">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-1.5">Section</label>
+            <select value={sectionId} onChange={e => { setSectionId(e.target.value); setLoaded(false); setGrid({}); }}
+              className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all">
+              {sections.map(s => <option key={s.id} value={s.id}>Section {s.name}</option>)}
+            </select>
+          </div>
+        )}
+
         {classId && (
           <div className="flex flex-wrap items-center gap-3 ml-auto">
             <button onClick={() => setEditingConfig(e => !e)} 
@@ -354,7 +390,23 @@ function ClassTimetableTab({ classes, teachers, academicYear }: { classes: Class
                               <select value={cell.teacherId} onChange={e => setCell(day, pc.number, { teacherId: e.target.value })}
                                 className="flex-1 min-w-0 py-1 text-xs bg-transparent focus:outline-none text-[#6B7280] font-medium hover:text-[#1A1D23] cursor-pointer appearance-none truncate">
                                 <option value="">Teacher</option>
-                                {teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+                                {(() => {
+                                  const subj = subjectById[cell.subjectId];
+                                  const assignedIds = subj ? new Set(assignedTeacherIds(subj, sectionId)) : new Set<string>();
+                                  const assigned = teachers.filter(t => assignedIds.has(t.id));
+                                  const others = teachers.filter(t => !assignedIds.has(t.id));
+                                  if (assigned.length === 0) return teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>);
+                                  return (
+                                    <>
+                                      <optgroup label="Assigned to this subject">
+                                        {assigned.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+                                      </optgroup>
+                                      <optgroup label="Others">
+                                        {others.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+                                      </optgroup>
+                                    </>
+                                  );
+                                })()}
                               </select>
                               <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
                             </div>
@@ -530,7 +582,57 @@ function TeacherScheduleTab({ teachers, academicYear }: { teachers: Teacher[]; a
 interface Slot { periodNumber: number; startTime: string; endTime: string; isBreak?: boolean; breakLabel?: string; }
 interface Availability { id: string; teacherId: string; dayOfWeek: string; periodNumber: number | null; reason: string | null; teacher?: { firstName: string; lastName: string }; }
 interface GenReport { feasible: boolean; totalDemands: number; placed: number; unplacedCount: number; unplaced: string[]; warnings: string[]; seed: number; }
-interface Draft { classId: string; className: string; periods: any[]; }
+interface Draft { classId: string; sectionId: string | null; className: string; sectionName: string | null; label: string; periods: any[]; }
+
+function draftUnitKey(d: { classId: string; sectionId: string | null }) { return `${d.classId}|${d.sectionId || ''}`; }
+
+// Compact read-only grid shared by the current-vs-generated comparison. Caller
+// supplies how to name the subject/teacher for a cell since the two sources
+// (saved periods vs. generated draft periods) shape that data differently.
+function MiniGrid({ days, periodNumbers, byCell, nameOf, teacherOf }: {
+  days: readonly string[]; periodNumbers: number[]; byCell: Record<string, any>;
+  nameOf: (p: any) => string | null | undefined; teacherOf: (p: any) => string | null | undefined;
+}) {
+  return (
+    <table className="w-full min-w-[600px] text-sm border-collapse">
+      <thead>
+        <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+          <th className="px-3 py-2 text-left text-[10px] font-bold text-[#4B5563] uppercase tracking-wider w-24 border-r border-[#E5E7EB]">Period</th>
+          {days.map(day => <th key={day} className="px-2 py-2 text-center text-[10px] font-bold text-[#4B5563] uppercase tracking-wider border-r border-[#E5E7EB] last:border-0">{DAY_SHORT[day]}</th>)}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-[#E5E7EB]">
+        {periodNumbers.map(pn => {
+          const sample = byCell[`${days[0]}-${pn}`];
+          const isBreak = sample?.isBreak;
+          return (
+            <tr key={pn} className={isBreak ? 'bg-[#FFFBEB]/40' : ''}>
+              <td className="px-3 py-2 border-r border-[#E5E7EB] bg-[#F9FAFB]/20">
+                <p className="text-[11px] font-bold text-[#1A1D23]">{isBreak ? (sample?.breakLabel || 'Break') : `Period ${pn}`}</p>
+              </td>
+              {days.map(day => {
+                const cell = byCell[`${day}-${pn}`];
+                if (cell?.isBreak) return <td key={day} className="px-2 py-2 text-center border-r border-[#E5E7EB] last:border-0"><span className="text-[9px] text-[#D97706] font-bold uppercase">{cell.breakLabel || 'Break'}</span></td>;
+                const name = nameOf(cell);
+                const teacher = teacherOf(cell);
+                return (
+                  <td key={day} className="px-1.5 py-2 text-center border-r border-[#E5E7EB] last:border-0 min-w-[100px]">
+                    {name ? (
+                      <div className="p-1 rounded-md bg-[#E5F6EE]/50 border border-[#26A96B]/15">
+                        <p className="text-[11px] font-bold text-[#1D7A4A] truncate">{name}</p>
+                        {teacher && <p className="text-[9px] font-semibold text-[#0F6E56] truncate">{teacher}</p>}
+                      </div>
+                    ) : <span className="text-xs text-[#D1D5DB]">—</span>}
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
 
 function AutoGenerateTab({ classes, teachers, academicYear }: { classes: ClassItem[]; teachers: Teacher[]; academicYear: string }) {
   const [config, setConfig] = useState<{ workingDays: string[]; slots: Slot[]; maxPeriodsPerDayPerTeacher: number }>({ workingDays: [...DAYS], slots: DEFAULT_PERIODS.map(p => ({ periodNumber: p.number, startTime: p.startTime, endTime: p.endTime, isBreak: p.isBreak, breakLabel: p.label })), maxPeriodsPerDayPerTeacher: 6 });
@@ -547,8 +649,15 @@ function AutoGenerateTab({ classes, teachers, academicYear }: { classes: ClassIt
   const [generating, setGenerating] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
-  const [previewClassId, setPreviewClassId] = useState('');
+  const [previewUnitKey, setPreviewUnitKey] = useState('');
   const [error, setError] = useState('');
+
+  // Per-unit choice between the freshly generated draft and whatever is already
+  // saved. Defaults to "current" — generating never overwrites anything until
+  // the admin explicitly opts a unit into the generated version.
+  const [decisions, setDecisions] = useState<Record<string, 'current' | 'generated'>>({});
+  const [currentByUnit, setCurrentByUnit] = useState<Record<string, any[]>>({});
+  const [loadingCurrent, setLoadingCurrent] = useState(false);
 
   const teacherById = Object.fromEntries(teachers.map(t => [t.id, t]));
 
@@ -618,30 +727,64 @@ function AutoGenerateTab({ classes, teachers, academicYear }: { classes: ClassIt
     try {
       const { data } = await api.post('/timetable/generate', { academicYear });
       setResult(data);
-      setPreviewClassId(data.drafts[0]?.classId || '');
+      setDecisions({});
+      setCurrentByUnit({});
+      setPreviewUnitKey(data.drafts[0] ? draftUnitKey(data.drafts[0]) : '');
     } catch (e: any) {
       setError(e.response?.data?.error || 'Failed to generate timetable.');
     } finally { setGenerating(false); }
   }
 
+  function decisionFor(key: string) { return decisions[key] || 'current'; }
+
+  async function loadCurrentFor(draft: Draft) {
+    const key = draftUnitKey(draft);
+    if (currentByUnit[key]) return;
+    setLoadingCurrent(true);
+    try {
+      const { data } = await api.get('/timetable', { params: { classId: draft.classId, sectionId: draft.sectionId || undefined, academicYear } });
+      setCurrentByUnit(prev => ({ ...prev, [key]: data.periods }));
+    } catch {
+      setCurrentByUnit(prev => ({ ...prev, [key]: [] }));
+    } finally { setLoadingCurrent(false); }
+  }
+
   async function apply() {
     if (!result) return;
-    if (!confirm('Apply this generated timetable to all classes? This replaces their current schedules for the year.')) return;
+    const toApply = result.drafts.filter(d => decisionFor(draftUnitKey(d)) === 'generated');
+    if (toApply.length === 0) {
+      setError('Mark at least one section as "Use generated" before applying — nothing is written otherwise.');
+      return;
+    }
+    if (!confirm(`Apply the generated timetable to ${toApply.length} section${toApply.length > 1 ? 's' : ''}? Sections left on "Keep current" are untouched.`)) return;
     setApplying(true);
     setError('');
     try {
-      await api.post('/timetable/generate/apply', { academicYear, drafts: result.drafts });
+      await api.post('/timetable/generate/apply', { academicYear, drafts: toApply });
       setApplied(true);
     } catch (e: any) {
       setError(e.response?.data?.error || 'Failed to apply timetable.');
     } finally { setApplying(false); }
   }
 
-  const preview = result?.drafts.find(d => d.classId === previewClassId);
+  const preview = result?.drafts.find(d => draftUnitKey(d) === previewUnitKey);
   const previewPeriodNumbers = preview ? [...new Set(preview.periods.map((p: any) => p.periodNumber))].sort((a, b) => a - b) : [];
   const previewByCell: Record<string, any> = {};
   preview?.periods.forEach((p: any) => { previewByCell[`${p.dayOfWeek}-${p.periodNumber}`] = p; });
+  const currentPeriods = currentByUnit[previewUnitKey] || [];
+  const currentByCell: Record<string, any> = {};
+  currentPeriods.forEach((p: any) => { currentByCell[`${p.dayOfWeek}-${p.periodNumber}`] = p; });
   const previewWorkingDays = DAYS.filter(d => config.workingDays.includes(d));
+
+  useEffect(() => {
+    if (preview) loadCurrentFor(preview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewUnitKey]);
+
+  const unitStats = (result?.drafts || []).map(d => {
+    const nonBreak = d.periods.filter((p: any) => !p.isBreak);
+    return { key: draftUnitKey(d), label: d.label, filled: nonBreak.filter((p: any) => p.subjectId).length, total: nonBreak.length };
+  });
 
   return (
     <div className="space-y-6">
@@ -772,7 +915,7 @@ function AutoGenerateTab({ classes, teachers, academicYear }: { classes: ClassIt
                 <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} /> Regenerate
               </button>
               <button onClick={apply} disabled={applying || applied} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1D7A4A] text-white rounded-lg text-xs font-semibold hover:bg-[#155B37] disabled:opacity-60">
-                <Save className="w-3.5 h-3.5" /> {applied ? 'Applied ✓' : applying ? 'Applying…' : 'Apply to All Classes'}
+                <Save className="w-3.5 h-3.5" /> {applied ? 'Applied ✓' : applying ? 'Applying…' : 'Apply accepted sections'}
               </button>
             </div>
           </div>
@@ -783,58 +926,73 @@ function AutoGenerateTab({ classes, teachers, academicYear }: { classes: ClassIt
               {result.report.unplaced.map((u, i) => <p key={`u${i}`} className="text-xs font-semibold text-[#B91C1C]">✗ {u}</p>)}
             </div>
           )}
-          {applied && <p className="mt-3 text-xs font-semibold text-[#0F6E56]">Timetable applied. View it under the Class Timetable tab.</p>}
+          {applied && <p className="mt-3 text-xs font-semibold text-[#0F6E56]">Timetable applied for the accepted sections. View it under the Class Timetable tab.</p>}
         </div>
       )}
 
-      {/* Draft preview */}
+      {/* Per-section review: nothing is written until a section is explicitly
+          switched to "Use generated" and Apply is pressed. */}
+      {result && (
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+            <span className="text-xs font-bold text-[#4B5563] uppercase tracking-wider">Review by section</span>
+          </div>
+          <div className="divide-y divide-[#E5E7EB] max-h-80 overflow-y-auto">
+            {unitStats.map(u => (
+              <div key={u.key} className={`flex items-center gap-3 px-5 py-2.5 ${previewUnitKey === u.key ? 'bg-[#E5F6EE]/40' : ''}`}>
+                <button onClick={() => setPreviewUnitKey(u.key)} className="flex-1 text-left text-sm font-semibold text-[#1A1D23] hover:text-[#1D7A4A] truncate">
+                  {u.label}
+                </button>
+                <span className="text-[11px] font-semibold text-[#6B7280] shrink-0">{u.filled}/{u.total} slots filled</span>
+                <div className="flex gap-1 shrink-0 bg-[#F3F4F6] p-0.5 rounded-lg">
+                  <button
+                    onClick={() => setDecisions(prev => ({ ...prev, [u.key]: 'current' }))}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${decisionFor(u.key) === 'current' ? 'bg-white text-[#1A1D23] shadow-sm' : 'text-[#6B7280]'}`}>
+                    Keep current
+                  </button>
+                  <button
+                    onClick={() => setDecisions(prev => ({ ...prev, [u.key]: 'generated' }))}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${decisionFor(u.key) === 'generated' ? 'bg-[#1D7A4A] text-white shadow-sm' : 'text-[#6B7280]'}`}>
+                    Use generated
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Side-by-side preview for the selected section */}
       {result && preview && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-[#E5E7EB] bg-[#F9FAFB]">
-            <span className="text-xs font-bold text-[#4B5563] uppercase tracking-wider">Draft preview</span>
-            <select value={previewClassId} onChange={e => setPreviewClassId(e.target.value)} className="border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-sm bg-white font-semibold">
-              {result.drafts.map(d => <option key={d.classId} value={d.classId}>{d.className}</option>)}
-            </select>
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+            <span className="text-sm font-bold text-[#1A1D23]">{preview.label}</span>
+            <span className="text-[11px] font-semibold text-[#6B7280]">
+              {decisionFor(previewUnitKey) === 'generated' ? 'Will apply the generated grid below' : 'Will keep the current grid below'}
+            </span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px] text-sm border-collapse">
-              <thead>
-                <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                  <th className="px-4 py-3 text-left text-xs font-bold text-[#4B5563] uppercase tracking-wider w-32 border-r border-[#E5E7EB]">Period</th>
-                  {previewWorkingDays.map(day => <th key={day} className="px-3 py-3 text-center text-xs font-bold text-[#4B5563] uppercase tracking-wider border-r border-[#E5E7EB] last:border-0">{DAY_SHORT[day]}</th>)}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E5E7EB]">
-                {previewPeriodNumbers.map(pn => {
-                  const sample = previewByCell[`${previewWorkingDays[0]}-${pn}`];
-                  const isBreak = sample?.isBreak;
-                  return (
-                    <tr key={pn} className={isBreak ? 'bg-[#FFFBEB]/40' : ''}>
-                      <td className="px-4 py-2.5 border-r border-[#E5E7EB] bg-[#F9FAFB]/20">
-                        <p className="text-xs font-bold text-[#1A1D23]">{isBreak ? (sample?.breakLabel || 'Break') : `Period ${pn}`}</p>
-                        <p className="text-[10px] text-[#6B7280] font-semibold">{sample?.startTime} – {sample?.endTime}</p>
-                      </td>
-                      {previewWorkingDays.map(day => {
-                        const cell = previewByCell[`${day}-${pn}`];
-                        if (cell?.isBreak) return <td key={day} className="px-3 py-2.5 text-center border-r border-[#E5E7EB] last:border-0"><span className="text-[10px] text-[#D97706] font-bold uppercase">{cell.breakLabel || 'Break'}</span></td>;
-                        const subj = cell?.subjectId ? subjectById[cell.subjectId] : null;
-                        const teach = cell?.teacherId ? teacherById[cell.teacherId] : null;
-                        return (
-                          <td key={day} className="px-2 py-2.5 text-center border-r border-[#E5E7EB] last:border-0 min-w-[130px]">
-                            {subj ? (
-                              <div className="p-1.5 rounded-lg bg-[#E5F6EE]/50 border border-[#26A96B]/15">
-                                <p className="text-xs font-bold text-[#1D7A4A] truncate">{subj.name}</p>
-                                {teach && <p className="text-[10px] font-semibold text-[#0F6E56] truncate">{teach.firstName} {teach.lastName}</p>}
-                              </div>
-                            ) : <span className="text-xs text-[#D1D5DB]">—</span>}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[#E5E7EB]">
+            <div>
+              <p className="px-5 pt-3 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">Current (saved)</p>
+              <div className="overflow-x-auto p-3">
+                {loadingCurrent ? (
+                  <p className="text-xs text-[#9CA3AF] py-6 text-center">Loading…</p>
+                ) : currentPeriods.length === 0 ? (
+                  <p className="text-xs text-[#9CA3AF] py-6 text-center">Nothing saved yet for this section.</p>
+                ) : (
+                  <MiniGrid days={previewWorkingDays} periodNumbers={previewPeriodNumbers} byCell={currentByCell}
+                    nameOf={(p) => p?.subject?.name} teacherOf={(p) => p?.teacher ? `${p.teacher.firstName} ${p.teacher.lastName}` : null} />
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="px-5 pt-3 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">Generated (draft)</p>
+              <div className="overflow-x-auto p-3">
+                <MiniGrid days={previewWorkingDays} periodNumbers={previewPeriodNumbers} byCell={previewByCell}
+                  nameOf={(p) => p?.subjectId ? subjectById[p.subjectId]?.name : null}
+                  teacherOf={(p) => p?.teacherId && teacherById[p.teacherId] ? `${teacherById[p.teacherId].firstName} ${teacherById[p.teacherId].lastName}` : null} />
+              </div>
+            </div>
           </div>
         </div>
       )}

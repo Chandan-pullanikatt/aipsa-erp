@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { calculateGrade, currentAcademicYear } = require('./exam.service');
+const { SUBJECT_TEACHERS_INCLUDE, teachersForSection } = require('../lib/subjectTeachers');
 
 const TERMS = ['TERM_1', 'TERM_2', 'ANNUAL'];
 const CCA_GRADES = ['A', 'B', 'C'];
@@ -8,28 +9,6 @@ const CONDUCT_TRAITS = ['discipline', 'punctuality', 'neatness', 'teamwork'];
 
 const TEACHER_SELECT = { select: { id: true, firstName: true, lastName: true } };
 function teacherName(t) { return t ? `${t.firstName} ${t.lastName}` : null; }
-
-// A subject may be taught by several teachers, some scoped to one section.
-// Include this on any subject query that needs to name a teacher.
-const SUBJECT_TEACHERS_INCLUDE = {
-  teacher: TEACHER_SELECT,
-  teachers: {
-    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
-    include: { teacher: TEACHER_SELECT },
-  },
-};
-
-// Teachers of `subject` as one student sees them. A section-specific assignment
-// overrides the class-wide ones for that section; several rows for the same scope
-// means co-teaching, so all of them are returned. Falls back to Subject.teacherId
-// for subjects that predate the join table.
-function teachersForSection(subject, sectionId) {
-  const rows = subject.teachers || [];
-  const scoped = sectionId ? rows.filter(r => r.sectionId === sectionId) : [];
-  const picked = scoped.length > 0 ? scoped : rows.filter(r => !r.sectionId);
-  if (picked.length > 0) return picked.map(r => r.teacher).filter(Boolean);
-  return subject.teacher ? [subject.teacher] : [];
-}
 
 function isPrivileged(role) { return role === 'SCHOOL_ADMIN'; }
 
@@ -132,21 +111,36 @@ async function saveCcaGrades(tenantId, user, { term, records }) {
 
 // ─── Progress term: conduct / achievements / remark / publish (class teacher) ─
 
-async function assertIncharge(tenantId, classId, user) {
-  const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
+// A class with sections is managed section by section — each section's incharge
+// owns only their own section's cards. A class with no sections keeps the old
+// class-wide incharge. `sectionId` is the student's (or the caller's chosen) section;
+// omitting it while the class has sections means "no section in view", which only
+// a privileged user (not a specific class teacher) can act on.
+async function assertIncharge(tenantId, classId, user, sectionId = null) {
+  const cls = await prisma.class.findFirst({
+    where: { id: classId, tenantId },
+    include: { sections: { select: { id: true, inchargeTeacherId: true } } },
+  });
   if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
-  if (!isPrivileged(user.role) && cls.inchargeTeacherId !== user.id) {
+  if (isPrivileged(user.role)) return cls;
+
+  if (cls.sections.length > 0) {
+    const section = sectionId ? cls.sections.find(s => s.id === sectionId) : null;
+    if (!section || section.inchargeTeacherId !== user.id) {
+      throw Object.assign(new Error('Only the section\'s class teacher can manage this class\'s progress cards'), { status: 403 });
+    }
+  } else if (cls.inchargeTeacherId !== user.id) {
     throw Object.assign(new Error('Only the class teacher can manage this class\'s progress cards'), { status: 403 });
   }
   return cls;
 }
 
-async function getProgressEntry(tenantId, user, { classId, term, academicYear }) {
+async function getProgressEntry(tenantId, user, { classId, sectionId, term, academicYear }) {
   assertTerm(term);
-  await assertIncharge(tenantId, classId, user);
+  await assertIncharge(tenantId, classId, user, sectionId);
   const year = academicYear || currentAcademicYear();
   const students = await prisma.student.findMany({
-    where: { tenantId, classId, status: 'ACTIVE' },
+    where: { tenantId, classId, ...(sectionId && { sectionId }), status: 'ACTIVE' },
     orderBy: { firstName: 'asc' },
     select: { id: true, firstName: true, lastName: true, admissionNumber: true },
   });
@@ -164,7 +158,7 @@ async function saveProgressTerm(tenantId, user, { studentId, term, academicYear,
   assertTerm(term);
   const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
-  await assertIncharge(tenantId, student.classId, user);
+  await assertIncharge(tenantId, student.classId, user, student.sectionId);
   const year = academicYear || currentAcademicYear();
   const existing = await prisma.progressTerm.findUnique({
     where: { studentId_term_academicYear: { studentId, term, academicYear: year } },
@@ -181,12 +175,13 @@ async function saveProgressTerm(tenantId, user, { studentId, term, academicYear,
 
 // Build the faculty list frozen onto a published card.
 async function buildFacultySnapshot(tenantId, classId, sectionId = null) {
-  const [cls, subjects] = await Promise.all([
+  const [cls, section, subjects] = await Promise.all([
     prisma.class.findFirst({ where: { id: classId, tenantId }, include: { inchargeTeacher: TEACHER_SELECT } }),
+    sectionId ? prisma.section.findFirst({ where: { id: sectionId, tenantId }, include: { inchargeTeacher: TEACHER_SELECT } }) : null,
     prisma.subject.findMany({ where: { tenantId, classId }, orderBy: { name: 'asc' }, include: SUBJECT_TEACHERS_INCLUDE }),
   ]);
   return {
-    classTeacher: teacherName(cls?.inchargeTeacher),
+    classTeacher: teacherName(section?.inchargeTeacher || cls?.inchargeTeacher),
     subjects: subjects.map(s => {
       const names = teachersForSection(s, sectionId).map(teacherName).filter(Boolean);
       // `teacher` stays a single string so already-published cards keep rendering.
@@ -200,7 +195,7 @@ async function publishProgressTerm(tenantId, user, { studentId, term, academicYe
   assertTerm(term);
   const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
-  await assertIncharge(tenantId, student.classId, user);
+  await assertIncharge(tenantId, student.classId, user, student.sectionId);
   const year = academicYear || currentAcademicYear();
   const snapshot = await buildFacultySnapshot(tenantId, student.classId, student.sectionId);
   return prisma.progressTerm.upsert({
@@ -214,7 +209,7 @@ async function unpublishProgressTerm(tenantId, user, { studentId, term, academic
   assertTerm(term);
   const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
-  await assertIncharge(tenantId, student.classId, user);
+  await assertIncharge(tenantId, student.classId, user, student.sectionId);
   const year = academicYear || currentAcademicYear();
   const existing = await prisma.progressTerm.findUnique({
     where: { studentId_term_academicYear: { studentId, term, academicYear: year } },
@@ -237,7 +232,7 @@ async function getHolisticCard(tenantId, studentId, academicYear, viewerRole) {
     where: { id: studentId, tenantId },
     include: {
       class: { select: { id: true, name: true, inchargeTeacher: TEACHER_SELECT } },
-      section: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true, inchargeTeacher: TEACHER_SELECT } },
     },
   });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
@@ -332,7 +327,7 @@ async function getHolisticCard(tenantId, studentId, academicYear, viewerRole) {
   // Faculty block: prefer the latest published snapshot, else live.
   const latestSnapshot = [...TERMS].reverse().map(t => progressByTerm[t]).find(p => p && p.status === 'PUBLISHED' && p.facultySnapshot)?.facultySnapshot;
   const faculty = latestSnapshot || {
-    classTeacher: teacherName(student.class?.inchargeTeacher),
+    classTeacher: teacherName(student.section?.inchargeTeacher || student.class?.inchargeTeacher),
     subjects: subjects.map(s => {
       const names = teachersForSection(s, student.sectionId).map(teacherName).filter(Boolean);
       return { subject: s.name, teacher: names[0] || null, teachers: names };
@@ -369,7 +364,7 @@ async function getMyTeachers(tenantId, studentId) {
     where: { id: studentId, tenantId },
     include: {
       class: { select: { id: true, name: true, inchargeTeacher: TEACHER_SELECT } },
-      section: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true, inchargeTeacher: TEACHER_SELECT } },
     },
   });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
@@ -378,11 +373,10 @@ async function getMyTeachers(tenantId, studentId) {
     orderBy: { name: 'asc' },
     include: SUBJECT_TEACHERS_INCLUDE,
   });
+  const classTeacher = student.section?.inchargeTeacher || student.class?.inchargeTeacher;
   return {
     student: { id: student.id, name: `${student.firstName} ${student.lastName}`, class: student.class?.name || null, section: student.section?.name || null },
-    classTeacher: student.class?.inchargeTeacher
-      ? { id: student.class.inchargeTeacher.id, name: teacherName(student.class.inchargeTeacher) }
-      : null,
+    classTeacher: classTeacher ? { id: classTeacher.id, name: teacherName(classTeacher) } : null,
     subjects: subjects.map(s => {
       const resolved = teachersForSection(s, student.sectionId)
         .map(t => ({ id: t.id, name: teacherName(t) }));

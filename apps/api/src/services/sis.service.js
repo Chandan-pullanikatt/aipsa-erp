@@ -56,13 +56,18 @@ async function deleteClass(tenantId, id) {
 
 // ─── Sections ────────────────────────────────────────────────────────────────
 
+const SECTION_INCLUDE = {
+  _count: { select: { students: true } },
+  inchargeTeacher: { select: { id: true, firstName: true, lastName: true } },
+};
+
 async function listSections(tenantId, classId) {
   const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
   if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
   return prisma.section.findMany({
     where: { classId, tenantId },
     orderBy: { name: 'asc' },
-    include: { _count: { select: { students: true } } },
+    include: SECTION_INCLUDE,
   });
 }
 
@@ -71,7 +76,7 @@ async function createSection(tenantId, classId, { name }) {
   if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
   return prisma.section.create({
     data: { tenantId, classId, name: name.trim() },
-    include: { _count: { select: { students: true } } },
+    include: SECTION_INCLUDE,
   });
 }
 
@@ -81,8 +86,16 @@ async function updateSection(tenantId, id, { name }) {
   return prisma.section.update({
     where: { id },
     data: { name: name.trim() },
-    include: { _count: { select: { students: true } } },
+    include: SECTION_INCLUDE,
   });
+}
+
+async function patchSection(tenantId, id, { inchargeTeacherId }) {
+  const sec = await prisma.section.findFirst({ where: { id, tenantId } });
+  if (!sec) throw Object.assign(new Error('Section not found'), { status: 404 });
+  const data = {};
+  if (inchargeTeacherId !== undefined) data.inchargeTeacherId = inchargeTeacherId || null;
+  return prisma.section.update({ where: { id }, data, include: SECTION_INCLUDE });
 }
 
 async function deleteSection(tenantId, id) {
@@ -706,7 +719,7 @@ async function deleteStudentActivity(tenantId, activityId, requesterId, requeste
 
 module.exports = {
   listClasses, createClass, updateClass, deleteClass, patchClass,
-  listSections, createSection, updateSection, deleteSection,
+  listSections, createSection, updateSection, patchSection, deleteSection,
   listStudents, getStudent, createStudent, updateStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
   getPortalPin, getParentStudents, getStudentByUserId, setFeeAccessOverride,

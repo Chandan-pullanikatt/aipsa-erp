@@ -37,6 +37,7 @@ interface ClassItem {
 interface Section {
   id: string;
   name: string;
+  inchargeTeacher: Teacher | null;
   _count: { students: number };
 }
 
@@ -57,6 +58,7 @@ export default function ClassesPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [generatingCodeFor, setGeneratingCodeFor] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [savingSectionInchargeFor, setSavingSectionInchargeFor] = useState<string | null>(null);
 
   async function fetchClasses() {
     try {
@@ -90,6 +92,21 @@ export default function ClassesPage() {
       setError(err.response?.data?.error || 'Failed to update class incharge.');
     } finally {
       setSavingInchargeFor(null);
+    }
+  }
+
+  async function handleSetSectionIncharge(sectionId: string, classId: string, teacherId: string) {
+    setSavingSectionInchargeFor(sectionId);
+    try {
+      const { data } = await api.patch(`/sis/sections/${sectionId}`, { inchargeTeacherId: teacherId || null });
+      setSections(prev => ({
+        ...prev,
+        [classId]: (prev[classId] ?? []).map(s => s.id === sectionId ? { ...s, inchargeTeacher: data.inchargeTeacher } : s),
+      }));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update section class teacher.');
+    } finally {
+      setSavingSectionInchargeFor(null);
     }
   }
 
@@ -302,32 +319,36 @@ export default function ClassesPage() {
               {expandedClass === cls.id && (
                 <div className="border-t border-[#F3F4F6] px-4 py-4 bg-[#F9FAFB]/60 space-y-4">
 
-                  {/* Class Incharge Assignment */}
-                  <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <UserCheck className="w-3.5 h-3.5 text-[#1D7A4A]" strokeWidth={1.75} />
-                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Class Incharge Teacher</span>
+                  {/* Class Incharge Assignment — only for classes with no sections.
+                      Once a class has sections, each section gets its own class
+                      teacher below instead of one for the whole grade. */}
+                  {cls._count.sections === 0 && (
+                    <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <UserCheck className="w-3.5 h-3.5 text-[#1D7A4A]" strokeWidth={1.75} />
+                        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Class Teacher</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={cls.inchargeTeacher?.id ?? ''}
+                          onChange={(e) => handleSetIncharge(cls.id, e.target.value)}
+                          disabled={savingInchargeFor === cls.id}
+                          className="flex-1 text-sm border border-[#E5E7EB] rounded-lg bg-white text-[#1A1D23] disabled:opacity-60"
+                        >
+                          <option value="">— No class teacher assigned —</option>
+                          {teachers.map((t) => (
+                            <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                          ))}
+                        </select>
+                        {savingInchargeFor === cls.id && (
+                          <span className="text-xs text-[#1D7A4A] font-semibold animate-pulse">Saving...</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1.5">
+                        The class teacher is responsible for this class's overall administration.
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={cls.inchargeTeacher?.id ?? ''}
-                        onChange={(e) => handleSetIncharge(cls.id, e.target.value)}
-                        disabled={savingInchargeFor === cls.id}
-                        className="flex-1 text-sm border border-[#E5E7EB] rounded-lg bg-white text-[#1A1D23] disabled:opacity-60"
-                      >
-                        <option value="">— No incharge assigned —</option>
-                        {teachers.map((t) => (
-                          <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
-                        ))}
-                      </select>
-                      {savingInchargeFor === cls.id && (
-                        <span className="text-xs text-[#1D7A4A] font-semibold animate-pulse">Saving...</span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1.5">
-                      The incharge teacher is responsible for this class's overall administration.
-                    </p>
-                  </div>
+                  )}
 
                   {/* Class Join Code */}
                   <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
@@ -374,15 +395,34 @@ export default function ClassesPage() {
 
                   <div className="space-y-2">
                     {(sections[cls.id] ?? []).map((sec) => (
-                      <div key={sec.id} className="flex items-center justify-between text-sm bg-white border border-[#E5E7EB] p-2.5 rounded-lg shadow-sm">
-                        <span className="text-[#4B5563] font-semibold text-xs inline-flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#1D7A4A]"></span>
-                          Section {sec.name} 
-                          <span className="text-[#9CA3AF] font-medium">({sec._count.students} students)</span>
-                        </span>
-                        <button onClick={() => handleDeleteSection(sec.id, cls.id)} className="p-1 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
-                          <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                        </button>
+                      <div key={sec.id} className="bg-white border border-[#E5E7EB] p-2.5 rounded-lg shadow-sm space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-[#4B5563] font-semibold text-xs inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#1D7A4A]"></span>
+                            Section {sec.name}
+                            <span className="text-[#9CA3AF] font-medium">({sec._count.students} students)</span>
+                          </span>
+                          <button onClick={() => handleDeleteSection(sec.id, cls.id)} className="p-1 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 pl-3 border-l-2 border-[#F3F4F6]">
+                          <UserCheck className="w-3 h-3 text-[#9CA3AF] shrink-0" strokeWidth={1.75} />
+                          <select
+                            value={sec.inchargeTeacher?.id ?? ''}
+                            onChange={(e) => handleSetSectionIncharge(sec.id, cls.id, e.target.value)}
+                            disabled={savingSectionInchargeFor === sec.id}
+                            className="flex-1 text-xs border border-[#E5E7EB] rounded-md px-1.5 py-1 bg-white text-[#1A1D23] disabled:opacity-60"
+                          >
+                            <option value="">— No class teacher assigned —</option>
+                            {teachers.map((t) => (
+                              <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+                            ))}
+                          </select>
+                          {savingSectionInchargeFor === sec.id && (
+                            <span className="text-[10px] text-[#1D7A4A] font-semibold animate-pulse">Saving...</span>
+                          )}
+                        </div>
                       </div>
                     ))}
                     {(sections[cls.id] ?? []).length === 0 && (

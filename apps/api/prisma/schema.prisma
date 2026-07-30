@@ -157,6 +157,7 @@ model User {
   reviewedJoinRequests   ClassJoinRequest[]      @relation("JoinRequestReviewer")
   lateFeeWaivers         LateFeeWaiver[]         @relation("LateFeeWaivedBy")
   inchargeClasses        Class[]                 @relation("ClassIncharge")
+  inchargeSections       Section[]               @relation("SectionIncharge")
   addedActivities        StudentActivity[]       @relation("ActivityAddedBy")
   reviewedGatePasses     GatePass[]              @relation("GatePassReviewer")
   recordedPurchases      Purchase[]              @relation("PurchaseRecordedBy")
@@ -252,18 +253,22 @@ model Class {
 // ─── SIS: Section ────────────────────────────────────────────────────────────
 
 model Section {
-  id        String   @id @default(cuid())
-  tenantId  String
-  classId   String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(cuid())
+  tenantId          String
+  classId           String
+  name              String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  inchargeTeacherId String?
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   class           Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  inchargeTeacher User?            @relation("SectionIncharge", fields: [inchargeTeacherId], references: [id], onDelete: SetNull)
   students        Student[]
   attendance      Attendance[]
   subjectTeachers SubjectTeacher[]
+  periods         Period[]
 
   @@unique([classId, name])
   @@index([tenantId])
@@ -903,10 +908,15 @@ enum DayOfWeek {
   SATURDAY
 }
 
+// sectionId null = timetable applies to the whole class (a class with no sections).
+// Once a class has sections, its per-section rows are authoritative and the
+// class-wide (sectionId null) rows for that class are retired — see the
+// backfill in migration 20260730000001_add_section_timetables.
 model Period {
   id           String    @id @default(cuid())
   tenantId     String
   classId      String
+  sectionId    String?
   academicYear String
   dayOfWeek    DayOfWeek
   periodNumber Int
@@ -921,11 +931,13 @@ model Period {
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  section Section? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   subject Subject? @relation(fields: [subjectId], references: [id])
   teacher User?    @relation("PeriodTeacher", fields: [teacherId], references: [id])
 
-  @@unique([tenantId, classId, academicYear, dayOfWeek, periodNumber])
+  @@unique([tenantId, classId, sectionId, academicYear, dayOfWeek, periodNumber])
   @@index([tenantId, classId])
+  @@index([tenantId, sectionId])
   @@index([tenantId, teacherId])
   @@map("periods")
 }
