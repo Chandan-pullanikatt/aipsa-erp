@@ -9,6 +9,18 @@ const api = axios.create({
 // Token is stored in an httpOnly cookie managed server-side — no Authorization
 // header is needed here; the proxy route injects it from the secure cookie.
 
+// The JSON content-type above is right for almost every call, but axios keeps a
+// header it was given explicitly — so a FormData body would be sent labelled as
+// JSON, without the multipart boundary, and the API would see no file at all.
+// Dropping it here lets axios set `multipart/form-data; boundary=…` itself.
+api.interceptors.request.use((config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (typeof config.headers?.delete === 'function') config.headers.delete('Content-Type');
+    else delete (config.headers as Record<string, unknown>)['Content-Type'];
+  }
+  return config;
+});
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
