@@ -1,0 +1,62 @@
+Levana student register → import files
+Source: levanastudents.csv
+
+Kept 882 current students across 26 class-sections.
+Dropped 1938 rows.
+
+── Per class-section ─────────────────────────────
+10TH / A               34  10th__a.csv
+10TH / B               37  10th__b.csv
+10TH / C               30  10th__c.csv
+1ST / A                32  1st__a.csv
+1ST / B                30  1st__b.csv
+2ND / A                34  2nd__a.csv
+2ND / B                36  2nd__b.csv
+3RD / A                28  3rd__a.csv
+3RD / B                24  3rd__b.csv
+4TH / A                34  4th__a.csv
+4TH / B                33  4th__b.csv
+5TH / A                32  5th__a.csv
+5TH / B                33  5th__b.csv
+6TH / A                43  6th__a.csv
+6TH / B                44  6th__b.csv
+7TH / A                37  7th__a.csv
+7TH / B                43  7th__b.csv
+8TH / A                44  8th__a.csv
+8TH / B                43  8th__b.csv
+9TH / A                31  9th__a.csv
+9TH / B                41  9th__b.csv
+9TH / C                30  9th__c.csv
+LKG / NONE             39  lkg__none.csv
+NUR / NONE             23  nur__none.csv
+UKG / A                24  ukg__a.csv
+UKG / B                23  ukg__b.csv
+
+── Why rows were dropped ────────────────────────
+  228  passed out
+ 1642  marked LEFT in remarks
+   68  non-attending
+
+── Duplicate admission numbers (0) ───────────
+The importer rejects a repeated admission number, so these need fixing
+or blanking (blank means the ERP assigns one):
+
+── Students importing WITHOUT a guardian (4) ────
+Their father's name is in _all_students.csv under fatherOnRegister.
+Collect the numbers, then re-upload the same file: the importer attaches
+guardians to students it has already enrolled.
+line 1332: SAURABH PRAKASH — father "Shiv Kishor Kumar" kept out of the import (no usable phone)
+line 1686: SYED ALBANI — father "Syed Alam" kept out of the import (no usable phone)
+line 1732: JANNAT KAUSAR — father "Md. Tauhid Khan" kept out of the import (no usable phone)
+line 1931: ARUSH KUMAR — father "Niraj Kumar" kept out of the import (no usable phone)
+
+── Data quality notes (9) ─────────────────────
+line 192 (Muskan Raj): unreadable date "11.07.210"
+line 1332 (SAURABH PRAKASH): phone not a valid mobile: 620342539
+line 1686 (SYED ALBANI): no phone
+line 1732 (JANNAT KAUSAR): no phone
+line 1931 (ARUSH KUMAR): phone not a valid mobile: 935059377
+line 2304 (AYUSH KUMAR): unreadable date "29.122013"
+line 2320 (ASMITA KUMARI): unreadable date "16.032019"
+line 2594 (ANAYA AYUB KHAN): unreadable date "15.012021"
+line 2809 (ANSH SINGH): implausible birth year "06.07.2026"

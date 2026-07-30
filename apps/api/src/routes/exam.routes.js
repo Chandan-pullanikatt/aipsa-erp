@@ -22,12 +22,41 @@ router.get('/subjects', async (req, res, next) => {
 router.post('/subjects', adminOnly, [
   body('classId').notEmpty(), body('name').trim().notEmpty(),
   body('periodsPerWeek').optional().isInt({ min: 0, max: 40 }),
+  body('teachers').optional().isArray({ max: 20 }),
+  body('teachers.*.teacherId').optional().notEmpty(),
 ], validate, async (req, res, next) => {
   try { res.status(201).json(await svc.createSubject(req.tenant.id, req.body)); } catch (e) { next(e); }
 });
-router.put('/subjects/:id', adminOnly, async (req, res, next) => {
+// Same subject across many classes in one submit.
+router.post('/subjects/bulk', adminOnly, [
+  body('classIds').isArray({ min: 1, max: 60 }),
+  body('name').trim().notEmpty(),
+  body('periodsPerWeek').optional().isInt({ min: 0, max: 40 }),
+  body('teachers').optional().isArray({ max: 20 }),
+  body('teachers.*.teacherId').optional().notEmpty(),
+], validate, async (req, res, next) => {
+  try { res.status(201).json(await svc.createSubjectsBulk(req.tenant.id, req.body)); } catch (e) { next(e); }
+});
+
+router.put('/subjects/:id', adminOnly, [
+  body('periodsPerWeek').optional().isInt({ min: 0, max: 40 }),
+  body('teachers').optional().isArray({ max: 20 }),
+  body('teachers.*.teacherId').optional().notEmpty(),
+], validate, async (req, res, next) => {
   try { res.json(await svc.updateSubject(req.tenant.id, req.params.id, req.body)); } catch (e) { next(e); }
 });
+// Teacher-centric view of every class × subject, and a bulk save of one
+// teacher's assignments across all of them.
+router.get('/teachers/:teacherId/teaching-grid', adminOnly, async (req, res, next) => {
+  try { res.json(await svc.getTeachingGrid(req.tenant.id, req.params.teacherId)); } catch (e) { next(e); }
+});
+router.put('/teachers/:teacherId/subjects', adminOnly, [
+  body('assignments').isArray({ max: 400 }),
+  body('assignments.*.subjectId').notEmpty(),
+], validate, async (req, res, next) => {
+  try { res.json(await svc.setTeacherSubjects(req.tenant.id, req.params.teacherId, req.body.assignments)); } catch (e) { next(e); }
+});
+
 router.delete('/subjects/:id', adminOnly, async (req, res, next) => {
   try { await svc.deleteSubject(req.tenant.id, req.params.id); res.json({ message: 'Deleted.' }); } catch (e) { next(e); }
 });

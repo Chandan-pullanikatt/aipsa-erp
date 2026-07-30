@@ -5,7 +5,9 @@ import api from '@/lib/api';
 import { Users, UserCog, BookOpen } from 'lucide-react';
 
 interface TeacherRef { id: string; name: string; }
-interface SubjectTeacher { id: string; name: string; code: string | null; teacher: TeacherRef | null; }
+// `teachers` holds every teacher for this subject in the student's own section;
+// `teacher` is the first of them, kept for older API responses.
+interface SubjectTeacher { id: string; name: string; code: string | null; teacher: TeacherRef | null; teachers?: TeacherRef[]; }
 interface Data {
   student: { id: string; name: string; class: string | null; section: string | null };
   classTeacher: TeacherRef | null;
@@ -49,17 +51,22 @@ export default function MyTeachers({ studentId }: { studentId: string | null }) 
           <Users className="w-4 h-4 text-[#1D7A4A]" /> Subject Teachers
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {data.subjects.map(s => (
-            <div key={s.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center shrink-0">
-                {s.teacher ? <span className="font-bold text-sm text-gray-700">{initials(s.teacher.name)}</span> : <BookOpen className="w-5 h-5" />}
+          {data.subjects.map(s => {
+            const staff = s.teachers && s.teachers.length > 0 ? s.teachers : s.teacher ? [s.teacher] : [];
+            return (
+              <div key={s.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center shrink-0">
+                  {staff.length > 0 ? <span className="font-bold text-sm text-gray-700">{initials(staff[0].name)}</span> : <BookOpen className="w-5 h-5" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-800 truncate">{s.name}</p>
+                  <p className="text-xs text-gray-500 truncate" title={staff.map(t => t.name).join(', ')}>
+                    {staff.length > 0 ? staff.map(t => t.name).join(', ') : 'No teacher assigned'}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-gray-800 truncate">{s.name}</p>
-                <p className="text-xs text-gray-500 truncate">{s.teacher?.name || 'No teacher assigned'}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {data.subjects.length === 0 && <p className="text-sm text-gray-400 col-span-full py-6 text-center">No subjects mapped yet.</p>}
         </div>
       </div>

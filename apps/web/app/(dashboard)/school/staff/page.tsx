@@ -13,8 +13,9 @@ import {
   Mail, 
   User, 
   BookOpen, 
-  Search 
+  Search
 } from 'lucide-react';
+import TeachingGrid from '@/components/TeachingGrid';
 
 interface StaffUser {
   id: string;
@@ -32,14 +33,23 @@ interface ClassItem {
   name: string;
 }
 
+interface SubjectAssignment {
+  id: string;
+  teacherId: string;
+  isPrimary: boolean;
+  section: { id: string; name: string } | null;
+}
+
 interface SubjectItem {
   id: string;
   name: string;
   code: string | null;
   classId: string;
   class: { id: string; name: string } | null;
+  // The primary teacher. `teachers` holds everyone, including section-scoped rows.
   teacherId: string | null;
   teacher: { id: string; firstName: string; lastName: string } | null;
+  teachers?: SubjectAssignment[];
   periodsPerWeek?: number;
 }
 
@@ -77,7 +87,7 @@ export default function StaffPage() {
   // Teacher Subject Mapping Drawer / Modal
   const [selectedTeacher, setSelectedTeacher] = useState<StaffUser | null>(null);
   const [teacherSubjects, setTeacherSubjects] = useState<SubjectItem[]>([]);
-  const [linkSubjectId, setLinkSubjectId] = useState('');
+  const [showTeachingGrid, setShowTeachingGrid] = useState(false);
 
   // Notification overlays
   const [success, setSuccess] = useState('');
@@ -147,10 +157,14 @@ export default function StaffPage() {
     );
   }, [fetchStaff, fetchSubjects, fetchClasses, fetchJoinCode]);
 
-  // Load teacher assigned subjects for drawer
+  // Load teacher assigned subjects for drawer. Counts subjects they own outright
+  // and ones they co-teach or take for a single section.
   useEffect(() => {
     if (selectedTeacher) {
-      const assigned = subjects.filter((sub) => sub.teacherId === selectedTeacher.id);
+      const assigned = subjects.filter((sub) =>
+        sub.teacherId === selectedTeacher.id ||
+        (sub.teachers || []).some((a) => a.teacherId === selectedTeacher.id)
+      );
       setTeacherSubjects(assigned);
     } else {
       setTeacherSubjects([]);
@@ -289,33 +303,6 @@ export default function StaffPage() {
     }
   }
 
-  // Map Subject to Teacher inside Teacher Details slide-over
-  async function handleLinkSubject() {
-    if (!selectedTeacher || !linkSubjectId) return;
-
-    setError('');
-    try {
-      const payload = { teacherId: selectedTeacher.id };
-      const { data } = await api.put(`/exams/subjects/${linkSubjectId}`, payload);
-      setSubjects((prev) => prev.map((s) => (s.id === linkSubjectId ? data : s)));
-      setLinkSubjectId('');
-      setSuccess('Subject mapped to instructor.');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to link subject mapping.');
-    }
-  }
-
-  async function handleUnlinkSubject(subId: string) {
-    setError('');
-    try {
-      const payload = { teacherId: null };
-      const { data } = await api.put(`/exams/subjects/${subId}`, payload);
-      setSubjects((prev) => prev.map((s) => (s.id === subId ? data : s)));
-      setSuccess('Subject mapping detached.');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to sever subject association.');
-    }
-  }
 
   // Direct Teacher Inline Mapping
   async function handleDirectMapSubject(subjectId: string, teacherId: string | null) {
@@ -345,11 +332,6 @@ export default function StaffPage() {
     const matchesClass = subjectClassFilter === 'ALL' || s.classId === subjectClassFilter;
     return matchesSearch && matchesClass;
   });
-
-  // Filter list of unassigned subjects for mapping drop downs
-  const assignableSubjects = subjects.filter(
-    (s) => s.teacherId !== selectedTeacher?.id
-  );
 
   const onboardingTeachers = staff.filter((u) => u.role === 'TEACHER');
 
@@ -1009,37 +991,23 @@ export default function StaffPage() {
                 </button>
               </div>
 
-              {/* Mapper Link controls */}
+              {/* Bulk mapper: subjects are per class, so a teacher covering several
+                  grades is edited from one grid rather than one class at a time. */}
               <div className="bg-[#F7F8FA] border border-[#E5E7EB] rounded-lg p-4 space-y-3">
                 <h4 className="font-display text-[14px] font-semibold text-[#1A1D23]">
-                  Link Subject Map
+                  Teaching Assignments
                 </h4>
                 <p className="font-body text-[12px] text-[#6B7280] leading-relaxed">
-                  Map a new syllabus subject directory directly to this instructor.
+                  Tick every subject this instructor takes across all classes and sections in one grid.
                 </p>
 
-                <div className="flex gap-2">
-                  <select
-                    value={linkSubjectId}
-                    onChange={(e) => setLinkSubjectId(e.target.value)}
-                    className="flex-1"
-                  >
-                    <option value="">-- Choose Subject to Link --</option>
-                    {assignableSubjects.map((sub) => (
-                      <option key={sub.id} value={sub.id}>
-                        [{sub.class?.name || 'Class'}] {sub.name} {sub.code ? `(${sub.code})` : ''}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    onClick={handleLinkSubject}
-                    disabled={!linkSubjectId}
-                    className="inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px] disabled:opacity-50 shrink-0"
-                  >
-                    Link
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowTeachingGrid(true)}
+                  className="w-full inline-flex items-center justify-center gap-1.5 bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px]"
+                >
+                  <BookOpen className="w-4 h-4" strokeWidth={1.75} />
+                  Assign Subjects Across Classes
+                </button>
               </div>
 
               {/* Assigned Subjects Lists */}
@@ -1050,33 +1018,39 @@ export default function StaffPage() {
 
                 {teacherSubjects.length === 0 ? (
                   <div className="py-8 text-center border border-[#E5E7EB] bg-[#F7F8FA] rounded-lg text-[14px] text-[#6B7280] leading-relaxed">
-                    No active academic courses assigned to this instructor. Use the dropdown tool above to map courses.
+                    No academic courses assigned to this instructor. Use the grid above to map courses.
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {teacherSubjects.map((sub) => (
-                      <div
-                        key={sub.id}
-                        className="border border-[#E5E7EB] bg-white rounded-lg p-3 flex items-center justify-between gap-3 text-xs"
-                      >
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded bg-[#EEF2FF] text-[#4338CA]">
-                              {sub.class?.name || 'Class'}
-                            </span>
-                            <span className="font-semibold text-[#1A1D23] text-sm">{sub.name}</span>
-                          </div>
-                          {sub.code && <p className="text-[12px] text-[#6B7280] mt-0.5">{sub.code}</p>}
-                        </div>
-
-                        <button
-                          onClick={() => handleUnlinkSubject(sub.id)}
-                          className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#DC2626] hover:bg-[#FCEBEB] h-8 px-3 rounded-md font-medium transition-colors duration-150 text-[12px]"
+                    {teacherSubjects.map((sub) => {
+                      const mine = (sub.teachers || []).filter((a) => a.teacherId === selectedTeacher.id);
+                      const sections = mine.filter((a) => a.section).map((a) => a.section!.name);
+                      const isPrimary = sub.teacherId === selectedTeacher.id;
+                      return (
+                        <div
+                          key={sub.id}
+                          className="border border-[#E5E7EB] bg-white rounded-lg p-3 flex items-center justify-between gap-3 text-xs"
                         >
-                          Detach
-                        </button>
-                      </div>
-                    ))}
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded bg-[#EEF2FF] text-[#4338CA]">
+                                {sub.class?.name || 'Class'}
+                              </span>
+                              <span className="font-semibold text-[#1A1D23] text-sm">{sub.name}</span>
+                              {isPrimary && (
+                                <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded bg-[#D6F0E4] text-[#0F6E56]">
+                                  Primary
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[12px] text-[#6B7280] mt-0.5">
+                              {sections.length > 0 ? `Section ${sections.join(', ')}` : 'All sections'}
+                              {sub.code ? ` · ${sub.code}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1090,6 +1064,14 @@ export default function StaffPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {selectedTeacher && showTeachingGrid && (
+        <TeachingGrid
+          teacherId={selectedTeacher.id}
+          onClose={() => setShowTeachingGrid(false)}
+          onSaved={() => { fetchSubjects(); setSuccess('Teaching assignments saved.'); }}
+        />
       )}
     </div>
   );

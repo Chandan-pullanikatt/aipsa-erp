@@ -68,12 +68,17 @@ async function deleteHomework(tenantId, id, userId, userRole) {
   await prisma.homework.delete({ where: { id } });
 }
 
-// Returns distinct classes a teacher is assigned to via subjects or timetable periods
+// Returns distinct classes a teacher is assigned to, via the subject they own,
+// a co-teaching/section assignment, or a timetable period.
 async function getTeacherClasses(tenantId, teacherId) {
-  const [subjectClasses, periodClasses] = await Promise.all([
+  const [subjectClasses, assignedClasses, periodClasses] = await Promise.all([
     prisma.subject.findMany({
       where: { tenantId, teacherId },
       select: { class: { select: { id: true, name: true } } },
+    }),
+    prisma.subjectTeacher.findMany({
+      where: { tenantId, teacherId },
+      select: { subject: { select: { class: { select: { id: true, name: true } } } } },
     }),
     prisma.period.findMany({
       where: { tenantId, teacherId },
@@ -81,7 +86,11 @@ async function getTeacherClasses(tenantId, teacherId) {
       distinct: ['classId'],
     }),
   ]);
-  const all = [...subjectClasses.map(s => s.class), ...periodClasses.map(p => p.class)];
+  const all = [
+    ...subjectClasses.map(s => s.class),
+    ...assignedClasses.map(a => a.subject.class),
+    ...periodClasses.map(p => p.class),
+  ];
   const seen = new Set();
   return all.filter(c => seen.has(c.id) ? false : seen.add(c.id));
 }

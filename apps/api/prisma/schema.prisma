@@ -35,6 +35,7 @@ model Tenant {
   announcements           Announcement[]
   notifications           Notification[]
   subjects                Subject[]
+  subjectTeachers         SubjectTeacher[]
   exams                   Exam[]
   examResults             ExamResult[]
   periods                 Period[]
@@ -147,6 +148,7 @@ model User {
   createdAnnouncements   Announcement[]          @relation("AnnouncementCreator")
   notifications          Notification[]          @relation("UserNotifications")
   taughtSubjects         Subject[]               @relation("SubjectTeacher")
+  subjectAssignments     SubjectTeacher[]        @relation("SubjectTeacherAssignment")
   taughtPeriods          Period[]                @relation("PeriodTeacher")
   unavailability         TeacherAvailability[]   @relation("TeacherUnavailability")
   postedHomeworks        Homework[]              @relation("HomeworkTeacher")
@@ -257,10 +259,11 @@ model Section {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  class      Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  students   Student[]
-  attendance Attendance[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class           Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students        Student[]
+  attendance      Attendance[]
+  subjectTeachers SubjectTeacher[]
 
   @@unique([classId, name])
   @@index([tenantId])
@@ -709,9 +712,10 @@ model Subject {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  class        Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
-  teacher      User?         @relation("SubjectTeacher", fields: [teacherId], references: [id])
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class        Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher      User?              @relation("SubjectTeacher", fields: [teacherId], references: [id])
+  teachers     SubjectTeacher[]
   examResults  ExamResult[]
   periods      Period[]
   homeworks    Homework[]
@@ -720,6 +724,37 @@ model Subject {
   @@unique([tenantId, classId, name])
   @@index([tenantId, classId])
   @@map("subjects")
+}
+
+// Who actually teaches a subject. A subject belongs to a class, so a school with
+// four maths teachers usually needs no rows here — each class's Maths row carries
+// its own teacher. This table exists for the two cases one column cannot express:
+// a different teacher per section (6-A vs 6-B), and co-teaching (Physics/Biology
+// splitting Science for the same class).
+//
+// sectionId null = teaches this subject for every section of the class.
+// Subject.teacherId is kept in sync with the isPrimary row and remains the
+// fallback for consumers that need exactly one name (timetable generator).
+model SubjectTeacher {
+  id        String   @id @default(cuid())
+  tenantId  String
+  subjectId String
+  teacherId String
+  sectionId String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher User     @relation("SubjectTeacherAssignment", fields: [teacherId], references: [id], onDelete: Cascade)
+  section Section? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, teacherId, sectionId])
+  @@index([tenantId, teacherId])
+  @@index([tenantId, subjectId])
+  @@index([tenantId, sectionId])
+  @@map("subject_teachers")
 }
 
 enum ExamStatus {

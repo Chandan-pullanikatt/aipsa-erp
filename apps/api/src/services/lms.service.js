@@ -6,7 +6,11 @@ async function listLmsSubjects(tenantId, filters = {}) {
   const where = {
     tenantId,
     ...(classId && { classId }),
-    ...(teacherId && { teacherId }),
+    // A teacher's subjects are the ones they own plus any they co-teach or teach
+    // for a single section.
+    ...(teacherId && {
+      OR: [{ teacherId }, { teachers: { some: { teacherId } } }],
+    }),
     ...(search && {
       name: { contains: search, mode: 'insensitive' },
     }),
@@ -18,6 +22,13 @@ async function listLmsSubjects(tenantId, filters = {}) {
     include: {
       class: { select: { id: true, name: true } },
       teacher: { select: { id: true, firstName: true, lastName: true } },
+      teachers: {
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        include: {
+          teacher: { select: { id: true, firstName: true, lastName: true } },
+          section: { select: { id: true, name: true } },
+        },
+      },
       _count: { select: { lmsMaterials: true } },
     },
   });

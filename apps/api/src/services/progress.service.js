@@ -9,6 +9,28 @@ const CONDUCT_TRAITS = ['discipline', 'punctuality', 'neatness', 'teamwork'];
 const TEACHER_SELECT = { select: { id: true, firstName: true, lastName: true } };
 function teacherName(t) { return t ? `${t.firstName} ${t.lastName}` : null; }
 
+// A subject may be taught by several teachers, some scoped to one section.
+// Include this on any subject query that needs to name a teacher.
+const SUBJECT_TEACHERS_INCLUDE = {
+  teacher: TEACHER_SELECT,
+  teachers: {
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+    include: { teacher: TEACHER_SELECT },
+  },
+};
+
+// Teachers of `subject` as one student sees them. A section-specific assignment
+// overrides the class-wide ones for that section; several rows for the same scope
+// means co-teaching, so all of them are returned. Falls back to Subject.teacherId
+// for subjects that predate the join table.
+function teachersForSection(subject, sectionId) {
+  const rows = subject.teachers || [];
+  const scoped = sectionId ? rows.filter(r => r.sectionId === sectionId) : [];
+  const picked = scoped.length > 0 ? scoped : rows.filter(r => !r.sectionId);
+  if (picked.length > 0) return picked.map(r => r.teacher).filter(Boolean);
+  return subject.teacher ? [subject.teacher] : [];
+}
+
 function isPrivileged(role) { return role === 'SCHOOL_ADMIN'; }
 
 // ─── CCA areas (admin config) ────────────────────────────────────────────────
@@ -158,14 +180,18 @@ async function saveProgressTerm(tenantId, user, { studentId, term, academicYear,
 }
 
 // Build the faculty list frozen onto a published card.
-async function buildFacultySnapshot(tenantId, classId) {
+async function buildFacultySnapshot(tenantId, classId, sectionId = null) {
   const [cls, subjects] = await Promise.all([
     prisma.class.findFirst({ where: { id: classId, tenantId }, include: { inchargeTeacher: TEACHER_SELECT } }),
-    prisma.subject.findMany({ where: { tenantId, classId }, orderBy: { name: 'asc' }, include: { teacher: TEACHER_SELECT } }),
+    prisma.subject.findMany({ where: { tenantId, classId }, orderBy: { name: 'asc' }, include: SUBJECT_TEACHERS_INCLUDE }),
   ]);
   return {
     classTeacher: teacherName(cls?.inchargeTeacher),
-    subjects: subjects.map(s => ({ subject: s.name, teacher: teacherName(s.teacher) })),
+    subjects: subjects.map(s => {
+      const names = teachersForSection(s, sectionId).map(teacherName).filter(Boolean);
+      // `teacher` stays a single string so already-published cards keep rendering.
+      return { subject: s.name, teacher: names[0] || null, teachers: names };
+    }),
     frozenAt: new Date().toISOString(),
   };
 }
@@ -176,7 +202,7 @@ async function publishProgressTerm(tenantId, user, { studentId, term, academicYe
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
   await assertIncharge(tenantId, student.classId, user);
   const year = academicYear || currentAcademicYear();
-  const snapshot = await buildFacultySnapshot(tenantId, student.classId);
+  const snapshot = await buildFacultySnapshot(tenantId, student.classId, student.sectionId);
   return prisma.progressTerm.upsert({
     where: { studentId_term_academicYear: { studentId, term, academicYear: year } },
     create: { tenantId, studentId, term, academicYear: year, status: 'PUBLISHED', publishedAt: new Date(), publishedById: user.id, facultySnapshot: snapshot },
@@ -218,7 +244,7 @@ async function getHolisticCard(tenantId, studentId, academicYear, viewerRole) {
   const classId = student.classId || '';
 
   const [subjects, termExams, ccaAreas, progressTerms] = await Promise.all([
-    prisma.subject.findMany({ where: { tenantId, classId }, orderBy: { name: 'asc' }, include: { teacher: TEACHER_SELECT } }),
+    prisma.subject.findMany({ where: { tenantId, classId }, orderBy: { name: 'asc' }, include: SUBJECT_TEACHERS_INCLUDE }),
     prisma.exam.findMany({ where: { tenantId, classId, academicYear: year, term: { not: null } } }),
     prisma.ccaArea.findMany({ where: { tenantId, classId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] }),
     prisma.progressTerm.findMany({ where: { tenantId, studentId, academicYear: year } }),
@@ -307,7 +333,10 @@ async function getHolisticCard(tenantId, studentId, academicYear, viewerRole) {
   const latestSnapshot = [...TERMS].reverse().map(t => progressByTerm[t]).find(p => p && p.status === 'PUBLISHED' && p.facultySnapshot)?.facultySnapshot;
   const faculty = latestSnapshot || {
     classTeacher: teacherName(student.class?.inchargeTeacher),
-    subjects: subjects.map(s => ({ subject: s.name, teacher: teacherName(s.teacher) })),
+    subjects: subjects.map(s => {
+      const names = teachersForSection(s, student.sectionId).map(teacherName).filter(Boolean);
+      return { subject: s.name, teacher: names[0] || null, teachers: names };
+    }),
     frozenAt: null,
   };
 
@@ -347,17 +376,23 @@ async function getMyTeachers(tenantId, studentId) {
   const subjects = await prisma.subject.findMany({
     where: { tenantId, classId: student.classId || '' },
     orderBy: { name: 'asc' },
-    include: { teacher: TEACHER_SELECT },
+    include: SUBJECT_TEACHERS_INCLUDE,
   });
   return {
     student: { id: student.id, name: `${student.firstName} ${student.lastName}`, class: student.class?.name || null, section: student.section?.name || null },
     classTeacher: student.class?.inchargeTeacher
       ? { id: student.class.inchargeTeacher.id, name: teacherName(student.class.inchargeTeacher) }
       : null,
-    subjects: subjects.map(s => ({
-      id: s.id, name: s.name, code: s.code,
-      teacher: s.teacher ? { id: s.teacher.id, name: teacherName(s.teacher) } : null,
-    })),
+    subjects: subjects.map(s => {
+      const resolved = teachersForSection(s, student.sectionId)
+        .map(t => ({ id: t.id, name: teacherName(t) }));
+      return {
+        id: s.id, name: s.name, code: s.code,
+        // `teacher` retained for older clients; `teachers` is the full list.
+        teacher: resolved[0] || null,
+        teachers: resolved,
+      };
+    }),
   };
 }
 
