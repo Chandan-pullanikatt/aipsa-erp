@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 import Stepper from '@/components/Stepper';
+import Link from 'next/link';
 import {
   Plus, Pencil, Trash2, X, Search, Briefcase, Users, CalendarCheck,
-  Building2, Check, KeyRound, Copy,
+  Building2, Check, KeyRound, Copy, Upload,
 } from 'lucide-react';
 
 type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT';
@@ -348,6 +349,11 @@ export default function HrPage() {
           </p>
         </div>
         <div className="flex gap-2 shrink-0 self-start sm:self-center">
+          {activeTab === 'staff' && (
+            <Link href="/school/hr/import" className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px]">
+              <Upload className="mr-2 w-4 h-4" strokeWidth={1.75} /> Import CSV
+            </Link>
+          )}
           {activeTab === 'staff' && (
             <button onClick={openCreate} className="inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px]">
               <Plus className="mr-2 w-4 h-4" strokeWidth={1.75} /> Add Staff

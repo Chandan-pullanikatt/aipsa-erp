@@ -3,6 +3,8 @@ const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
 const svc = require('../services/hr.service');
+const teacherImport = require('../services/teacherImport.service');
+const { csvUpload } = require('../middleware/upload');
 
 const router = Router();
 router.use(authenticate, authorize('SCHOOL_ADMIN'), requireTenant);
@@ -54,6 +56,36 @@ router.delete('/departments/:id', async (req, res, next) => {
 router.get('/staff', async (req, res, next) => {
   try {
     res.json(await svc.listStaff(req.tenant.id, req.query));
+  } catch (err) { next(err); }
+});
+
+// ─── Bulk import (staff list CSV) ────────────────────────────────────────────
+// Declared before /staff/:id so "import" is not swallowed as an id.
+
+// GET /api/hr/staff/import/template — the CSV shape the school should fill
+router.get('/staff/import/template', (req, res) => {
+  res.type('text/csv').attachment('teacher-import-template.csv').send(teacherImport.templateCsv());
+});
+
+// POST /api/hr/staff/import/preview — validate only, writes nothing
+router.post('/staff/import/preview', csvUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+    res.json(await teacherImport.previewImport(req.tenant.id, {
+      csv: req.file.buffer.toString('utf8'),
+      emailDomain: req.body.emailDomain,
+    }));
+  } catch (err) { next(err); }
+});
+
+// POST /api/hr/staff/import — apply it; returns one-time temp passwords
+router.post('/staff/import', csvUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+    res.status(201).json(await teacherImport.commitImport(req.tenant.id, {
+      csv: req.file.buffer.toString('utf8'),
+      emailDomain: req.body.emailDomain,
+    }));
   } catch (err) { next(err); }
 });
 

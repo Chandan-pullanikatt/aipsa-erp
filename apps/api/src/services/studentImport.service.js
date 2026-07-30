@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
+const csv = require('../lib/csv');
 
 /**
  * Bulk student import from a class register CSV.
@@ -23,52 +24,7 @@ const RELATIONS = new Set(['FATHER', 'MOTHER', 'GUARDIAN', 'SIBLING', 'OTHER']);
 
 const generatePortalPin = () => String(Math.floor(100000 + Math.random() * 900000));
 
-/** RFC4180-ish: handles quoted fields so a name containing a comma survives. */
-function splitCsvLine(line) {
-  const out = [];
-  let cur = '';
-  let quoted = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (quoted) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1; }
-      else if (ch === '"') quoted = false;
-      else cur += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ',') { out.push(cur.trim()); cur = ''; }
-    else cur += ch;
-  }
-  out.push(cur.trim());
-  return out;
-}
-
-/** Tolerates whatever casing/spacing a school's spreadsheet produces. */
-function normaliseHeader(name) {
-  const key = name.replace(/[\s_-]/g, '').toLowerCase();
-  return TEMPLATE_COLUMNS.find((c) => c.toLowerCase() === key) || null;
-}
-
-function parseCsv(text) {
-  const clean = String(text).replace(/^﻿/, '');
-  const lines = clean.split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) throw Object.assign(new Error('The file is empty.'), { status: 400 });
-
-  const header = splitCsvLine(lines[0]).map(normaliseHeader);
-  if (!header.includes('firstName')) {
-    throw Object.assign(
-      new Error('The file needs a "firstName" column. Download the template to see the expected format.'),
-      { status: 400 },
-    );
-  }
-
-  return lines.slice(1).map((line, i) => {
-    const cells = splitCsvLine(line);
-    const row = { line: i + 2 }; // 1-indexed, +1 for the header row
-    header.forEach((col, j) => { if (col) row[col] = cells[j] || ''; });
-    return row;
-  });
-}
+const parseCsv = (text) => csv.parseCsv(text, TEMPLATE_COLUMNS, { required: 'firstName' });
 
 function normaliseRow(row) {
   const guardianName = (row.guardianName || '').trim();

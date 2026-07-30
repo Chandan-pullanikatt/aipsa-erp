@@ -107,7 +107,12 @@ async function getStaff(tenantId, userId) {
 // one transaction. Returns the generated temp password for the admin to share;
 // the staff member must change it on first login.
 async function createStaff(tenantId, data) {
-  const { email, firstName, lastName, phone, role = 'STAFF', profile = {} } = data;
+  const {
+    email, firstName, lastName, phone, role = 'STAFF', profile = {},
+    // Bulk imports derive a predictable password per row so the admin can hand
+    // out one legible sheet; single creates keep the random default.
+    password,
+  } = data;
   if (!['STAFF', 'TEACHER'].includes(role)) throw badRequest('Role must be STAFF or TEACHER');
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -115,7 +120,7 @@ async function createStaff(tenantId, data) {
 
   if (profile.departmentId) await assertDepartmentInTenant(tenantId, profile.departmentId);
 
-  const tempPassword = genTempPassword();
+  const tempPassword = password || genTempPassword();
   const hashed = await bcrypt.hash(tempPassword, 12);
 
   try {
