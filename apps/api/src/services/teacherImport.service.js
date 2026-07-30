@@ -31,19 +31,17 @@ const parseCsv = (text) => csv.parseCsv(text, TEMPLATE_COLUMNS, { required: 'fir
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 /**
- * Temp password the admin can read down a phone line: first name + "erp".
- * Padded when that is under the 8 characters the change-password endpoint
- * demands, so every teacher can actually replace what they were given.
+ * Temp password the admin can read down a phone line: full name + "erp".
+ *
+ * The full name, not just the first: a staff room holds several Anithas, and on
+ * first-name-only passwords each of them could guess the others' — the login
+ * address follows the same public rule. Padded with the year when a short name
+ * would fall under the 8 characters the change-password endpoint demands, so
+ * every teacher can actually replace what they were given.
  */
 function tempPasswordFor(firstName, lastName) {
-  const first = slug(firstName);
-  const last = slug(lastName);
-  const candidates = [
-    `${first}erp`,
-    `${first}${last}erp`,
-    `${first}${last}erp${new Date().getFullYear()}`,
-  ];
-  return candidates.find((c) => c.length >= 8) || candidates[candidates.length - 1];
+  const stem = `${slug(firstName)}${slug(lastName)}erp`;
+  return stem.length >= 8 ? stem : `${stem}${new Date().getFullYear()}`;
 }
 
 function normaliseRow(row) {
