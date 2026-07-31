@@ -29,6 +29,7 @@ interface Student {
 }
 
 interface ClassItem { id: string; name: string; }
+interface SectionItem { id: string; name: string; }
 
 const STATUS_STYLE: Record<string, string> = {
   ACTIVE: 'bg-[#D6F0E4] text-[#0F6E56]',
@@ -40,10 +41,12 @@ const STATUS_STYLE: Record<string, string> = {
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<SectionItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('ACTIVE');
   const [page, setPage] = useState(1);
   const LIMIT = 20;
@@ -54,16 +57,28 @@ export default function StudentsPage() {
       const params: Record<string, string> = { page: String(page), limit: String(LIMIT), status: statusFilter };
       if (search) params.search = search;
       if (classFilter) params.classId = classFilter;
+      if (sectionFilter) params.sectionId = sectionFilter;
       const { data } = await api.get('/sis/students', { params });
       setStudents(data.students);
       setTotal(data.total);
     } finally {
       setLoading(false);
     }
-  }, [search, classFilter, statusFilter, page]);
+  }, [search, classFilter, sectionFilter, statusFilter, page]);
 
   useEffect(() => { api.get('/sis/classes').then((r) => setClasses(r.data)).catch(console.error); }, []);
-  useEffect(() => { setPage(1); }, [search, classFilter, statusFilter]);
+
+  // Sections belong to a class, so the list refreshes whenever the class changes
+  useEffect(() => {
+    if (!classFilter) { setSections([]); return; }
+    let stale = false;
+    api.get(`/sis/classes/${classFilter}/sections`)
+      .then((r) => { if (!stale) setSections(r.data); })
+      .catch(console.error);
+    return () => { stale = true; };
+  }, [classFilter]);
+
+  useEffect(() => { setPage(1); }, [search, classFilter, sectionFilter, statusFilter]);
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
   const totalPages = Math.ceil(total / LIMIT);
@@ -130,13 +145,24 @@ export default function StudentsPage() {
         
         <select
           value={classFilter}
-          onChange={(e) => setClassFilter(e.target.value)}
+          onChange={(e) => { setClassFilter(e.target.value); setSectionFilter(''); }}
           className="min-w-[160px]"
         >
           <option value="">All Classes</option>
           {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        
+
+        <select
+          value={sectionFilter}
+          onChange={(e) => setSectionFilter(e.target.value)}
+          disabled={!classFilter || sections.length === 0}
+          className="min-w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"
+          title={!classFilter ? 'Select a class first' : undefined}
+        >
+          <option value="">All Sections</option>
+          {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}

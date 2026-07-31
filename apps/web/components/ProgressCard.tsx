@@ -32,8 +32,9 @@ function gradeCell(m: Marks | null) {
   return <span className="font-semibold text-gray-800">{m.obtained}<span className="text-gray-400 font-normal">/{m.max}</span> {m.grade && <span className="text-[#1D7A4A]">({m.grade})</span>}</span>;
 }
 
-export default function ProgressCard({ card }: { card: CardData }) {
+export default function ProgressCard({ card, variant = 'full' }: { card: CardData; variant?: 'full' | 'cca' }) {
   const termMeta = Object.fromEntries(card.terms.map(t => [t.term, t]));
+  const ccaOnly = variant === 'cca';
 
   function print() {
     const el = document.getElementById('progress-card-print');
@@ -49,8 +50,22 @@ export default function ProgressCard({ card }: { card: CardData }) {
     return (
       <div className="py-20 text-center border border-dashed border-gray-250 rounded-2xl bg-gray-50">
         <GraduationCap className="w-12 h-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
-        <p className="text-sm font-semibold text-gray-700 font-display">Progress card not published yet</p>
-        <p className="text-xs text-gray-400 max-w-xs mx-auto mt-1">Your class teacher will publish the holistic progress card here once results are finalised.</p>
+        <p className="text-sm font-semibold text-gray-700 font-display">{ccaOnly ? 'CCA grades not published yet' : 'Progress card not published yet'}</p>
+        <p className="text-xs text-gray-400 max-w-xs mx-auto mt-1">
+          {ccaOnly
+            ? 'Your class teacher will publish co-curricular activity grades here once they are finalised.'
+            : 'Your class teacher will publish the holistic progress card here once results are finalised.'}
+        </p>
+      </div>
+    );
+  }
+
+  if (ccaOnly && card.cca.length === 0) {
+    return (
+      <div className="py-20 text-center border border-dashed border-gray-250 rounded-2xl bg-gray-50">
+        <Award className="w-12 h-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
+        <p className="text-sm font-semibold text-gray-700 font-display">No co-curricular activities recorded</p>
+        <p className="text-xs text-gray-400 max-w-xs mx-auto mt-1">CCA grades will appear here once your class teacher records them.</p>
       </div>
     );
   }
@@ -68,7 +83,7 @@ export default function ProgressCard({ card }: { card: CardData }) {
 
       <div className="flex justify-end no-print">
         <button onClick={print} className="inline-flex items-center gap-1.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white px-4 py-2 rounded-lg text-sm font-semibold">
-          <Printer className="w-4 h-4" /> Print Card
+          <Printer className="w-4 h-4" /> {ccaOnly ? 'Print CCA Record' : 'Print Card'}
         </button>
       </div>
 
@@ -76,7 +91,7 @@ export default function ProgressCard({ card }: { card: CardData }) {
         {/* Header */}
         <div className="bg-gradient-to-r from-[#1D7A4A] to-[#155D37] text-white px-6 py-5 flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold font-display tracking-wide">Holistic Progress Card</h2>
+            <h2 className="text-xl font-bold font-display tracking-wide">{ccaOnly ? 'Co-Curricular Activities (CCA)' : 'Holistic Progress Card'}</h2>
             <p className="text-xs text-white/80 mt-0.5">Academic Year {card.academicYear}</p>
           </div>
           {card.student.photoUrl
@@ -93,6 +108,7 @@ export default function ProgressCard({ card }: { card: CardData }) {
         </div>
 
         {/* Scholastic */}
+        {!ccaOnly && (
         <Section title="Scholastic — Academic Performance" icon={<GraduationCap className="w-4 h-4" />}>
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -112,6 +128,7 @@ export default function ProgressCard({ card }: { card: CardData }) {
             </tbody>
           </table>
         </Section>
+        )}
 
         {/* Co-scholastic / CCA */}
         {card.cca.length > 0 && (
@@ -136,6 +153,7 @@ export default function ProgressCard({ card }: { card: CardData }) {
         )}
 
         {/* Conduct */}
+        {!ccaOnly && (
         <Section title="Personal & Social Qualities (Conduct)">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -154,8 +172,10 @@ export default function ProgressCard({ card }: { card: CardData }) {
             </tbody>
           </table>
         </Section>
+        )}
 
         {/* Achievements + remarks per term */}
+        {!ccaOnly && (
         <Section title="Achievements & Remarks">
           <div className="px-4 py-3 space-y-3">
             {TERMS.map(t => {
@@ -171,9 +191,10 @@ export default function ProgressCard({ card }: { card: CardData }) {
             })}
           </div>
         </Section>
+        )}
 
         {/* Result */}
-        {card.cumulative && (
+        {!ccaOnly && card.cumulative && (
           <div className="px-6 py-4 bg-[#E5F6EE]/50 border-y border-[#1D7A4A]/10 flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
               <span className="text-gray-500">Overall: </span>
@@ -187,6 +208,7 @@ export default function ProgressCard({ card }: { card: CardData }) {
         )}
 
         {/* Faculty */}
+        {!ccaOnly && (
         <Section title="Faculty" icon={<Users className="w-4 h-4" />}>
           <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
             <p className="text-gray-700"><span className="font-semibold">Class Teacher:</span> {card.faculty.classTeacher || '—'}</p>
@@ -195,15 +217,18 @@ export default function ProgressCard({ card }: { card: CardData }) {
             ))}
           </div>
         </Section>
+        )}
 
         {/* Signatures */}
+        {!ccaOnly && (
         <div className="px-6 py-8 grid grid-cols-2 sm:grid-cols-3 gap-6 text-center text-xs text-gray-400">
           <div><div className="border-t border-gray-300 pt-1 mt-8">Class Teacher</div></div>
           <div className="hidden sm:block"><div className="border-t border-gray-300 pt-1 mt-8">Principal</div></div>
           <div><div className="border-t border-gray-300 pt-1 mt-8">Parent / Guardian</div></div>
         </div>
+        )}
 
-        <p className="px-6 pb-4 text-[10px] text-gray-400">* Term not yet published.</p>
+        {!ccaOnly && <p className="px-6 pb-4 text-[10px] text-gray-400">* Term not yet published.</p>}
       </div>
     </div>
   );

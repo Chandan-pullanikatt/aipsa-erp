@@ -1072,10 +1072,10 @@ function ParentDashboardContent() {
                     </div>
                   )}
 
-                  {/* TAB 4: CCA / HOLISTIC PROGRESS CARD */}
+                  {/* TAB 4: CCA — co-curricular activities only (full card lives at /parent/progress) */}
                   {activeTab === 'cca' && (
                     ccaCard ? (
-                      <ProgressCard card={ccaCard} />
+                      <ProgressCard card={ccaCard} variant="cca" />
                     ) : (
                       <div className="py-16 text-center text-sm text-gray-400">
                         Failed to load co-curricular records.
