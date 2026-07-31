@@ -2,7 +2,8 @@ const { Router } = require('express');
 const { body, query, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
-const { csvUpload } = require('../middleware/upload');
+const { csvUpload, joinPhotoUpload } = require('../middleware/upload');
+const { storage } = require('../lib/storage');
 const sis = require('../services/sis.service');
 const studentImport = require('../services/studentImport.service');
 
@@ -333,6 +334,34 @@ router.delete('/activities/:id',
 router.get('/parent/students', authorize('PARENT'), async (req, res, next) => {
   try {
     res.json(await sis.getParentStudents(req.tenant.id, req.user.id));
+  } catch (err) { next(err); }
+});
+
+// POST /api/sis/parent/students/:id/photo — a parent uploads their child's photo.
+// The file goes to storage and the returned url is written straight onto the
+// student, so the parent never has to hold the url themselves.
+router.post(
+  '/parent/students/:id/photo',
+  authorize('PARENT'),
+  joinPhotoUpload.single('file'),
+  async (req, res, next) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+      await sis.assertParentOwnsStudent(req.tenant.id, req.user.id, req.params.id);
+      const { url } = await storage.upload(req.file.buffer, {
+        folder: `aipsa/${req.tenant.id}/student-photos`,
+        resourceType: 'image',
+        contentType: req.file.mimetype,
+      });
+      res.status(201).json(await sis.setParentStudentPhoto(req.tenant.id, req.user.id, req.params.id, url));
+    } catch (err) { next(err); }
+  }
+);
+
+// DELETE /api/sis/parent/students/:id/photo
+router.delete('/parent/students/:id/photo', authorize('PARENT'), async (req, res, next) => {
+  try {
+    res.json(await sis.setParentStudentPhoto(req.tenant.id, req.user.id, req.params.id, null));
   } catch (err) { next(err); }
 });
 

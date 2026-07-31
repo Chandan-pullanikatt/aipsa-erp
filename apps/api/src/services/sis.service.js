@@ -398,6 +398,31 @@ async function getParentStudents(tenantId, userId) {
   return students.map(({ portalPin: _pin, ...s }) => s);
 }
 
+// A parent may only touch a child they are actually linked to — either the
+// student account is theirs or they are a listed guardian. Same rule as
+// getParentStudents, applied to a single student.
+async function assertParentOwnsStudent(tenantId, userId, studentId) {
+  const student = await prisma.student.findFirst({
+    where: {
+      id: studentId,
+      tenantId,
+      OR: [{ userId }, { guardians: { some: { userId } } }],
+    },
+  });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+  return student;
+}
+
+async function setParentStudentPhoto(tenantId, userId, studentId, photoUrl) {
+  await assertParentOwnsStudent(tenantId, userId, studentId);
+  const { portalPin: _pin, ...student } = await prisma.student.update({
+    where: { id: studentId },
+    data: { photoUrl: photoUrl || null },
+    include: { class: true, section: true },
+  });
+  return student;
+}
+
 // ─── Class Join Codes ─────────────────────────────────────────────────────────
 
 const CLASS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -748,6 +773,7 @@ module.exports = {
   listStudents, getStudent, createStudent, updateStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
   getPortalPin, resetPortalPin, listSectionCredentials, getParentStudents, getStudentByUserId, setFeeAccessOverride,
+  setParentStudentPhoto, assertParentOwnsStudent,
   // Class join codes
   generateClassJoinCode, getClassJoinCode, listClassJoinCodes,
   lookupClassByJoinCode,

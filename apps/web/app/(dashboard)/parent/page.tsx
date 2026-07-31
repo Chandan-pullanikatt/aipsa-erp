@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
@@ -26,7 +26,8 @@ import {
   Clock,
   Download,
   Pin,
-  Send
+  Send,
+  Camera
 } from 'lucide-react';
 
 // Interfaces
@@ -41,6 +42,7 @@ interface StudentItem {
   classId: string | null;
   sectionId: string | null;
   portalPin: string | null;
+  photoUrl: string | null;
   class: { id: string; name: string } | null;
   section: { id: string; name: string } | null;
 }
@@ -204,6 +206,11 @@ function ParentDashboardContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
 
+  // Child photo upload (one hidden input reused for every child card)
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photoTargetId, setPhotoTargetId] = useState<string | null>(null);
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+
   // General Notification Banners
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -233,6 +240,36 @@ function ParentDashboardContent() {
   useEffect(() => {
     fetchStudents();
   }, [fetchStudents]);
+
+  // Photo upload — the API stores the file and writes the url onto the student,
+  // returning the updated record, so we patch it into local state without refetching.
+  const handlePhotoPicked = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const studentId = photoTargetId;
+    e.target.value = ''; // allow re-picking the same file after a failure
+    if (!file || !studentId) return;
+
+    if (file.size > 4 * 1024 * 1024) {
+      setError('Photo must be 4 MB or smaller.');
+      return;
+    }
+
+    setUploadingPhotoId(studentId);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const { data } = await api.post(`/sis/parent/students/${studentId}/photo`, form);
+      setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, photoUrl: data.photoUrl } : s)));
+      setActiveStudent((prev) => (prev && prev.id === studentId ? { ...prev, photoUrl: data.photoUrl } : prev));
+      setSuccess('Photo updated.');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to upload photo.');
+    } finally {
+      setUploadingPhotoId(null);
+      setPhotoTargetId(null);
+    }
+  }, [photoTargetId]);
 
   // Data fetching functions
   const fetchAttendance = useCallback(async (studentId: string, from: string, to: string) => {
@@ -500,22 +537,27 @@ function ParentDashboardContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {students.map((child) => {
                 const isSelected = activeStudent?.id === child.id;
+                const isUploading = uploadingPhotoId === child.id;
                 return (
+                  <div key={child.id} className="relative">
                   <button
-                    key={child.id}
                     onClick={() => setActiveStudent(child)}
-                    className={`flex items-center gap-4 p-4 text-left bg-white border rounded-2xl transition-all shadow-sm outline-none cursor-pointer ${
+                    className={`w-full flex items-center gap-4 p-4 text-left bg-white border rounded-2xl transition-all shadow-sm outline-none cursor-pointer ${
                       isSelected
                         ? 'border-[#1D7A4A] ring-2 ring-[#E5F6EE] translate-y-[-2px] shadow-md'
                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
                     }`}
                   >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 border uppercase font-display ${
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 border uppercase font-display overflow-hidden ${
                       isSelected
                         ? 'bg-[#E5F6EE] text-[#1D7A4A] border-[#1D7A4A]/20'
                         : 'bg-gray-100 text-gray-600 border-gray-200'
                     }`}>
-                      {child.firstName[0]}{child.lastName[0]}
+                      {isUploading
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : child.photoUrl
+                          ? <img src={child.photoUrl} alt={`${child.firstName} ${child.lastName}`} className="w-full h-full object-cover" />
+                          : <>{child.firstName[0]}{child.lastName[0]}</>}
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-semibold text-gray-905 text-sm truncate font-display">{child.firstName} {child.lastName}</h3>
@@ -529,9 +571,28 @@ function ParentDashboardContent() {
                       </p>
                     </div>
                   </button>
+                  {/* Sits outside the selection button — a button cannot be nested in a button. */}
+                  <button
+                    type="button"
+                    onClick={() => { setPhotoTargetId(child.id); photoInputRef.current?.click(); }}
+                    disabled={isUploading}
+                    title={child.photoUrl ? 'Change photo' : 'Add photo'}
+                    aria-label={`${child.photoUrl ? 'Change' : 'Add'} photo for ${child.firstName} ${child.lastName}`}
+                    className="absolute left-[46px] top-[46px] w-6 h-6 rounded-full bg-white border border-gray-300 text-gray-600 flex items-center justify-center shadow-sm hover:bg-[#E5F6EE] hover:text-[#1D7A4A] hover:border-[#1D7A4A]/30 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                  </button>
+                  </div>
                 );
               })}
             </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handlePhotoPicked}
+              className="hidden"
+            />
           </div>
 
           {/* Module Tab Grid */}

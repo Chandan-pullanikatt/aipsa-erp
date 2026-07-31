@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
 import { BarChart3, Save, Lock, Unlock, CheckCircle } from 'lucide-react';
 
 interface ClassItem { id: string; name: string; }
+interface SectionItem { id: string; name: string; inchargeTeacher?: { id: string } | null; }
 interface Student { id: string; firstName: string; lastName: string; admissionNumber: string; }
 interface ProgressRow {
   conduct: Record<string, string> | null;
@@ -23,6 +25,9 @@ type Draft = { conduct: Record<string, string>; achievements: string; remark: st
 export default function TeacherProgressPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [classId, setClassId] = useState('');
+  const [sections, setSections] = useState<SectionItem[]>([]);
+  const [sectionId, setSectionId] = useState('');
+  const [sectionsReady, setSectionsReady] = useState(false);
   const [term, setTerm] = useState('TERM_1');
   const [traits, setTraits] = useState<string[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -35,11 +40,31 @@ export default function TeacherProgressPage() {
     api.get('/sis/classes').then(r => { setClasses(r.data); if (r.data[0]) setClassId(r.data[0].id); }).catch(console.error);
   }, []);
 
+  // A class with sections is managed section by section, so the API needs the
+  // section too — without it even the section's own class teacher gets a 403.
+  useEffect(() => {
+    setSectionId(''); setSectionsReady(false);
+    if (!classId) { setSections([]); setSectionsReady(true); return; }
+    let stale = false;
+    api.get(`/sis/classes/${classId}/sections`)
+      .then(r => {
+        if (stale) return;
+        const list: SectionItem[] = r.data;
+        setSections(list);
+        const me = getUser();
+        const mine = me ? list.find(s => s.inchargeTeacher?.id === me.id) : null;
+        setSectionId(mine ? mine.id : (list[0]?.id || ''));
+      })
+      .catch(console.error)
+      .finally(() => { if (!stale) setSectionsReady(true); });
+    return () => { stale = true; };
+  }, [classId]);
+
   const load = useCallback(async () => {
-    if (!classId || !term) return;
+    if (!classId || !term || !sectionsReady) return;
     setLoading(true); setError('');
     try {
-      const { data } = await api.get('/progress/entry', { params: { classId, term } });
+      const { data } = await api.get('/progress/entry', { params: { classId, term, ...(sectionId && { sectionId }) } });
       setTraits(data.conductTraits);
       setEntries(data.students);
       const d: Record<string, Draft> = {};
@@ -56,7 +81,7 @@ export default function TeacherProgressPage() {
       setError(err.response?.data?.error || 'You may not be the class teacher for this class.');
       setEntries([]);
     } finally { setLoading(false); }
-  }, [classId, term]);
+  }, [classId, sectionId, sectionsReady, term]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -114,6 +139,15 @@ export default function TeacherProgressPage() {
             {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        {sections.length > 0 && (
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1 font-body">Section</label>
+            <select value={sectionId} onChange={e => setSectionId(e.target.value)}
+              className="border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20">
+              {sections.map(s => <option key={s.id} value={s.id}>Section {s.name}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1 font-body">Term</label>
           <select value={term} onChange={e => setTerm(e.target.value)}
