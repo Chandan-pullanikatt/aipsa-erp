@@ -106,7 +106,7 @@ router.post('/join', [
   body('password').isLength({ min: 8 }),
   body('firstName').trim().notEmpty(),
   body('lastName').trim().notEmpty(),
-  body('role').isIn(['TEACHER', 'PARENT']),
+  body('role').isIn(['TEACHER']),
 ], validate, async (req, res, next) => {
   try {
     const result = await authService.joinSchool(req.body);
@@ -114,17 +114,27 @@ router.post('/join', [
   } catch (err) { next(err); }
 });
 
-// POST /api/auth/link-student — parent links their account to a student
-router.post('/link-student',
-  authenticate, authorize('PARENT'), requireTenant,
+// POST /api/auth/pin-login — parents/students sign in with admission number + password
+router.post('/pin-login', [
+  body('admissionNumber').trim().notEmpty(),
+  body('password').notEmpty(),
+], validate, async (req, res, next) => {
+  try {
+    const result = await authService.loginWithPin(req.body);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/portal-password — parent replaces the shared default password
+router.post('/portal-password',
+  authenticate, authorize('PARENT', 'STUDENT'), requireTenant,
   [
     body('admissionNumber').trim().notEmpty(),
-    body('portalPin').trim().notEmpty(),
+    body('newPassword').isLength({ min: 6 }),
   ], validate,
   async (req, res, next) => {
     try {
-      const result = await authService.linkStudentToParent(req.user.id, req.tenant.id, req.body);
-      res.json(result);
+      res.json(await authService.changePortalPassword(req.user.id, req.tenant.id, req.body));
     } catch (err) { next(err); }
   }
 );

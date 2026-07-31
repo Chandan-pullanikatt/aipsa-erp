@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
 const svc = require('../services/progress.service');
+const sis = require('../services/sis.service');
 
 const router = Router();
 router.use(authenticate, authorize('SCHOOL_ADMIN', 'TEACHER', 'STUDENT', 'PARENT'), requireTenant);
@@ -62,10 +63,23 @@ router.post('/unpublish', adminOrTeacher, [
 });
 
 // ─── Holistic card + live faculty (any role) ─────────────────────────────────
-router.get('/card/:studentId', async (req, res, next) => {
+
+// Parents and students may only read their own records.
+async function ownStudentOnly(req, res, next) {
+  if (req.user.role !== 'PARENT' && req.user.role !== 'STUDENT') return next();
+  try {
+    const own = await sis.getParentStudents(req.tenant.id, req.user.id);
+    if (!own.some((s) => s.id === req.params.studentId)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  } catch (e) { next(e); }
+}
+
+router.get('/card/:studentId', ownStudentOnly, async (req, res, next) => {
   try { res.json(await svc.getHolisticCard(req.tenant.id, req.params.studentId, req.query.academicYear, req.user.role)); } catch (e) { next(e); }
 });
-router.get('/teachers/:studentId', async (req, res, next) => {
+router.get('/teachers/:studentId', ownStudentOnly, async (req, res, next) => {
   try { res.json(await svc.getMyTeachers(req.tenant.id, req.params.studentId)); } catch (e) { next(e); }
 });
 

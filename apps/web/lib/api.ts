@@ -26,6 +26,7 @@ api.interceptors.response.use(
   (err) => {
     const publicAuthEndpoints = [
       '/auth/login',
+      '/auth/pin-login',
       '/auth/register',
       '/auth/join',
       '/auth/forgot-password',

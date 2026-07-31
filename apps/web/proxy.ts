@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/join', '/student-join', '/change-password'];
+const PUBLIC_PATHS = ['/login', '/portal-login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/join', '/student-join', '/change-password'];
 
 // Legal/info pages that must be reachable by ANYONE, signed in or not (required by
 // Google Play — the privacy policy + account-deletion URLs must open without a login).

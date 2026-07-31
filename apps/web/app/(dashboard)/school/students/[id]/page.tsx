@@ -444,14 +444,14 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             <div>
               <p className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5 text-[#6B7280]" />
-                Portal Connection PIN
+                Portal Password
               </p>
-              <p className="text-[11px] text-[#6B7280] font-semibold mt-1">Provide this secure pin to parents so they can cleanly link their child's dashboard profile.</p>
+              <p className="text-[11px] text-[#6B7280] font-semibold mt-1">Parents sign in with the admission number and this password.</p>
             </div>
             
             {showPin && portalPin ? (
               <div className="flex items-center gap-2 mt-2">
-                <span className="font-mono text-xl font-black text-[#1D7A4A] tracking-widest bg-white border border-[#E5E7EB] px-3.5 py-2 rounded-xl shadow-sm">{portalPin}</span>
+                <span className="font-mono text-base font-black text-[#1D7A4A] bg-white border border-[#E5E7EB] px-3.5 py-2 rounded-xl shadow-sm break-all">{portalPin}</span>
                 <button onClick={() => { navigator.clipboard.writeText(portalPin); setPinCopied(true); setTimeout(() => setPinCopied(false), 2000); }} 
                   className="inline-flex items-center gap-1 text-xs border border-[#E5E7EB] bg-white font-bold px-3 py-2 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
                   {pinCopied ? <Check className="w-3.5 h-3.5 text-[#0F6E56]" strokeWidth={2.5} /> : <Copy className="w-3.5 h-3.5 text-[#6B7280]" strokeWidth={1.75} />}
@@ -463,7 +463,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
               <button onClick={handleShowPin} 
                 className="w-fit inline-flex items-center gap-1.5 text-xs font-bold text-[#1D7A4A] hover:text-[#155B37] bg-white border border-[#26A96B]/25 hover:border-[#1D7A4A] px-4 py-2 rounded-lg transition-all shadow-sm mt-1">
                 <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />
-                Reveal Portal Access PIN
+                Reveal Portal Password
               </button>
             )}
           </div>

@@ -193,6 +193,20 @@ router.get('/students/:id/portal-pin', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/sis/students/:id/portal-pin/reset — admin restores the default password
+router.post('/students/:id/portal-pin/reset', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.resetPortalPin(req.tenant.id, req.params.id));
+  } catch (err) { next(err); }
+});
+
+// GET /api/sis/sections/:id/credentials — portal credential sheet for one section
+router.get('/sections/:id/credentials', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.listSectionCredentials(req.tenant.id, req.params.id));
+  } catch (err) { next(err); }
+});
+
 // POST /api/sis/students/:id/reset-password — admin resets to default pattern
 router.post('/students/:id/reset-password', adminOnly, async (req, res, next) => {
   try {

@@ -1,10 +1,7 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
 const { sendStudentApproval } = require('./email.service');
-
-function generatePortalPin() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
+const portalPassword = require('../lib/portalPassword');
 
 // ─── Classes ─────────────────────────────────────────────────────────────────
 
@@ -178,14 +175,10 @@ async function createStudent(tenantId, data) {
     if (!sec) throw Object.assign(new Error('Section not found'), { status: 404 });
   }
 
-  const plainPin = generatePortalPin();
-  const hashedPin = await bcrypt.hash(plainPin, 10);
-
   const student = await prisma.student.create({
     data: {
       tenantId,
       admissionNumber,
-      portalPin: hashedPin,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
@@ -319,14 +312,53 @@ async function deleteGuardian(tenantId, id) {
 async function getPortalPin(tenantId, studentId) {
   const student = await prisma.student.findFirst({
     where: { id: studentId, tenantId },
-    select: { id: true, firstName: true, lastName: true, admissionNumber: true },
+    select: { id: true, firstName: true, lastName: true, admissionNumber: true, portalPin: true },
+
   });
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
 
-  // Always generate a fresh PIN — stored value is a bcrypt hash, not recoverable.
-  const plainPin = generatePortalPin();
-  await prisma.student.update({ where: { id: studentId }, data: { portalPin: await bcrypt.hash(plainPin, 10) } });
-  return { ...student, portalPin: plainPin };
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+  const { portalPin, ...rest } = student;
+  return {
+    ...rest,
+    portalPin: portalPassword.currentPassword(student, tenant?.name),
+    isCustom: portalPassword.isCustom(student),
+  };
+}
+
+// Clearing the column restores the school-wide default pattern.
+async function resetPortalPin(tenantId, studentId) {
+  const student = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+
+  await prisma.student.update({ where: { id: studentId }, data: { portalPin: null } });
+  return getPortalPin(tenantId, studentId);
+}
+
+// Section-wise credential sheet the office hands out (10-A, 10-B, …).
+async function listSectionCredentials(tenantId, sectionId) {
+  const section = await prisma.section.findFirst({
+    where: { id: sectionId, tenantId },
+    include: { class: true },
+  });
+  if (!section) throw Object.assign(new Error('Section not found'), { status: 404 });
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+  const students = await prisma.student.findMany({
+    where: { tenantId, sectionId, status: 'ACTIVE' },
+    orderBy: [{ firstName: 'asc' }],
+  });
+
+  return {
+    className: `${section.class?.name || ''}${section.name ? ` - ${section.name}` : ''}`.trim(),
+    students: students.map((s) => ({
+      id: s.id,
+      name: `${s.firstName} ${s.lastName}`.trim(),
+      admissionNumber: s.admissionNumber,
+      password: portalPassword.currentPassword(s, tenant?.name),
+      isCustom: portalPassword.isCustom(s),
+    })),
+  };
 }
 
 async function setFeeAccessOverride(tenantId, studentId, enabled) {
@@ -525,11 +557,7 @@ async function listJoinRequests(tenantId, { classId, status = 'PENDING', page = 
 // Uses the admission number (unique per student) instead of DOB, which is not
 // unique. Example: school "AIPSA Public School" + "ADM-2026-0001" -> "aipsaaipsaadm20260001".
 // Deterministic so the school can recite it; students change it on first login.
-function buildDefaultPassword(schoolName, admissionNumber) {
-  const firstWord = (schoolName || '').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-  const adm = String(admissionNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-  return `aipsa${firstWord}${adm}`;
-}
+const { buildDefaultPassword } = portalPassword;
 
 async function approveJoinRequest(tenantId, requestId, reviewerId, { sectionId } = {}) {
   const req = await prisma.classJoinRequest.findFirst({
@@ -562,8 +590,6 @@ async function approveJoinRequest(tenantId, requestId, reviewerId, { sectionId }
   }
 
   const admissionNumber = await generateAdmissionNumber(tenantId);
-  const plainPin = generatePortalPin();
-  const hashedPin = await bcrypt.hash(plainPin, 10);
   const defaultPassword = buildDefaultPassword(req.tenant.name, admissionNumber);
   const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
@@ -587,7 +613,6 @@ async function approveJoinRequest(tenantId, requestId, reviewerId, { sectionId }
       data: {
         tenantId,
         admissionNumber,
-        portalPin: hashedPin,
         firstName: req.firstName,
         lastName: req.lastName,
         dateOfBirth: req.dateOfBirth || undefined,
@@ -722,7 +747,7 @@ module.exports = {
   listSections, createSection, updateSection, patchSection, deleteSection,
   listStudents, getStudent, createStudent, updateStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
-  getPortalPin, getParentStudents, getStudentByUserId, setFeeAccessOverride,
+  getPortalPin, resetPortalPin, listSectionCredentials, getParentStudents, getStudentByUserId, setFeeAccessOverride,
   // Class join codes
   generateClassJoinCode, getClassJoinCode, listClassJoinCodes,
   lookupClassByJoinCode,

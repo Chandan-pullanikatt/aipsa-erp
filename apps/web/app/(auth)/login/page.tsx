@@ -106,8 +106,12 @@ export default function LoginPage() {
             <Link href="/register" className="text-blue-600 hover:underline font-medium">Apply here</Link>
           </p>
           <p className="text-center text-sm text-gray-500 mt-2">
-            Teacher or Student?{' '}
+            Teacher?{' '}
             <Link href="/join" className="text-blue-600 hover:underline font-medium">Join with school code</Link>
+          </p>
+          <p className="text-center text-sm text-gray-500 mt-2">
+            Parent or Student?{' '}
+            <Link href="/portal-login" className="text-blue-600 hover:underline font-medium">Sign in with admission number</Link>
           </p>
         </div>
 

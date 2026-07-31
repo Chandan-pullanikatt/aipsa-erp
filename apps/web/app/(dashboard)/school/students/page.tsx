@@ -11,6 +11,7 @@ import {
   Plus,
   ChevronLeft,
   IdCard,
+  KeyRound,
   Upload
 } from 'lucide-react';
 
@@ -82,6 +83,13 @@ export default function StudentsPage() {
           >
             <IdCard className="w-4 h-4 mr-2" strokeWidth={1.75} />
             ID Cards
+          </Link>
+          <Link
+            href="/school/students/credentials"
+            className="h-[38px] px-4 rounded-lg bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] transition-colors inline-flex items-center justify-center font-medium text-[14px]"
+          >
+            <KeyRound className="w-4 h-4 mr-2" strokeWidth={1.75} />
+            Portal Logins
           </Link>
           <Link
             href="/school/students/classes"

@@ -1,7 +1,9 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../lib/prisma');
 const { signToken } = require('../lib/jwt');
+const portalPassword = require('../lib/portalPassword');
 const { sendPasswordReset, sendWelcome, sendInvite, sendRaw } = require('./email.service');
 
 async function registerSchool({ schoolName, adminEmail, adminPassword, adminFirstName, adminLastName, city, state, phone }) {
@@ -82,6 +84,13 @@ async function login({ email, password }) {
 
   if (!user) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
   if (!user.isActive) throw Object.assign(new Error('Account is disabled'), { status: 403 });
+
+  if (user.role === 'PARENT' || user.role === 'STUDENT') {
+    throw Object.assign(
+      new Error('Parents and students sign in with their admission number and portal PIN.'),
+      { status: 403 },
+    );
+  }
 
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
@@ -252,7 +261,7 @@ async function acceptInvite(token, password) {
 // ─── Self-Join via School Code ────────────────────────────────────────────────
 
 async function joinSchool({ joinCode, email, password, firstName, lastName, role }) {
-  if (!['TEACHER', 'PARENT'].includes(role)) {
+  if (!['TEACHER'].includes(role)) {
     throw Object.assign(new Error('Invalid role'), { status: 400 });
   }
 
@@ -271,43 +280,124 @@ async function joinSchool({ joinCode, email, password, firstName, lastName, role
   return { message: 'Account created. You can now login.', tenantName: tenant.name };
 }
 
-// ─── Parent: Link to Student ──────────────────────────────────────────────────
+// ─── Parent/Student: Login with Admission Number + Portal Password ────────────
 
-async function linkStudentToParent(userId, tenantId, { admissionNumber, portalPin }) {
-  const student = await prisma.student.findFirst({
-    where: { tenantId, admissionNumber },
+// Admission numbers are only unique per tenant, and the portal is served from a
+// single shared domain, so every school's match is checked until one passes.
+async function loginWithPin({ admissionNumber, password }) {
+  const invalid = () => Object.assign(new Error('Invalid admission number or password'), { status: 401 });
+
+  const candidates = await prisma.student.findMany({
+    where: { admissionNumber: admissionNumber.trim().toUpperCase() },
+    include: {
+      tenant: { select: { id: true, name: true, status: true, slug: true } },
+      guardians: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+    },
   });
 
-  if (!student) throw Object.assign(new Error('Student not found. Check the admission number.'), { status: 404 });
+  const student = candidates.find((s) => portalPassword.matches(password, s, s.tenant?.name));
+  if (!student) throw invalid();
 
-  // Support both bcrypt hashes (new) and any legacy plaintext PINs.
-  const stored = student.portalPin || '';
-  const isBcrypt = stored.startsWith('$2');
-  const pinValid = isBcrypt
-    ? await bcrypt.compare(portalPin, stored)
-    : stored === portalPin;
-
-  if (!pinValid) throw Object.assign(new Error('Incorrect PIN. Check with the school office.'), { status: 403 });
-
-  // Opportunistically upgrade a legacy plaintext PIN to a hash on first successful use.
-  if (!isBcrypt) {
-    await prisma.student.update({ where: { id: student.id }, data: { portalPin: await bcrypt.hash(stored, 10) } });
+  if (student.tenant?.status === 'SUSPENDED') {
+    throw Object.assign(new Error('School account is suspended'), { status: 403 });
   }
+
+  const user = await resolvePortalUser(student);
+  const token = signToken({ userId: user.id, tenantId: user.tenantId, role: user.role });
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      tenantId: user.tenantId,
+      tenantStatus: student.tenant?.status ?? null,
+      tenantSlug: student.tenant?.slug ?? null,
+      mustChangePassword: false,
+    },
+  };
+}
+
+// Finds (or creates) the portal account for a student, merging siblings onto one
+// account when their guardian shares a phone number with an already-linked guardian.
+async function resolvePortalUser(student) {
+  const primary = student.guardians[0] || null;
 
   if (student.userId) {
-    throw Object.assign(new Error('This student already has a linked account'), { status: 409 });
+    const existing = await prisma.user.findUnique({ where: { id: student.userId } });
+    if (existing?.isActive) return syncNameFromGuardian(existing, primary);
   }
 
-  await prisma.student.update({ where: { id: student.id }, data: { userId } });
-
-  const primaryGuardian = await prisma.guardian.findFirst({
-    where: { studentId: student.id, isPrimary: true },
+  const linkedGuardian = primary && await prisma.guardian.findFirst({
+    where: { tenantId: student.tenantId, phone: primary.phone, userId: { not: null } },
   });
-  if (primaryGuardian && !primaryGuardian.userId) {
-    await prisma.guardian.update({ where: { id: primaryGuardian.id }, data: { userId } });
+
+  let user;
+  if (linkedGuardian) {
+    user = await prisma.user.findUnique({ where: { id: linkedGuardian.userId } });
   }
 
-  return { message: 'Student linked successfully.', studentName: `${student.firstName} ${student.lastName}` };
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        tenantId: student.tenantId,
+        // Portal accounts authenticate by PIN only; these satisfy the required
+        // columns without ever being usable as credentials.
+        email: `${student.admissionNumber.toLowerCase()}.${student.tenantId}@portal.local`,
+        password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12),
+        role: 'PARENT',
+        firstName: primary?.firstName || student.firstName,
+        lastName: primary?.lastName || student.lastName,
+        phone: primary?.phone || undefined,
+        isActive: true,
+      },
+    });
+  }
+
+  // Siblings are linked through their guardian rows; Student.userId holds at most
+  // one account, so it is only used when the student has no guardian on file.
+  if (primary) {
+    if (primary.userId !== user.id) {
+      await prisma.guardian.update({ where: { id: primary.id }, data: { userId: user.id } });
+    }
+  } else if (!student.userId) {
+    await prisma.student.update({ where: { id: student.id }, data: { userId: user.id } });
+  }
+
+  return syncNameFromGuardian(user, primary);
+}
+
+// Optional: a parent may replace the shared default with their own password.
+async function changePortalPassword(userId, tenantId, { admissionNumber, newPassword }) {
+  const students = await prisma.student.findMany({
+    where: {
+      tenantId,
+      admissionNumber: admissionNumber.trim().toUpperCase(),
+      OR: [{ userId }, { guardians: { some: { userId } } }],
+    },
+  });
+  const student = students[0];
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+
+  await prisma.student.update({
+    where: { id: student.id },
+    data: { portalPin: portalPassword.encryptSecret(newPassword) },
+  });
+  return { message: 'Portal password updated.' };
+}
+
+// The school office's guardian record is the source of truth for the parent's
+// name, so the portal never shows a stale self-registered one.
+async function syncNameFromGuardian(user, guardian) {
+  if (!guardian) return user;
+  if (user.firstName === guardian.firstName && user.lastName === guardian.lastName) return user;
+  return prisma.user.update({
+    where: { id: user.id },
+    data: { firstName: guardian.firstName, lastName: guardian.lastName },
+  });
 }
 
 // ─── Account Deletion ───────────────────────────────────────────────────────
@@ -382,6 +472,6 @@ module.exports = {
   changePassword,
   getOrCreateJoinCode, regenerateJoinCode,
   inviteUser, acceptInvite,
-  joinSchool, linkStudentToParent,
+  joinSchool, loginWithPin, changePortalPassword,
   requestAccountDeletion,
 };

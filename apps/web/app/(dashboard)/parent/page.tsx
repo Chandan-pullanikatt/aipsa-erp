@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
-import { 
-  Plus, 
-  Search, 
+import ProgressCard, { type CardData } from '@/components/ProgressCard';
+import {
+  Search,
   AlertCircle, 
   CheckCircle2, 
   X, 
@@ -164,10 +164,10 @@ function ParentDashboardContent() {
   const [parentName, setParentName] = useState('');
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [activeStudent, setActiveStudent] = useState<StudentItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'attendance' | 'fees' | 'exams' | 'homework' | 'announcements'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'fees' | 'exams' | 'cca' | 'homework' | 'announcements'>('attendance');
 
   useEffect(() => {
-    if (tabParam && ['attendance', 'fees', 'exams', 'homework', 'announcements'].includes(tabParam)) {
+    if (tabParam && ['attendance', 'fees', 'exams', 'cca', 'homework', 'announcements'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
@@ -180,14 +180,9 @@ function ParentDashboardContent() {
   const [attendance, setAttendance] = useState<AttendanceReport | null>(null);
   const [fees, setFees] = useState<FeeAccount | null>(null);
   const [exams, setExams] = useState<ReportCard | null>(null);
+  const [ccaCard, setCcaCard] = useState<CardData | null>(null);
   const [homeworks, setHomeworks] = useState<HomeworkItem[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
-
-  // Linking Form State
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [admissionNumber, setAdmissionNumber] = useState('');
-  const [portalPin, setPortalPin] = useState('');
-  const [submittingLink, setSubmittingLink] = useState(false);
 
   // Filter States
   const [fromDate, setFromDate] = useState(() => {
@@ -281,6 +276,19 @@ function ParentDashboardContent() {
     }
   }, []);
 
+  const fetchCca = useCallback(async (studentId: string) => {
+    setLoadingData(true);
+    try {
+      const { data } = await api.get(`/progress/card/${studentId}`);
+      setCcaCard(data);
+    } catch (err) {
+      console.error(err);
+      setCcaCard(null);
+    } finally {
+      setLoadingData(false);
+    }
+  }, []);
+
   const fetchHomework = useCallback(async (classId: string) => {
     setLoadingData(true);
     try {
@@ -317,6 +325,8 @@ function ParentDashboardContent() {
       fetchFees(activeStudent.id);
     } else if (activeTab === 'exams') {
       fetchExams(activeStudent.id);
+    } else if (activeTab === 'cca') {
+      fetchCca(activeStudent.id);
     } else if (activeTab === 'homework') {
       if (activeStudent.classId) {
         fetchHomework(activeStudent.classId);
@@ -326,42 +336,12 @@ function ParentDashboardContent() {
     } else if (activeTab === 'announcements') {
       fetchAnnouncements();
     }
-  }, [activeStudent, activeTab, fetchAttendance, fetchFees, fetchExams, fetchHomework, fetchAnnouncements, fromDate, toDate]);
+  }, [activeStudent, activeTab, fetchAttendance, fetchFees, fetchExams, fetchCca, fetchHomework, fetchAnnouncements, fromDate, toDate]);
 
   // Submitted-state is per child; clear it when the parent switches children.
   useEffect(() => {
     setSubmittedIds(new Set());
   }, [activeStudent]);
-
-  // Handle student linking
-  const handleLinkStudent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!admissionNumber.trim() || !portalPin.trim()) {
-      setError('Please fill in both fields.');
-      return;
-    }
-
-    setSubmittingLink(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const { data } = await api.post('/auth/link-student', {
-        admissionNumber: admissionNumber.trim(),
-        portalPin: portalPin.trim(),
-      });
-      setSuccess(data.message || 'Student linked successfully!');
-      setAdmissionNumber('');
-      setPortalPin('');
-      setShowLinkModal(false);
-      fetchStudents();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Invalid Admission Number or PIN. Please try again.');
-    } finally {
-      setSubmittingLink(false);
-    }
-  };
 
   // View receipt logic
   const handleViewReceipt = async (payment: FeePaymentItem) => {
@@ -471,15 +451,6 @@ function ParentDashboardContent() {
           </p>
         </div>
 
-        {students.length > 0 && (
-          <button
-            onClick={() => setShowLinkModal(true)}
-            className="px-4 py-2.5 bg-[#1D7A4A] hover:bg-[#155B37] text-white text-sm font-semibold rounded-xl transition-all shadow-sm shrink-0 flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" strokeWidth={1.75} />
-            Link Another Child
-          </button>
-        )}
       </div>
 
       {/* Notifications Alerts */}
@@ -510,64 +481,22 @@ function ParentDashboardContent() {
             <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
               <GraduationCap className="w-8 h-8 text-white" strokeWidth={1.75} />
             </div>
-            <h2 className="text-xl font-bold font-display">Link Your Child's Record</h2>
-            <p className="text-xs text-[#E5F6EE] mt-2 max-w-xs mx-auto">
-              Please enter your child's school registration details below to activate full parental dashboards.
-            </p>
+            <h2 className="text-xl font-bold font-display">No Student Records Found</h2>
           </div>
 
-          <form onSubmit={handleLinkStudent} className="p-6 space-y-4 font-body">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 font-display">Admission Number</label>
-              <input
-                type="text"
-                placeholder="e.g. ADM-2026-0001"
-                value={admissionNumber}
-                onChange={(e) => setAdmissionNumber(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A] focus:border-transparent transition-all"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 font-display">6-Digit Portal PIN</label>
-              <input
-                type="password"
-                maxLength={6}
-                placeholder="••••••"
-                value={portalPin}
-                onChange={(e) => setPortalPin(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A] focus:border-transparent tracking-widest text-center transition-all"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={submittingLink}
-              className="w-full py-3 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer font-display"
-            >
-              {submittingLink ? (
-                <>
-                  <Loader2 className="animate-spin h-4 w-4" strokeWidth={1.75} />
-                  Validating Credentials...
-                </>
-              ) : (
-                'Link Student Account'
-              )}
-            </button>
-
-            <p className="text-[11px] text-gray-400 text-center max-w-xs mx-auto leading-relaxed mt-2">
-              Note: Contact the school administrative office if you do not have your child's Admission Number or Portal PIN.
+          <div className="p-6 font-body">
+            <p className="text-sm text-gray-500 text-center leading-relaxed">
+              We could not find any student linked to this account. Please contact the school
+              administrative office to confirm your child&apos;s admission number and Portal PIN.
             </p>
-          </form>
+          </div>
         </div>
       ) : (
         /* ACTIVE PORTAL WORKSPACE */
         <div className="space-y-6">
           {/* Child Selection Bar */}
           <div>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 font-display">Linked Children</h2>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 font-display">Your Children</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {students.map((child) => {
                 const isSelected = activeStudent?.id === child.id;
@@ -613,6 +542,7 @@ function ParentDashboardContent() {
                 { id: 'attendance', label: 'Attendance' },
                 { id: 'fees', label: 'Fee Tracker' },
                 { id: 'exams', label: 'Exam Results' },
+                { id: 'cca', label: 'CCA' },
                 { id: 'homework', label: 'Homework' },
                 { id: 'announcements', label: 'Announcements' },
               ].map((tab) => {
@@ -1081,7 +1011,18 @@ function ParentDashboardContent() {
                     </div>
                   )}
 
-                  {/* TAB 4: HOMEWORK FEED */}
+                  {/* TAB 4: CCA / HOLISTIC PROGRESS CARD */}
+                  {activeTab === 'cca' && (
+                    ccaCard ? (
+                      <ProgressCard card={ccaCard} />
+                    ) : (
+                      <div className="py-16 text-center text-sm text-gray-400">
+                        Failed to load co-curricular records.
+                      </div>
+                    )
+                  )}
+
+                  {/* TAB 5: HOMEWORK FEED */}
                   {activeTab === 'homework' && (
                     <div className="space-y-6">
                       <div className="flex items-center justify-between no-print">
@@ -1303,71 +1244,6 @@ function ParentDashboardContent() {
                   )}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* POPUP MODAL: LINK STUDENT (Only triggered manually when students exist) */}
-      {showLinkModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn no-print">
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl overflow-hidden max-w-md w-full animate-scaleUp">
-            <div className="bg-gradient-to-tr from-[#1D7A4A] to-[#155B37] p-6 text-center text-white relative">
-              <button
-                onClick={() => {
-                  setShowLinkModal(false);
-                  setError(null);
-                }}
-                className="absolute top-4 right-4 text-white hover:text-[#E5F6EE] transition-colors outline-none cursor-pointer"
-              >
-                <X className="w-5 h-5" strokeWidth={2} />
-              </button>
-              <h3 className="text-lg font-bold font-display">Link Another Student</h3>
-              <p className="text-xs text-[#E5F6EE] mt-1 max-w-xs mx-auto font-body">
-                Add siblings or additional child student accounts under your parental login profile.
-              </p>
-            </div>
-
-            <form onSubmit={handleLinkStudent} className="p-6 space-y-4 font-body">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 font-display">Admission Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. ADM-2026-0001"
-                  value={admissionNumber}
-                  onChange={(e) => setAdmissionNumber(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A] focus:border-transparent transition-all font-body bg-gray-50/50"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 font-display">6-Digit Portal PIN</label>
-                <input
-                  type="password"
-                  maxLength={6}
-                  placeholder="••••••"
-                  value={portalPin}
-                  onChange={(e) => setPortalPin(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A] focus:border-transparent tracking-widest text-center transition-all font-body bg-gray-50/50"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={submittingLink}
-                className="w-full py-3 bg-[#1D7A4A] hover:bg-[#155B37] text-white rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer font-display"
-              >
-                {submittingLink ? (
-                  <>
-                    <Loader2 className="animate-spin h-4 w-4 text-white" strokeWidth={2} />
-                    Validating...
-                  </>
-                ) : (
-                  'Confirm & Link sibling'
-                )}
-              </button>
             </form>
           </div>
         </div>

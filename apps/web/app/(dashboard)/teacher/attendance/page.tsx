@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import { ClipboardList, Calendar, Users, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 interface ClassItem { id: string; name: string; }
+interface SectionItem { id: string; name: string; }
 interface StudentRow { id: string; firstName: string; lastName: string; admissionNumber: string; }
 
 const STATUS_CYCLE: Record<string, string> = { PRESENT: 'ABSENT', ABSENT: 'LATE', LATE: 'PRESENT' };
@@ -20,6 +21,8 @@ function today() { return new Date().toISOString().split('T')[0]; }
 export default function TeacherAttendancePage() {
   const [myClasses, setMyClasses] = useState<ClassItem[]>([]);
   const [classId, setClassId] = useState('');
+  const [sections, setSections] = useState<SectionItem[]>([]);
+  const [sectionId, setSectionId] = useState('');
   const [date, setDate] = useState(today());
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
@@ -37,13 +40,22 @@ export default function TeacherAttendancePage() {
     }
   }, []);
 
+  useEffect(() => {
+    setSectionId('');
+    if (classId) {
+      api.get(`/sis/classes/${classId}/sections`).then(r => setSections(r.data)).catch(console.error);
+    } else {
+      setSections([]);
+    }
+  }, [classId]);
+
   async function loadAttendance() {
     if (!classId || !date) return;
     setLoading(true); setLoaded(false);
     try {
       const [studRes, attRes] = await Promise.all([
-        api.get('/sis/students', { params: { classId, status: 'ACTIVE', limit: 200 } }),
-        api.get('/attendance/students', { params: { classId, date } }),
+        api.get('/sis/students', { params: { classId, ...(sectionId && { sectionId }), status: 'ACTIVE', limit: 200 } }),
+        api.get('/attendance/students', { params: { classId, ...(sectionId && { sectionId }), date } }),
       ]);
       const s: StudentRow[] = studRes.data.students;
       setStudents(s);
@@ -59,7 +71,7 @@ export default function TeacherAttendancePage() {
     setSaving(true);
     try {
       const records = students.map(s => ({ studentId: s.id, status: statuses[s.id] || 'PRESENT' }));
-      await api.post('/attendance/students/mark', { date, classId, records });
+      await api.post('/attendance/students/mark', { date, classId, sectionId: sectionId || undefined, records });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } finally { setSaving(false); }
   }
@@ -93,6 +105,16 @@ export default function TeacherAttendancePage() {
               {myClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          {sections.length > 0 && (
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 font-display">Section</label>
+              <select value={sectionId} onChange={e => setSectionId(e.target.value)}
+                className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] bg-white text-[#1A1D23] font-body">
+                <option value="">All sections</option>
+                {sections.map(s => <option key={s.id} value={s.id}>Section {s.name}</option>)}
+              </select>
+            </div>
+          )}
           <button onClick={loadAttendance} disabled={!classId || loading}
             className="px-5 py-2 bg-[#1D7A4A] text-white rounded-lg text-sm font-semibold hover:bg-[#155B37] disabled:opacity-50 transition-colors font-display min-w-[100px] h-[38px] flex items-center justify-center">
             {loading ? 'Loading...' : 'Load Roster'}

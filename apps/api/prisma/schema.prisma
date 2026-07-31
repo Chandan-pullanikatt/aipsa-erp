@@ -141,7 +141,7 @@ model User {
   tenant                 Tenant?                 @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   passwordResets         PasswordReset[]
   student                Student?
-  guardian               Guardian?
+  guardians              Guardian[]
   teacherAttendance      Attendance[]            @relation("TeacherAttendance")
   userLeaves             Leave[]                 @relation("UserLeaves")
   collectedPayments      FeePayment[]            @relation("FeeCollector")
@@ -373,7 +373,7 @@ model Guardian {
   email      String?
   occupation String?
   isPrimary  Boolean          @default(false)
-  userId     String?          @unique
+  userId     String?
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
 
@@ -383,6 +383,7 @@ model Guardian {
 
   @@index([tenantId])
   @@index([studentId])
+  @@index([userId])
   @@map("guardians")
 }
 

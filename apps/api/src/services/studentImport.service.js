@@ -22,7 +22,7 @@ const TEMPLATE_COLUMNS = [
 const GENDERS = new Set(['MALE', 'FEMALE', 'OTHER']);
 const RELATIONS = new Set(['FATHER', 'MOTHER', 'GUARDIAN', 'SIBLING', 'OTHER']);
 
-const generatePortalPin = () => String(Math.floor(100000 + Math.random() * 900000));
+const { buildDefaultPassword } = require('../lib/portalPassword');
 
 const parseCsv = (text) => csv.parseCsv(text, TEMPLATE_COLUMNS, { required: 'firstName' });
 
@@ -218,6 +218,7 @@ async function commitImport(tenantId, { classId, sectionId, csv }) {
     if (!section) throw Object.assign(new Error('Section not found in this class'), { status: 404 });
   }
 
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
   const byLine = new Map(preview.rows.map((r) => [r.line, r.status]));
   const rows = parseCsv(csv).map(normaliseRow)
     .filter((r) => ['NEW', 'GUARDIAN'].includes(byLine.get(r.line)));
@@ -267,7 +268,8 @@ async function commitImport(tenantId, { classId, sectionId, csv }) {
     }
 
     const admissionNumber = row.admissionNumber || await nextAdmissionNumber(tenantId, taken);
-    const plainPin = generatePortalPin();
+    // Left unset so the student uses the school-wide default password pattern.
+    const plainPin = buildDefaultPassword(tenant?.name, admissionNumber);
 
     // Student + guardian together: a half-written row is worse than none.
     const student = await prisma.$transaction(async (tx) => {
@@ -275,7 +277,6 @@ async function commitImport(tenantId, { classId, sectionId, csv }) {
         data: {
           tenantId,
           admissionNumber,
-          portalPin: await bcrypt.hash(plainPin, 10),
           firstName: row.firstName,
           lastName: row.lastName,
           classId,

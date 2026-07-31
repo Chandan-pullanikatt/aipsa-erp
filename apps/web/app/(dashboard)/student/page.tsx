@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
+import ProgressCard, { type CardData } from '@/components/ProgressCard';
 import {
   Calendar,
   Clock,
@@ -169,7 +170,8 @@ function StudentPortalContent() {
   const tabParam = searchParams.get('tab');
 
   const [student, setStudent] = useState<StudentItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'fees' | 'exams' | 'homework' | 'announcements'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'fees' | 'exams' | 'cca' | 'homework' | 'announcements'>('overview');
+  const [ccaCard, setCcaCard] = useState<CardData | null>(null);
 
   // Loading States
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -227,7 +229,7 @@ function StudentPortalContent() {
 
   // Update active tab based on query param
   useEffect(() => {
-    if (tabParam && ['overview', 'attendance', 'fees', 'exams', 'homework', 'announcements'].includes(tabParam)) {
+    if (tabParam && ['overview', 'attendance', 'fees', 'exams', 'cca', 'homework', 'announcements'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
@@ -256,6 +258,19 @@ function StudentPortalContent() {
     } catch (err) {
       console.error(err);
       setFees(null);
+    } finally {
+      setLoadingData(false);
+    }
+  }, []);
+
+  const fetchCca = useCallback(async (studentId: string) => {
+    setLoadingData(true);
+    try {
+      const { data } = await api.get(`/progress/card/${studentId}`);
+      setCcaCard(data);
+    } catch (err) {
+      console.error(err);
+      setCcaCard(null);
     } finally {
       setLoadingData(false);
     }
@@ -339,6 +354,8 @@ function StudentPortalContent() {
       fetchFees(student.id);
     } else if (activeTab === 'exams') {
       fetchExams(student.id);
+    } else if (activeTab === 'cca') {
+      fetchCca(student.id);
     } else if (activeTab === 'homework') {
       if (student.classId) {
         fetchHomework(student.classId);
@@ -348,7 +365,7 @@ function StudentPortalContent() {
     } else if (activeTab === 'announcements') {
       fetchAnnouncements();
     }
-  }, [student, activeTab, fetchOverviewData, fetchAttendance, fetchFees, fetchExams, fetchHomework, fetchAnnouncements, fromDate, toDate]);
+  }, [student, activeTab, fetchOverviewData, fetchAttendance, fetchFees, fetchExams, fetchCca, fetchHomework, fetchAnnouncements, fromDate, toDate]);
 
   // View Receipt Handler
   const handleViewReceipt = async (payment: FeePaymentItem) => {
@@ -521,7 +538,7 @@ function StudentPortalContent() {
 
       {/* Tabs list navigation */}
       <div className="flex overflow-x-auto gap-1 border-b border-[#E5E7EB] pb-px scrollbar-none no-print font-display">
-        {(['overview', 'attendance', 'fees', 'exams', 'homework', 'announcements'] as const).map((tab) => (
+        {(['overview', 'attendance', 'fees', 'exams', 'cca', 'homework', 'announcements'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -531,7 +548,7 @@ function StudentPortalContent() {
                 : 'border-transparent text-gray-500 hover:text-gray-805 hover:border-gray-300'
             }`}
           >
-            {tab === 'exams' ? 'Exams & Grades' : tab}
+            {tab === 'exams' ? 'Exams & Grades' : tab === 'cca' ? 'CCA' : tab}
           </button>
         ))}
       </div>
@@ -1060,7 +1077,18 @@ function StudentPortalContent() {
           </div>
         )}
 
-        {/* TAB 5: HOMEWORK */}
+        {/* TAB 5: CCA / CO-SCHOLASTIC */}
+        {activeTab === 'cca' && (
+          ccaCard ? (
+            <ProgressCard card={ccaCard} />
+          ) : (
+            <div className="py-16 text-center text-sm text-gray-400">
+              Failed to load co-curricular records.
+            </div>
+          )
+        )}
+
+        {/* TAB 6: HOMEWORK */}
         {activeTab === 'homework' && (
           <div className="space-y-6 animate-fadeIn no-print">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
