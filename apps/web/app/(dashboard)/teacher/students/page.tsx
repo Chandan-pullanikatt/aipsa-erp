@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import {
   GraduationCap,
   ChevronDown,
+  Search,
   Plus,
   X,
   Flag,
@@ -15,6 +16,11 @@ import {
 } from 'lucide-react';
 
 interface ClassItem {
+  id: string;
+  name: string;
+}
+
+interface SectionItem {
   id: string;
   name: string;
 }
@@ -47,6 +53,9 @@ const EMPTY_FORM = { type: 'REMARK', title: '', description: '', date: new Date(
 export default function TeacherStudentsPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
+  const [sections, setSections] = useState<SectionItem[]>([]);
+  const [selectedSectionId, setSelectedSectionId] = useState('');
+  const [search, setSearch] = useState('');
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   // Map of studentId → activities
@@ -63,6 +72,16 @@ export default function TeacherStudentsPage() {
       if (r.data.length > 0) setSelectedClassId(r.data[0].id);
     }).catch(console.error);
   }, []);
+
+  // Sections belong to the selected class — reset the filter whenever the class changes.
+  useEffect(() => {
+    setSelectedSectionId('');
+    setSections([]);
+    if (!selectedClassId) return;
+    api.get(`/sis/classes/${selectedClassId}/sections`)
+      .then((r) => setSections(r.data))
+      .catch(console.error);
+  }, [selectedClassId]);
 
   useEffect(() => {
     if (!selectedClassId) return;
@@ -128,6 +147,18 @@ export default function TeacherStudentsPage() {
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
 
+  // The class roster is fetched whole (limit 200), so section + name filtering is done here.
+  const term = search.trim().toLowerCase();
+  const visibleStudents = students.filter((s) => {
+    if (selectedSectionId && s.section?.id !== selectedSectionId) return false;
+    if (!term) return true;
+    return (
+      `${s.firstName} ${s.lastName}`.toLowerCase().includes(term) ||
+      (s.admissionNumber ?? '').toLowerCase().includes(term)
+    );
+  });
+  const isFiltered = !!selectedSectionId || !!term;
+
   return (
     <div className="max-w-3xl space-y-6 pb-12">
       {/* Header */}
@@ -147,20 +178,63 @@ export default function TeacherStudentsPage() {
         </div>
       )}
 
-      {/* Class Selector */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-sm">
-        <label className="block text-xs font-bold uppercase tracking-wider text-[#6B7280] mb-2">Select Class</label>
-        <div className="relative">
-          <select
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-3.5 pr-10 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] appearance-none"
-          >
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#6B7280] mb-2">Select Class</label>
+            <div className="relative">
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-3.5 pr-10 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] appearance-none"
+              >
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#6B7280] mb-2">Section</label>
+            <div className="relative">
+              <select
+                value={selectedSectionId}
+                onChange={(e) => setSelectedSectionId(e.target.value)}
+                disabled={sections.length === 0}
+                className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-3.5 pr-10 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] appearance-none disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]"
+              >
+                <option value="">All sections</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-[#6B7280] mb-2">Search Student</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" strokeWidth={1.75} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or admission number…"
+              className="w-full border border-[#E5E7EB] rounded-lg py-2.5 pl-9 pr-9 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded text-[#9CA3AF] hover:text-[#1A1D23] hover:bg-[#F3F4F6] transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -170,14 +244,18 @@ export default function TeacherStudentsPage() {
           <Activity className="w-4 h-4 animate-spin" />
           <span>Loading students…</span>
         </div>
-      ) : students.length === 0 && selectedClassId ? (
+      ) : visibleStudents.length === 0 && selectedClassId ? (
         <div className="bg-white rounded-xl border border-dashed border-[#E5E7EB] p-8 text-center shadow-sm">
           <GraduationCap className="w-8 h-8 text-[#D1D5DB] mx-auto mb-2" strokeWidth={1.5} />
-          <p className="text-sm font-semibold text-[#6B7280]">No students in {selectedClass?.name ?? 'this class'} yet.</p>
+          <p className="text-sm font-semibold text-[#6B7280]">
+            {isFiltered
+              ? 'No students match these filters.'
+              : `No students in ${selectedClass?.name ?? 'this class'} yet.`}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {students.map((student) => {
+          {visibleStudents.map((student) => {
             const studentActivities = activitiesMap[student.id] ?? [];
             const isAdding = addingFor === student.id;
 

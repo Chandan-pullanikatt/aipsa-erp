@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import {
@@ -32,7 +32,10 @@ import {
   MessageSquare,
   X,
   IdCard,
+  Camera,
 } from 'lucide-react';
+
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 interface Student {
   id: string; admissionNumber: string; firstName: string; lastName: string;
@@ -163,8 +166,39 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [addingActivity, setAddingActivity] = useState(false);
   const [activityForm, setActivityForm] = useState({ type: 'REMARK', title: '', description: '', date: new Date().toISOString().split('T')[0] });
   const [activitySaving, setActivitySaving] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => { params.then((p) => setId(p.id)); }, [params]);
+
+  // The API stores the file and writes the url onto the student, returning the
+  // updated record — so we swap it into state without a refetch.
+  async function handlePhotoPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file after a failure
+    if (!file || !id) return;
+    if (file.size > 4 * 1024 * 1024) { setError('Photo must be 4 MB or smaller.'); return; }
+    setPhotoBusy(true); setError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await api.post(`/sis/students/${id}/photo`, fd);
+      setStudent((prev) => (prev ? { ...prev, photoUrl: data.photoUrl } : prev));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to upload photo.');
+    } finally { setPhotoBusy(false); }
+  }
+
+  async function handleRemovePhoto() {
+    if (!id || !confirm('Remove this student’s photo?')) return;
+    setPhotoBusy(true); setError('');
+    try {
+      const { data } = await api.delete(`/sis/students/${id}/photo`);
+      setStudent((prev) => (prev ? { ...prev, photoUrl: data.photoUrl } : prev));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to remove photo.');
+    } finally { setPhotoBusy(false); }
+  }
 
   async function loadStudent(sid: string) {
     const { data } = await api.get(`/sis/students/${sid}`);
@@ -357,6 +391,31 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
 
         {editing ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Photo — uploaded/removed immediately, independent of the Save button */}
+            <div className="sm:col-span-2 flex items-center gap-4 pb-4 border-b border-[#F3F4F6]">
+              <div className="w-16 h-16 rounded-full bg-[#E5F6EE] text-[#1D7A4A] flex items-center justify-center font-bold text-xl border border-[#26A96B]/15 overflow-hidden shrink-0">
+                {student.photoUrl
+                  ? <img src={student.photoUrl} alt="" className="w-full h-full object-cover" />
+                  : <>{student.firstName[0]}{student.lastName[0]}</>}
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap gap-2">
+                  <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoPicked} className="hidden" />
+                  <button type="button" onClick={() => photoInputRef.current?.click()} disabled={photoBusy}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#E5E7EB] rounded-lg text-xs font-bold text-[#4B5563] bg-white hover:bg-[#F9FAFB] transition-all shadow-sm disabled:opacity-50">
+                    <Camera className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    {photoBusy ? 'Working...' : student.photoUrl ? 'Change Photo' : 'Add Photo'}
+                  </button>
+                  {student.photoUrl && (
+                    <button type="button" onClick={handleRemovePhoto} disabled={photoBusy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#FCA5A5] rounded-lg text-xs font-bold text-[#DC2626] bg-white hover:bg-[#FEF2F2] transition-all shadow-sm disabled:opacity-50">
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} /> Remove
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-[#9CA3AF] font-medium">JPG, PNG or WEBP · up to 4 MB</p>
+              </div>
+            </div>
             {(['firstName', 'lastName', 'phone', 'address', 'city', 'state'] as const).map((key) => (
               <div key={key} className="space-y-1">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{key.replace(/([A-Z])/g, ' $1')}</label>
@@ -368,6 +427,16 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Date of Birth</label>
               <input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} 
                 className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all" />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Blood Group</label>
+              <select value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })}
+                className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all">
+                <option value="">Not recorded</option>
+                {/* keep an already-stored value selectable even if it isn't one of the eight */}
+                {form.bloodGroup && !BLOOD_GROUPS.includes(form.bloodGroup) && <option value={form.bloodGroup}>{form.bloodGroup}</option>}
+                {BLOOD_GROUPS.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
             </div>
             <div className="space-y-1">
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Status</label>

@@ -413,6 +413,23 @@ async function assertParentOwnsStudent(tenantId, userId, studentId) {
   return student;
 }
 
+// Admin-side counterpart of setParentStudentPhoto: sets or clears the photo on
+// any student in the tenant. `photoUrl` null removes it.
+async function setStudentPhoto(tenantId, studentId, photoUrl) {
+  const existing = await prisma.student.findFirst({ where: { id: studentId, tenantId } });
+  if (!existing) throw Object.assign(new Error('Student not found'), { status: 404 });
+  const { portalPin: _pin, ...student } = await prisma.student.update({
+    where: { id: studentId },
+    data: { photoUrl: photoUrl || null },
+    include: {
+      class: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true } },
+      guardians: true,
+    },
+  });
+  return student;
+}
+
 async function setParentStudentPhoto(tenantId, userId, studentId, photoUrl) {
   await assertParentOwnsStudent(tenantId, userId, studentId);
   const { portalPin: _pin, ...student } = await prisma.student.update({
@@ -773,7 +790,7 @@ module.exports = {
   listStudents, getStudent, createStudent, updateStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
   getPortalPin, resetPortalPin, listSectionCredentials, getParentStudents, getStudentByUserId, setFeeAccessOverride,
-  setParentStudentPhoto, assertParentOwnsStudent,
+  setParentStudentPhoto, setStudentPhoto, assertParentOwnsStudent,
   // Class join codes
   generateClassJoinCode, getClassJoinCode, listClassJoinCodes,
   lookupClassByJoinCode,

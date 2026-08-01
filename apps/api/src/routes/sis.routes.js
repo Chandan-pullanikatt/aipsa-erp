@@ -147,6 +147,27 @@ router.put('/students/:id', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/sis/students/:id/photo — admin uploads/replaces a student photo.
+// The file goes to storage and the returned url is written onto the student.
+router.post('/students/:id/photo', adminOnly, joinPhotoUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+    const { url } = await storage.upload(req.file.buffer, {
+      folder: `aipsa/${req.tenant.id}/student-photos`,
+      resourceType: 'image',
+      contentType: req.file.mimetype,
+    });
+    res.status(201).json(await sis.setStudentPhoto(req.tenant.id, req.params.id, url));
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/sis/students/:id/photo
+router.delete('/students/:id/photo', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.setStudentPhoto(req.tenant.id, req.params.id, null));
+  } catch (err) { next(err); }
+});
+
 // ─── Guardians ───────────────────────────────────────────────────────────────
 
 router.get('/students/:studentId/guardians', async (req, res, next) => {
