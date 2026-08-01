@@ -47,6 +47,7 @@ model Tenant {
   homeworkSubmissions     HomeworkSubmission[]
   classJoinRequests       ClassJoinRequest[]
   lateFeeWaivers          LateFeeWaiver[]
+  feeReminderLogs         FeeReminderLog[]
   studentActivities       StudentActivity[]
   premiumLmsSubscriptions PremiumLmsSubscription[]
   busRoutes               BusRoute[]
@@ -254,12 +255,12 @@ model Class {
 // ─── SIS: Section ────────────────────────────────────────────────────────────
 
 model Section {
-  id                String   @id @default(cuid())
-  tenantId          String
-  classId           String
-  name              String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id        String   @id @default(cuid())
+  tenantId  String
+  classId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   inchargeTeacherId String?
 
@@ -335,6 +336,7 @@ model Student {
   examResults             ExamResult[]
   homeworkSubmissions     HomeworkSubmission[]
   lateFeeWaivers          LateFeeWaiver[]
+  feeReminderLogs         FeeReminderLog[]
   activities              StudentActivity[]
   premiumLmsSubscriptions PremiumLmsSubscription[]
   busRoute                BusRoute?                @relation(fields: [busRouteId], references: [id])
@@ -574,10 +576,11 @@ model FeeStructure {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  feeCategory    FeeCategory     @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
-  class          Class?          @relation(fields: [classId], references: [id])
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feeCategory    FeeCategory      @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
+  class          Class?           @relation(fields: [classId], references: [id])
   lateFeeWaivers LateFeeWaiver[]
+  reminderLogs   FeeReminderLog[]
 
   @@index([tenantId, academicYear])
   @@map("fee_structures")
@@ -719,9 +722,9 @@ model Subject {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  class        Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
-  teacher      User?              @relation("SubjectTeacher", fields: [teacherId], references: [id])
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class        Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher      User?            @relation("SubjectTeacher", fields: [teacherId], references: [id])
   teachers     SubjectTeacher[]
   examResults  ExamResult[]
   periods      Period[]
@@ -1114,6 +1117,33 @@ model LateFeeWaiver {
   @@map("late_fee_waivers")
 }
 
+// ─── Fee Reminder Log ─────────────────────────────────────────────────────────
+// One row per reminder actually dispatched, keyed by the calendar day it went
+// out. It serves two purposes: the unique constraint makes the daily job
+// idempotent (a re-run on the same day inserts nothing), and `sentOn` is what
+// the weekly overdue cadence measures against.
+
+model FeeReminderLog {
+  id             String   @id @default(cuid())
+  tenantId       String
+  studentId      String
+  feeStructureId String
+  academicYear   String
+  // UPCOMING = ahead of the due date, DUE = on it, OVERDUE = past it.
+  kind           String
+  amount         Float
+  sentOn         DateTime @db.Date
+  createdAt      DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeStructure FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, studentId, feeStructureId, sentOn])
+  @@index([tenantId, studentId, feeStructureId])
+  @@map("fee_reminder_logs")
+}
+
 // ─── Class Join Requests (Student Self-Registration) ─────────────────────────
 
 enum JoinRequestStatus {
@@ -1406,23 +1436,23 @@ model StoreItem {
 }
 
 model Purchase {
-  id           String           @id @default(cuid())
-  tenantId     String
-  studentId    String
-  storeItemId  String?
-  itemName     String
-  category     PurchaseCategory @default(OTHER)
-  quantity     Int              @default(1)
-  amount       Float
-  purchasedAt  DateTime         @default(now())
-  note         String?
-  recordedById String
+  id                String           @id @default(cuid())
+  tenantId          String
+  studentId         String
+  storeItemId       String?
+  itemName          String
+  category          PurchaseCategory @default(OTHER)
+  quantity          Int              @default(1)
+  amount            Float
+  purchasedAt       DateTime         @default(now())
+  note              String?
+  recordedById      String
   // Online-checkout fields. Admin-recorded sales default to PAID (no Razorpay);
   // student/parent online purchases go PENDING → PAID after signature verify.
-  paymentStatus     String   @default("PAID") // PENDING | PAID | FAILED
-  razorpayOrderId   String?  @unique
+  paymentStatus     String           @default("PAID") // PENDING | PAID | FAILED
+  razorpayOrderId   String?          @unique
   razorpayPaymentId String?
-  createdAt    DateTime         @default(now())
+  createdAt         DateTime         @default(now())
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)

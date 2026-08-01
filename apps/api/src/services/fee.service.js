@@ -414,8 +414,165 @@ async function getDefaulterReport(tenantId, { classId, feeCategoryId, academicYe
   };
 }
 
+// ─── Fee Due Reminders ────────────────────────────────────────────────────────
+// Cadence: 3 days before the due date, again on the due date, then once a week
+// while the balance is still outstanding. Every dispatch is written to
+// fee_reminder_logs, whose unique (tenant, student, structure, sentOn) index makes
+// a same-day re-run a no-op — so the cron job can safely run more than once and an
+// admin can press the manual button without double-messaging anyone.
+//
+// Driven by `scripts/send-fee-reminders.js` (system cron) and by
+// POST /fees/send-reminders (admin button). Pass `dryRun` to preview.
+
+const REMIND_DAYS_BEFORE = 3;
+const OVERDUE_REPEAT_DAYS = 7;
+
+const startOfDay = (d) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); return x; };
+const formatDueDate = (d) =>
+  new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+async function sendFeeReminders(tenantId, { academicYear, today, dryRun = false } = {}) {
+  const year = academicYear || currentAcademicYear();
+  const runDate = startOfDay(today || new Date());
+  const throttleFrom = new Date(runDate.getTime() - OVERDUE_REPEAT_DAYS * 86400000);
+
+  const [students, structures, payments, guardians, recentLogs] = await Promise.all([
+    prisma.student.findMany({
+      where: { tenantId, status: 'ACTIVE' },
+      select: {
+        id: true, firstName: true, lastName: true, admissionNumber: true,
+        classId: true, boardingType: true, busRouteId: true,
+        class: { select: { name: true } },
+      },
+    }),
+    // Only dated structures can be reminded about — an undated one has no cadence.
+    prisma.feeStructure.findMany({
+      where: { tenantId, academicYear: year, isActive: true, dueDate: { not: null } },
+      include: { feeCategory: { select: { id: true, name: true, serviceType: true } } },
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.feePayment.findMany({
+      where: { tenantId, academicYear: year },
+      select: { studentId: true, feeCategoryId: true, amount: true },
+    }),
+    prisma.guardian.findMany({
+      where: { tenantId, userId: { not: null } },
+      select: { studentId: true, userId: true },
+    }),
+    prisma.feeReminderLog.findMany({
+      where: { tenantId, sentOn: { gte: throttleFrom } },
+      select: { studentId: true, feeStructureId: true, sentOn: true },
+    }),
+  ]);
+
+  const result = {
+    academicYear: year, date: runDate.toISOString().slice(0, 10), dryRun,
+    sent: 0, skipped: 0, unreachable: [], reminders: [],
+  };
+  if (!structures.length || !students.length) return result;
+
+  // paid[studentId][categoryId] — payments are recorded per category, so a
+  // category's total is spread across its structures earliest due date first.
+  const paid = {};
+  for (const p of payments) {
+    (paid[p.studentId] ||= {})[p.feeCategoryId] = (paid[p.studentId]?.[p.feeCategoryId] || 0) + p.amount;
+  }
+
+  const guardiansByStudent = {};
+  for (const g of guardians) (guardiansByStudent[g.studentId] ||= []).push(g.userId);
+
+  // pair key -> most recent sentOn within the throttle window
+  const lastSent = {};
+  for (const l of recentLogs) {
+    const k = `${l.studentId}:${l.feeStructureId}`;
+    if (!lastSent[k] || l.sentOn > lastSent[k]) lastSent[k] = l.sentOn;
+  }
+
+  // Service categories only apply to the students who use the service.
+  const eligible = (svc, s) =>
+    svc === 'TRANSPORT' ? !!s.busRouteId
+    : svc === 'HOSTEL' ? s.boardingType === 'HOSTELER'
+    : true;
+
+  const toLog = [];
+
+  for (const s of students) {
+    const applicable = structures.filter(
+      (st) => (!st.classId || st.classId === s.classId) && eligible(st.feeCategory.serviceType, s),
+    );
+    if (!applicable.length) continue;
+
+    const remaining = { ...(paid[s.id] || {}) }; // category credit left to allocate
+
+    for (const st of applicable) {
+      const credit = Math.min(remaining[st.feeCategoryId] || 0, st.amount);
+      remaining[st.feeCategoryId] = (remaining[st.feeCategoryId] || 0) - credit;
+      const due = Math.max(0, st.amount - credit);
+      if (due <= 0) continue;
+
+      const dueDate = startOfDay(st.dueDate);
+      const daysUntil = Math.round((dueDate - runDate) / 86400000);
+
+      const kind = daysUntil === REMIND_DAYS_BEFORE ? 'UPCOMING'
+        : daysUntil === 0 ? 'DUE'
+        : daysUntil < 0 ? 'OVERDUE'
+        : null;
+      if (!kind) continue; // not a reminder day for this structure
+
+      const prev = lastSent[`${s.id}:${st.id}`];
+      // Upcoming/due fire once on their day; overdue repeats only every 7 days.
+      const throttled = kind === 'OVERDUE'
+        ? !!prev
+        : !!prev && startOfDay(prev).getTime() === runDate.getTime();
+      if (throttled) { result.skipped += 1; continue; }
+
+      const studentName = `${s.firstName} ${s.lastName}`.trim();
+      const userIds = guardiansByStudent[s.id] || [];
+      if (!userIds.length) {
+        // No guardian has a portal account yet, so there is nobody to message.
+        // Reported back rather than logged, so it retries once they log in.
+        // Listed once per student, however many fees they owe.
+        if (!result.unreachable.some((u) => u.studentId === s.id)) {
+          result.unreachable.push({ studentId: s.id, studentName, admissionNumber: s.admissionNumber });
+        }
+        continue;
+      }
+
+      result.reminders.push({
+        studentId: s.id, studentName, admissionNumber: s.admissionNumber,
+        className: s.class?.name || null,
+        feeCategory: st.feeCategory.name,
+        amount: due,
+        dueDate: dueDate.toISOString().slice(0, 10),
+        kind,
+        daysOverdue: daysUntil < 0 ? -daysUntil : 0,
+      });
+      result.sent += 1;
+
+      if (!dryRun) {
+        notify.notify(tenantId, userIds, 'FEE_DUE', {
+          studentName,
+          amount: due,
+          dueDate: formatDueDate(dueDate),
+          referenceId: st.id,
+        });
+        toLog.push({
+          tenantId, studentId: s.id, feeStructureId: st.id,
+          academicYear: year, kind, amount: due, sentOn: runDate,
+        });
+      }
+    }
+  }
+
+  if (toLog.length) {
+    await prisma.feeReminderLog.createMany({ data: toLog, skipDuplicates: true });
+  }
+  return result;
+}
+
 module.exports = {
   currentAcademicYear,
+  sendFeeReminders,
   listCategories, createCategory, updateCategory, deleteCategory,
   listStructures, createStructure, updateStructure, deleteStructure,
   getStudentFeeAccount, recordPayment, listPayments, getPayment, getDueReport,

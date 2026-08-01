@@ -96,6 +96,19 @@ router.get('/defaulter-report', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─── Fee Due Reminders ────────────────────────────────────────────────────────
+// Same job the nightly cron runs, on demand. Idempotent per day, so pressing the
+// button twice will not message anyone twice. `?dryRun=true` previews the list.
+router.post('/send-reminders', adminOnly, async (req, res, next) => {
+  try {
+    const { academicYear, dryRun } = { ...req.query, ...req.body };
+    res.json(await fee.sendFeeReminders(req.tenant.id, {
+      academicYear,
+      dryRun: dryRun === true || dryRun === 'true',
+    }));
+  } catch (e) { next(e); }
+});
+
 // ─── Academic Year ────────────────────────────────────────────────────────────
 router.get('/academic-year', (req, res) => {
   res.json({ academicYear: fee.currentAcademicYear() });

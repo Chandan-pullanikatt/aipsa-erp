@@ -567,6 +567,8 @@ function DueReportTab({ classes }: { classes: ClassItem[] }) {
   const [report, setReport] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const [reminderResult, setReminderResult] = useState<any>(null);
 
   async function loadReport() {
     setLoading(true);
@@ -574,6 +576,25 @@ function DueReportTab({ classes }: { classes: ClassItem[] }) {
       const { data } = await api.get('/fees/due-report', { params: classId ? { classId } : {} });
       setReport(data); setLoaded(true);
     } finally { setLoading(false); }
+  }
+
+  // Preview first (dry run), confirm, then send. The API is idempotent per day, so
+  // an accidental second click cannot double-message a parent.
+  async function sendReminders() {
+    setReminding(true);
+    setReminderResult(null);
+    try {
+      const { data: preview } = await api.post('/fees/send-reminders', { dryRun: true });
+      if (!preview.sent) {
+        setReminderResult({ ...preview, previewOnly: true });
+        return;
+      }
+      if (!confirm(`Send ${preview.sent} fee reminder${preview.sent !== 1 ? 's' : ''} to parents now?`)) return;
+      const { data } = await api.post('/fees/send-reminders', {});
+      setReminderResult(data);
+    } catch {
+      setReminderResult({ error: 'Could not send reminders. Please try again.' });
+    } finally { setReminding(false); }
   }
 
   const totalDue = report.reduce((a, r) => a + r.balance, 0);
@@ -593,7 +614,31 @@ function DueReportTab({ classes }: { classes: ClassItem[] }) {
           className="w-full sm:w-auto px-5 py-2 bg-[#1D7A4A] hover:bg-[#155D37] text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50 shrink-0">
           {loading ? 'Generating...' : 'Generate Report'}
         </button>
+        <button onClick={sendReminders} disabled={reminding} title="Reminders also go out automatically: 3 days before the due date, on the due date, then weekly while unpaid."
+          className="w-full sm:w-auto px-5 py-2 border border-[#1D7A4A] text-[#1D7A4A] hover:bg-[#1D7A4A]/5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 shrink-0">
+          {reminding ? 'Sending...' : 'Send Reminders'}
+        </button>
       </div>
+
+      {reminderResult && (
+        <div className={`p-4 rounded-xl border text-sm font-body ${reminderResult.error ? 'bg-[#FEE2E2]/30 border-[#EF4444]/20 text-[#991B1B]' : 'bg-[#ECFDF5] border-[#0F6E56]/20 text-[#0F6E56]'}`}>
+          {reminderResult.error ? reminderResult.error : reminderResult.sent === 0 ? (
+            <p className="font-semibold">No reminders are due today — every parent with a pending fee has already been reminded this cycle.</p>
+          ) : (
+            <p className="font-semibold">Sent {reminderResult.sent} reminder{reminderResult.sent !== 1 ? 's' : ''} to parents.</p>
+          )}
+          {reminderResult.skipped > 0 && (
+            <p className="mt-1 text-xs opacity-80">{reminderResult.skipped} skipped — already reminded within the last 7 days.</p>
+          )}
+          {reminderResult.unreachable?.length > 0 && (
+            <p className="mt-1 text-xs opacity-80">
+              {reminderResult.unreachable.length} student{reminderResult.unreachable.length !== 1 ? 's have' : ' has'} no parent account linked yet, so no reminder could be sent:{' '}
+              {reminderResult.unreachable.slice(0, 5).map((u: any) => u.studentName).join(', ')}
+              {reminderResult.unreachable.length > 5 ? ` and ${reminderResult.unreachable.length - 5} more` : ''}.
+            </p>
+          )}
+        </div>
+      )}
 
       {loaded && (
         <>

@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:demo": "node prisma/demo_seed.js",
+    "fees:remind": "node scripts/send-fee-reminders.js",
     "test:isolation": "node tests/tenant-isolation.test.js"
   },
   "dependencies": {
