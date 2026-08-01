@@ -12,8 +12,11 @@ router.use(authenticate, authorize('SCHOOL_ADMIN', 'TEACHER', 'STUDENT', 'PARENT
 
 function validate(req, res, next) {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
-  next();
+  if (errors.isEmpty()) return next();
+  // Clients read `error` for display; `errors` stays for field-level handling.
+  const list = errors.array();
+  const error = list.map((e) => e.msg === 'Invalid value' ? `${e.path} is required.` : e.msg).join(' ');
+  return res.status(422).json({ error, errors: list });
 }
 
 const adminOnly = authorize('SCHOOL_ADMIN');
@@ -147,6 +150,15 @@ router.put('/students/:id', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/sis/students/:id — permanent, and only for students with no
+// school records. A child who has actually attended should be moved to
+// Transferred/Inactive via the status field instead.
+router.delete('/students/:id', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.deleteStudent(req.tenant.id, req.params.id, req.user));
+  } catch (err) { next(err); }
+});
+
 // POST /api/sis/students/:id/photo — admin uploads/replaces a student photo.
 // The file goes to storage and the returned url is written onto the student.
 router.post('/students/:id/photo', adminOnly, joinPhotoUpload.single('file'), async (req, res, next) => {
@@ -177,10 +189,9 @@ router.get('/students/:studentId/guardians', async (req, res, next) => {
 });
 
 router.post('/students/:studentId/guardians', adminOnly, [
-  body('firstName').trim().notEmpty(),
-  body('lastName').trim().notEmpty(),
-  body('relation').notEmpty(),
-  body('phone').notEmpty(),
+  body('firstName').trim().notEmpty().withMessage('First name is required.'),
+  body('relation').notEmpty().withMessage('Relation is required.'),
+  body('phone').trim().notEmpty().withMessage('Phone is required.'),
 ], validate, async (req, res, next) => {
   try {
     res.status(201).json(await sis.createGuardian(req.tenant.id, req.params.studentId, req.body));

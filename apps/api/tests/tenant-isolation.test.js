@@ -170,6 +170,9 @@ async function main() {
       const s = await prisma.student.findUnique({ where: { id: A.student.id } });
       return s && s.firstName === 'Secret' ? s : null; // null => was mutated
     });
+  await expectMutationDenied('sis.deleteStudent(B, A.studentId)',
+    () => sis.deleteStudent(B.tenant.id, A.student.id, B.admin),
+    found('student', A.student.id));
   await expectMutationDenied('sis.updateClass(B, A.emptyClassId)',
     () => sis.updateClass(B.tenant.id, A.emptyClass.id, { name: 'HACKED' }),
     async () => {

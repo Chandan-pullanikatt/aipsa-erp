@@ -1,6 +1,7 @@
 'use client';
 
 import { Printer, Award, GraduationCap, Users } from 'lucide-react';
+import { printElement } from '@/lib/print';
 
 const TERMS = ['TERM_1', 'TERM_2', 'ANNUAL'] as const;
 const TERM_LABELS: Record<string, string> = { TERM_1: 'Term 1', TERM_2: 'Term 2', ANNUAL: 'Annual' };
@@ -36,14 +37,11 @@ export default function ProgressCard({ card, variant = 'full' }: { card: CardDat
   const termMeta = Object.fromEntries(card.terms.map(t => [t.term, t]));
   const ccaOnly = variant === 'cca';
 
+  // The holistic card is a multi-section record, not a one-sheet summary — it prints
+  // at its natural A4 size and runs onto as many pages as it needs, repeating table
+  // headers and never splitting a row. (Switch to `fit: 'page'` to cram it onto one.)
   function print() {
-    const el = document.getElementById('progress-card-print');
-    if (!el) return;
-    const prev = document.getElementById('print-section');
-    if (prev) prev.id = '';
-    el.id = 'print-section';
-    window.print();
-    setTimeout(() => { el.id = 'progress-card-print'; if (prev) prev.id = 'print-section'; }, 500);
+    printElement(document.getElementById('progress-card-print'), { fit: 'flow' });
   }
 
   if (!card.anyPublished) {
@@ -72,15 +70,6 @@ export default function ProgressCard({ card, variant = 'full' }: { card: CardDat
 
   return (
     <div className="space-y-4">
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #print-section, #print-section * { visibility: visible; }
-          #print-section { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
       <div className="flex justify-end no-print">
         <button onClick={print} className="inline-flex items-center gap-1.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white px-4 py-2 rounded-lg text-sm font-semibold">
           <Printer className="w-4 h-4" /> {ccaOnly ? 'Print CCA Record' : 'Print Card'}

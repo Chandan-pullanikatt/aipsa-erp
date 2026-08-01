@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
+import { printElement } from '@/lib/print';
 import { StudentIdCard, type IdCardStudent, type IdCardSchool } from '@/components/StudentIdCard';
 import { ArrowLeft, Printer, IdCard, Loader2 } from 'lucide-react';
 
@@ -56,14 +57,11 @@ export default function IdCardsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* print rules — hide everything except the card area, render cards true-to-size */}
+      {/* Cards must print true-to-size, so no shrink-to-fit here — just keep a
+          front/back pair from being split across a page boundary. */}
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #id-card-print-area, #id-card-print-area * { visibility: visible !important; }
-          #id-card-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
-          .idcard-pair { break-inside: avoid; page-break-inside: avoid; margin-bottom: 6mm; }
-          @page { size: A4; margin: 10mm; }
+          #print-root .idcard-pair { break-inside: avoid; page-break-inside: avoid; margin-bottom: 6mm; }
         }
       `}</style>
 
@@ -98,7 +96,7 @@ export default function IdCardsPage() {
               </div>
             )}
             <button
-              onClick={() => window.print()}
+              onClick={() => printElement(document.getElementById('id-card-print-area'), { fit: 'flow' })}
               disabled={!students.length}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1D7A4A] text-white text-sm font-semibold hover:bg-[#166038] disabled:opacity-40 disabled:cursor-not-allowed"
             >

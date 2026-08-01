@@ -372,3 +372,157 @@ aside.app-sidebar:not(img) {
 body.sidebar-open {
   overflow: hidden;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PRINT
+   Driven by lib/print.ts, which clones the thing being printed into a
+   `#print-root` hung off <body>. That escape hatch is required: the dashboard
+   shell is `h-[100dvh] overflow-hidden` around an `overflow-auto` pane, so
+   anything printed in place is clipped to a single viewport and the rest of the
+   document silently disappears.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+:root {
+  /* A4 portrait minus the 12mm @page margin below. Keep in sync with lib/print.ts. */
+  --print-page-w: 186mm;
+}
+
+/* Print-only content: hidden in the app, revealed inside `#print-root`. Using a
+   class rather than Tailwind's `print:` variant means it is also visible while
+   `#print-root` is being measured, so the shrink-to-fit maths sees the real height. */
+.print-only,
+.print-only-grid {
+  display: none !important;
+}
+
+/* Off-screen staging area. Laid out at the true printable width so measurements
+   taken here match the sheet exactly; never visible on screen. */
+#print-root {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: var(--print-page-w);
+  background: #fff;
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+#print-root .print-only {
+  display: block !important;
+}
+
+#print-root .print-only-grid {
+  display: grid !important;
+}
+
+#print-root .no-print {
+  display: none !important;
+}
+
+/* Compaction and un-clipping. These sit outside `@media print` on purpose — they
+   must be active during measurement too, or the computed scale is wrong. */
+/* Scroll panes must not clip on paper. `.overflow-hidden` is deliberately left
+   alone — it's used for intentional clipping (receipt watermark, ID card art). */
+#print-root .overflow-x-auto,
+#print-root .overflow-y-auto,
+#print-root .overflow-auto {
+  overflow: visible !important;
+}
+
+#print-root table {
+  min-width: 0 !important;
+}
+
+#print-root thead th {
+  padding: 6px 10px !important;
+}
+
+#print-root tbody td {
+  padding: 6px 10px !important;
+}
+
+/* The global 48px row height is a screen affordance; on paper it just wastes sheet. */
+#print-root tbody tr {
+  height: auto !important;
+}
+
+#print-root * {
+  box-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* Unwind the fixed-height app shell so the page can grow to its content. */
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* Everything except the lifted clone is out of the printed document. Note this
+     is `display: none`, not `visibility: hidden` — hidden boxes still occupy the
+     sheet, which is what pushed report cards off the only printable page. */
+  body.printing > *:not(#print-root) {
+    display: none !important;
+  }
+
+  #print-root {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    opacity: 1 !important;
+    z-index: auto !important;
+    width: var(--print-page-w) !important;
+  }
+
+  #print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-root-inner {
+    width: var(--print-page-w);
+    transform: scale(var(--print-scale, 1));
+    transform-origin: top left;
+  }
+
+  /* fit: 'page' — one exam mark sheet, one sheet of paper. The wrapper is clamped
+     to the *scaled* height so the shrunken content doesn't leave a trailing blank
+     page, and nothing inside is allowed to break. */
+  #print-root.print-fit-page {
+    height: var(--print-height, auto);
+    overflow: hidden;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #print-root.print-fit-page * {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* fit: 'flow' — the holistic progress card keeps its natural size and runs onto
+     as many sheets as it needs, repeating table headers and never splitting a row. */
+  #print-root.print-fit-flow thead {
+    display: table-header-group;
+  }
+
+  #print-root.print-fit-flow tr,
+  #print-root.print-fit-flow img {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Legacy safety net for any print surface not yet on lib/print.ts. */
+  .no-print {
+    display: none !important;
+  }
+}

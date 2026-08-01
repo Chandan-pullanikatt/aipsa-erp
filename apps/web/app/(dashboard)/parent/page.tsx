@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
+import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
 import {
   Search,
@@ -453,32 +454,6 @@ function ParentDashboardContent() {
 
   return (
     <div className="max-w-6xl space-y-6 font-body">
-      {/* Global CSS style block for clean, print-friendly templates */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #print-section, #print-section * {
-            visibility: visible !important;
-          }
-          #print-section {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            background: white !important;
-            box-shadow: none !important;
-            border: none !important;
-            margin: 0 !important;
-            padding: 20px !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-6 no-print">
         <div>
@@ -941,22 +916,11 @@ function ParentDashboardContent() {
                                       </p>
                                     </div>
 
-                                    {/* Action button to print this single report card */}
+                                    {/* Action button to print this single report card — one exam, one sheet */}
                                     <button
-                                      onClick={() => {
-                                        const originalSec = document.getElementById('print-section');
-                                        if (originalSec) originalSec.id = '';
-                                        const card = document.getElementById(`report-card-${summary.exam.id}`);
-                                        if (card) {
-                                          card.id = 'print-section';
-                                          window.print();
-                                          // restore ID to prevent duplicates
-                                          setTimeout(() => {
-                                            card.id = `report-card-${summary.exam.id}`;
-                                            if (originalSec) originalSec.id = 'print-section';
-                                          }, 500);
-                                        }
-                                      }}
+                                      onClick={() =>
+                                        printElement(document.getElementById(`report-card-${summary.exam.id}`), { fit: 'page' })
+                                      }
                                       className="px-4 py-2 border border-[#1D7A4A]/25 hover:bg-[#E5F6EE]/50 text-xs font-bold text-[#1D7A4A] rounded-xl transition-all shadow-sm flex items-center gap-1.5 self-start no-print cursor-pointer font-display"
                                     >
                                       <Printer className="w-3.5 h-3.5" strokeWidth={2} />
@@ -967,10 +931,13 @@ function ParentDashboardContent() {
                                   {/* RENDERABLE PRINT SECTION TEMPLATE */}
                                   <div id={`report-card-${summary.exam.id}`} className="p-6 space-y-6 bg-white">
                                     {/* Official Header (Visible on print only) */}
-                                    <div className="hidden print:block text-center border-b-2 border-gray-900 pb-4 mb-4 font-display">
+                                    <div className="print-only text-center border-b-2 border-gray-900 pb-4 mb-4 font-display">
                                       <h2 className="text-xl font-black uppercase text-gray-900 tracking-wider">Official Academic Record</h2>
                                       <p className="text-sm font-semibold text-gray-600 mt-1">EduBridge Multi-Tenant School ERP Systems</p>
-                                      
+                                      {/* The exam name lives in the on-screen header, which is outside the printed
+                                          section — without this the sheet never says which exam it is. */}
+                                      <p className="text-sm font-bold uppercase tracking-wide text-gray-900 mt-2">{summary.exam.name}</p>
+
                                       <div className="grid grid-cols-2 text-left text-xs text-gray-700 mt-4 border border-gray-300 p-3 rounded">
                                         <p><span className="font-bold">Student:</span> {activeStudent?.firstName} {activeStudent?.lastName}</p>
                                         <p><span className="font-bold">Adm No:</span> {activeStudent?.admissionNumber}</p>
@@ -1051,7 +1018,7 @@ function ParentDashboardContent() {
                                     </div>
 
                                     {/* Official Signature Lines (Print Only) */}
-                                    <div className="hidden print:grid grid-cols-2 gap-12 mt-16 pt-12 border-t border-dashed border-gray-400 text-xs text-center font-display">
+                                    <div className="print-only-grid grid-cols-2 gap-12 mt-16 pt-12 border-t border-dashed border-gray-400 text-xs text-center font-display">
                                       <div>
                                         <div className="h-10 border-b border-gray-400 max-w-[200px] mx-auto"></div>
                                         <p className="font-bold text-gray-700 mt-2">Class Teacher Signature</p>
@@ -1338,7 +1305,7 @@ function ParentDashboardContent() {
             ) : receiptDetails ? (
               <div className="p-6 space-y-6 font-body">
                 {/* RENDERABLE RECEIPT CONTAINER FOR DYNAMIC HIDE-PRINT SHEET */}
-                <div id="print-section" className="bg-white border border-gray-150 rounded-2xl p-6 space-y-6 text-sm text-gray-800 relative overflow-hidden">
+                <div id="receipt-print-section" className="bg-white border border-gray-150 rounded-2xl p-6 space-y-6 text-sm text-gray-800 relative overflow-hidden">
                   {/* Watermark badge (Visible only on screen or beautifully printed) */}
                   <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[#1D7A4A]/5 font-black text-7xl tracking-widest uppercase border-4 border-[#1D7A4A]/10 p-4 select-none pointer-events-none rotate-12 z-0">
                     PAID
@@ -1442,7 +1409,7 @@ function ParentDashboardContent() {
                     Close Preview
                   </button>
                   <button
-                    onClick={() => window.print()}
+                    onClick={() => printElement(document.getElementById('receipt-print-section'), { fit: 'page' })}
                     className="px-5 py-2 bg-[#1D7A4A] hover:bg-[#155B37] text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" strokeWidth={1.75} />

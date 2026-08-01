@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
+import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
 import {
   Calendar,
@@ -490,32 +491,6 @@ function StudentPortalContent() {
 
   return (
     <div className="max-w-6xl space-y-6">
-      {/* Global CSS style block for clean, print-friendly templates */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #print-section, #print-section * {
-            visibility: visible !important;
-          }
-          #print-section {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            background: white !important;
-            box-shadow: none !important;
-            border: none !important;
-            margin: 0 !important;
-            padding: 20px !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
       {/* Welcome Banner Panel */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-gray-100 pb-6 no-print">
         <div className="space-y-1">
@@ -961,20 +936,10 @@ function StudentPortalContent() {
                           </span>
                         )}
                         <button
-                          onClick={() => {
-                            // Assign global print section target for this exam block only
-                            const el = document.getElementById(`exam-sheet-${summary.exam.id}`);
-                            if (el) {
-                              // Assign temporary ID to match generic print container logic
-                              const prev = document.getElementById('print-section');
-                              if (prev) prev.removeAttribute('id');
-                              el.setAttribute('id', 'print-section');
-                              window.print();
-                              el.removeAttribute('id');
-                              el.setAttribute('id', `exam-sheet-${summary.exam.id}`);
-                              if (prev) prev.setAttribute('id', 'print-section');
-                            }
-                          }}
+                          onClick={() =>
+                            // One exam mark sheet, one sheet of paper.
+                            printElement(document.getElementById(`exam-sheet-${summary.exam.id}`), { fit: 'page' })
+                          }
                           className="px-4 py-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 text-xs font-semibold text-gray-700 rounded-lg transition-all shadow-sm shrink-0 flex items-center gap-1.5 font-display cursor-pointer"
                         >
                           <Printer className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -1317,7 +1282,7 @@ function StudentPortalContent() {
             ) : receiptDetails ? (
               <div className="p-6 space-y-6">
                 {/* RENDERABLE RECEIPT CONTAINER FOR DYNAMIC HIDE-PRINT SHEET */}
-                <div id="print-section" className="bg-white border border-gray-200 rounded-xl p-6 space-y-6 text-sm text-gray-800 relative">
+                <div id="receipt-print-section" className="bg-white border border-gray-200 rounded-xl p-6 space-y-6 text-sm text-gray-800 relative">
                   {/* Watermark badge */}
                   <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-emerald-500/5 font-black text-6xl tracking-widest uppercase border-4 border-emerald-500/10 p-4 select-none pointer-events-none rotate-12 z-0">
                     PAID
@@ -1421,7 +1386,7 @@ function StudentPortalContent() {
                     Close Preview
                   </button>
                   <button
-                    onClick={() => window.print()}
+                    onClick={() => printElement(document.getElementById('receipt-print-section'), { fit: 'page' })}
                     className="px-5 py-2 bg-[#1D7A4A] hover:bg-[#155B37] text-white text-xs font-semibold rounded-lg transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" strokeWidth={2} />

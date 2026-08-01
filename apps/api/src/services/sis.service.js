@@ -255,6 +255,106 @@ async function updateStudent(tenantId, id, data) {
   });
 }
 
+// Relations that make a student part of the school's permanent record rather
+// than a stray row from an import sheet. Attendance, leaves, fee payments and
+// exam results are Restrict foreign keys, so a delete would fail at the
+// database anyway; the rest cascade, which is worse — the history would go
+// silently. Either way the answer is the same: mark them TRANSFERRED.
+const STUDENT_HISTORY_RELATIONS = [
+  ['fee payments', (id) => prisma.feePayment.count({ where: { studentId: id } })],
+  ['exam results', (id) => prisma.examResult.count({ where: { studentId: id } })],
+  ['attendance records', (id) => prisma.attendance.count({ where: { studentId: id } })],
+  ['leave requests', (id) => prisma.leave.count({ where: { studentId: id } })],
+  ['homework submissions', (id) => prisma.homeworkSubmission.count({ where: { studentId: id } })],
+  ['progress cards', (id) => prisma.progressTerm.count({ where: { studentId: id } })],
+  ['CCA grades', (id) => prisma.ccaGrade.count({ where: { studentId: id } })],
+  ['library issues', (id) => prisma.bookIssue.count({ where: { studentId: id } })],
+  ['purchases', (id) => prisma.purchase.count({ where: { studentId: id } })],
+  ['programme registrations', (id) => prisma.registration.count({ where: { studentId: id } })],
+  ['premium LMS subscriptions', (id) => prisma.premiumLmsSubscription.count({ where: { studentId: id } })],
+  ['fee waivers', (id) => prisma.lateFeeWaiver.count({ where: { studentId: id } })],
+  ['activity records', (id) => prisma.studentActivity.count({ where: { studentId: id } })],
+];
+
+/**
+ * Permanently removes a student.
+ *
+ * Deliberately narrow, and for the same reason as deleteStaff: this undoes a
+ * mistake — a duplicate row in an import sheet, an admission that never turned
+ * into a joining — not a child who has actually attended. Anyone carrying
+ * academic or financial history is refused with a 409 pointing at the status
+ * field, which is what a leaver needs and keeps the records the school is
+ * required to retain.
+ *
+ * What does go with the student is only the paperwork that has no meaning
+ * without them: guardians, reminder logs, hostel allotment, gate passes and
+ * complaints (all onDelete: Cascade), plus the portal login.
+ */
+async function deleteStudent(tenantId, id, actingUser) {
+  const student = await prisma.student.findFirst({
+    where: { id, tenantId },
+    select: {
+      id: true, firstName: true, lastName: true,
+      admissionNumber: true, status: true, userId: true,
+    },
+  });
+  if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
+
+  const name = `${student.firstName} ${student.lastName}`.trim();
+
+  const counts = await Promise.all(STUDENT_HISTORY_RELATIONS.map(([label, count]) =>
+    count(id).then((n) => [label, n])));
+  const blocking = counts.filter(([, n]) => n > 0).map(([label]) => label);
+
+  // Registration.studentId is SetNull, so the row above only catches
+  // registrations made *for* this student. One the student booked themselves
+  // hangs off registrantUserId instead, which is Cascade on the portal user we
+  // delete below — without this it would take a paid registration with it.
+  if (student.userId) {
+    const selfRegistrations = await prisma.registration.count({
+      where: { tenantId, registrantUserId: student.userId },
+    });
+    if (selfRegistrations > 0 && !blocking.includes('programme registrations')) {
+      blocking.push('programme registrations');
+    }
+  }
+
+  if (blocking.length) {
+    throw Object.assign(
+      new Error(
+        `${name} has school records (${blocking.join(', ')}) and cannot be deleted. `
+        + 'Set the status to Transferred or Inactive instead — this keeps the records '
+        + 'and takes the student off the active roll.',
+      ),
+      { status: 409 },
+    );
+  }
+
+  // Written before the delete so the row survives it, and outside the
+  // transaction below for the same reason it is in deleteStaff: auditLog has no
+  // foreign key back to student or user, so it outlives both.
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      userId: actingUser ? actingUser.id : null,
+      action: 'STUDENT_DELETED',
+      entity: 'Student',
+      entityId: id,
+      meta: { name, admissionNumber: student.admissionNumber, status: student.status },
+    },
+  });
+
+  // The portal login is a separate User row that the student record points at,
+  // so nothing removes it for us — without this the school keeps an orphaned
+  // account that can still sign in.
+  await prisma.$transaction([
+    prisma.student.delete({ where: { id } }),
+    ...(student.userId ? [prisma.user.delete({ where: { id: student.userId } })] : []),
+  ]);
+
+  return { deleted: true, id, name };
+}
+
 // ─── Guardians ───────────────────────────────────────────────────────────────
 
 async function listGuardians(tenantId, studentId) {
@@ -280,9 +380,9 @@ async function createGuardian(tenantId, studentId, data) {
       data: {
         tenantId, studentId,
         firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        lastName: (lastName || '').trim(),
         relation,
-        phone,
+        phone: phone.trim(),
         email: email || undefined,
         occupation: occupation || undefined,
         isPrimary: isPrimary ?? false,
@@ -305,7 +405,7 @@ async function updateGuardian(tenantId, id, data) {
       where: { id },
       data: {
         ...(firstName && { firstName: firstName.trim() }),
-        ...(lastName && { lastName: lastName.trim() }),
+        ...(lastName !== undefined && { lastName: (lastName || '').trim() }),
         ...(relation && { relation }),
         ...(phone && { phone }),
         ...(email !== undefined && { email: email || null }),
@@ -800,7 +900,7 @@ async function deleteStudentActivity(tenantId, activityId, requesterId, requeste
 module.exports = {
   listClasses, createClass, updateClass, deleteClass, patchClass,
   listSections, createSection, updateSection, patchSection, deleteSection,
-  listStudents, getStudent, createStudent, updateStudent,
+  listStudents, getStudent, createStudent, updateStudent, deleteStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
   getPortalPin, resetPortalPin, listSectionCredentials, getParentStudents, getStudentByUserId, setFeeAccessOverride,
   setParentStudentPhoto, setStudentPhoto, assertParentOwnsStudent,

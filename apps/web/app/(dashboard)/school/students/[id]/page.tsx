@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import {
   ArrowLeft,
@@ -168,8 +169,37 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [activitySaving, setActivitySaving] = useState(false);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Kept apart from `error`, which renders in the top banner — a delete refusal
+  // needs to be readable next to the button that caused it, at the page bottom.
+  const [deleteError, setDeleteError] = useState('');
+  const router = useRouter();
 
   useEffect(() => { params.then((p) => setId(p.id)); }, [params]);
+
+  // Permanent removal, for a record that should never have existed. The server
+  // refuses anyone carrying school history and says which records blocked it —
+  // surface that verbatim, since it names the fix (change the status instead).
+  async function handleDeleteStudent() {
+    if (!id || !student) return;
+    const name = `${student.firstName} ${student.lastName}`;
+    if (!confirm(
+      `Permanently delete ${name} (${student.admissionNumber})?\n\n`
+      + 'This removes the student, their guardians and their portal login for good, '
+      + 'and cannot be undone. For a child who has left the school, set the status '
+      + 'to Transferred instead — that keeps their records.',
+    )) return;
+
+    setDeleting(true); setDeleteError('');
+    try {
+      await api.delete(`/sis/students/${id}`);
+      // No setDeleting(false) — the record is gone and we are leaving the page.
+      router.push('/school/students');
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.error || 'Failed to delete this student.');
+      setDeleting(false);
+    }
+  }
 
   // The API stores the file and writes the url onto the student, returning the
   // updated record — so we swap it into state without a refetch.
@@ -256,7 +286,13 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
       await loadStudent(id);
       setAddingGuardian(false);
       setNewGuardian({ firstName: '', lastName: '', relation: 'FATHER', phone: '', email: '', occupation: '', isPrimary: false });
-    } catch (err: any) { setError(err.response?.data?.error || 'Failed to add guardian.'); }
+    } catch (err: any) {
+      const data = err.response?.data;
+      const fieldErrors = Array.isArray(data?.errors)
+        ? data.errors.map((e: any) => e.msg).join(' ')
+        : '';
+      setError(data?.error || fieldErrors || 'Failed to add guardian.');
+    }
   }
 
   async function handleDeleteGuardian(gid: string) {
@@ -668,7 +704,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             <div key={g.id} className="flex items-start justify-between p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl shadow-sm hover:border-[#1D7A4A]/10 transition-all">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-[#1A1D23]">{g.firstName} {g.lastName}</span>
+                  <span className="font-bold text-sm text-[#1A1D23]">{`${g.firstName} ${g.lastName || ''}`.trim()}</span>
                   <span className="inline-flex items-center px-2 py-0.5 bg-[#EEF2FF] text-[#4338CA] text-[10px] font-bold rounded-lg border border-[#EEF2FF]/30">{g.relation[0] + g.relation.slice(1).toLowerCase()}</span>
                   {g.isPrimary && <span className="inline-flex items-center px-2 py-0.5 bg-[#D6F0E4] text-[#0F6E56] text-[10px] font-bold rounded-lg border border-[#26A96B]/15">Primary Contact</span>}
                 </div>
@@ -693,13 +729,22 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           <form onSubmit={handleAddGuardian} className="mt-4 p-5 border border-[#E5E7EB] bg-[#F9FAFB]/50 rounded-xl space-y-4 shadow-inner">
             <p className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider pb-1 border-b border-[#E5E7EB]">Enlist New Guardian</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(['firstName', 'lastName', 'phone', 'email', 'occupation'] as const).map((key) => (
-                <div key={key} className="space-y-1">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{key.replace(/([A-Z])/g, ' $1')}</label>
-                  <input value={newGuardian[key]} onChange={(e) => setNewGuardian({ ...newGuardian, [key]: e.target.value })} 
-                    className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all" />
-                </div>
-              ))}
+              {(['firstName', 'lastName', 'phone', 'email', 'occupation'] as const).map((key) => {
+                const required = key === 'firstName' || key === 'phone';
+                return (
+                  <div key={key} className="space-y-1">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                      {key.replace(/([A-Z])/g, ' $1')}
+                      {required
+                        ? <span className="text-[#DC2626] ml-0.5">*</span>
+                        : <span className="text-[#9CA3AF] normal-case tracking-normal font-medium ml-1">(optional)</span>}
+                    </label>
+                    <input value={newGuardian[key]} required={required} type={key === 'email' ? 'email' : 'text'}
+                      onChange={(e) => setNewGuardian({ ...newGuardian, [key]: e.target.value })}
+                      className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all" />
+                  </div>
+                );
+              })}
               <div className="space-y-1">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Relation</label>
                 <select value={newGuardian.relation} onChange={(e) => setNewGuardian({ ...newGuardian, relation: e.target.value })} 
@@ -1194,6 +1239,42 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             })}
           </div>
         )}
+      </div>
+
+      {/* Danger zone — permanent removal, for correcting a record that should
+          never have been created. A student who has actually attended is
+          refused by the server and belongs in Transferred/Inactive instead. */}
+      <div className="bg-white rounded-xl border border-[#FCA5A5] p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-[#FEE2E2]">
+          <AlertTriangle className="w-4 h-4 text-[#DC2626]" strokeWidth={1.75} />
+          <h3 className="text-xs font-bold text-[#DC2626] uppercase tracking-wider">Danger Zone</h3>
+        </div>
+
+        {deleteError && (
+          <div className="bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-sm rounded-lg px-4 py-3 flex gap-2 items-start">
+            <AlertTriangle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" strokeWidth={1.75} />
+            <span className="font-semibold leading-relaxed">{deleteError}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="max-w-md">
+            <p className="text-sm font-bold text-[#1A1D23]">Delete this student</p>
+            <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
+              Removes the student, their guardians and their portal login permanently.
+              Only possible while the student has no attendance, fees, marks or other
+              school records — for a child who has left, set the status to Transferred instead.
+            </p>
+          </div>
+          <button
+            onClick={handleDeleteStudent}
+            disabled={deleting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all shadow-sm font-display shrink-0"
+          >
+            <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+            {deleting ? 'Deleting…' : 'Delete Student'}
+          </button>
+        </div>
       </div>
     </div>
   );
