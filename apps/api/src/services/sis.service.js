@@ -211,8 +211,11 @@ async function createStudent(tenantId, data) {
     },
   });
 
+  // portalPin is left null on create, so the student is on the school-wide
+  // derived default — hand that back so the office can pass it on right away.
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
   const { portalPin: _pin, ...studentData } = student;
-  return { ...studentData, portalPin: plainPin };
+  return { ...studentData, portalPin: portalPassword.currentPassword(student, tenant?.name) };
 }
 
 async function updateStudent(tenantId, id, data) {
