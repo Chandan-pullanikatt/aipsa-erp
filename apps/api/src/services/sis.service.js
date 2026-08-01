@@ -159,7 +159,17 @@ async function getStudent(tenantId, id) {
 }
 
 async function createStudent(tenantId, data) {
-  const admissionNumber = await generateAdmissionNumber(tenantId);
+  // Admins may set the admission number themselves (schools usually have their
+  // own numbering); left blank we fall back to the generated ADM-YYYY-NNNN.
+  const supplied = (data.admissionNumber || '').trim();
+  if (supplied) {
+    const clash = await prisma.student.findFirst({
+      where: { tenantId, admissionNumber: supplied },
+      select: { id: true },
+    });
+    if (clash) throw Object.assign(new Error('That admission number is already in use.'), { status: 409 });
+  }
+  const admissionNumber = supplied || await generateAdmissionNumber(tenantId);
   const {
     firstName, lastName, dateOfBirth, gender, bloodGroup,
     address, city, state, phone, classId, sectionId, admissionDate,

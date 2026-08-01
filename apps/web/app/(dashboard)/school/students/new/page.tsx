@@ -21,7 +21,8 @@ import {
   ShieldAlert,
   Camera,
   Bus,
-  Hotel
+  Hotel,
+  IdCard
 } from 'lucide-react';
 
 interface ClassItem { id: string; name: string; }
@@ -37,7 +38,7 @@ export default function NewStudentPage() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', dateOfBirth: '', gender: '',
     bloodGroup: '', address: '', city: '', state: '', phone: '',
-    classId: '', sectionId: '', admissionDate: new Date().toISOString().split('T')[0],
+    classId: '', sectionId: '', admissionNumber: '', admissionDate: new Date().toISOString().split('T')[0],
     photoUrl: '', boardingType: 'DAY_SCHOLAR', needsBus: false,
   });
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -268,7 +269,13 @@ export default function NewStudentPage() {
               </select>
             </div>
           </div>
-          {field('Official Admission Date', 'admissionDate', 'date', '', false, <Calendar className="w-4 h-4" strokeWidth={1.75} />)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              {field('Admission Number', 'admissionNumber', 'text', 'Leave blank to auto-generate', false, <IdCard className="w-4 h-4" strokeWidth={1.75} />)}
+              <p className="text-[11px] text-[#9CA3AF]">Must be unique within the school.</p>
+            </div>
+            {field('Official Admission Date', 'admissionDate', 'date', '', false, <Calendar className="w-4 h-4" strokeWidth={1.75} />)}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
