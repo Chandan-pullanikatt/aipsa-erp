@@ -7,10 +7,19 @@ function currentAcademicYear() {
   return now.getMonth() >= 3 ? `${y}-${String(y + 1).slice(-2)}` : `${y - 1}-${String(y).slice(-2)}`;
 }
 
+// Receipts run RCP-<year>-00001 upwards, per school. The next number comes from the
+// highest one already issued rather than a row count: counting reissues a number
+// whenever a payment has been deleted, which the unique index then rejects.
 async function generateReceiptNumber(tenantId) {
   const year = new Date().getFullYear();
-  const count = await prisma.feePayment.count({ where: { tenantId } });
-  return `RCP-${year}-${String(count + 1).padStart(5, '0')}`;
+  const prefix = `RCP-${year}-`;
+  const last = await prisma.feePayment.findFirst({
+    where: { tenantId, receiptNumber: { startsWith: prefix } },
+    orderBy: { receiptNumber: 'desc' },
+    select: { receiptNumber: true },
+  });
+  const seq = last ? parseInt(last.receiptNumber.slice(prefix.length), 10) || 0 : 0;
+  return `${prefix}${String(seq + 1).padStart(5, '0')}`;
 }
 
 // ─── Fee Categories ───────────────────────────────────────────────────────────
@@ -219,28 +228,58 @@ async function recordPayment(tenantId, collectedById, data) {
   if (!student) throw Object.assign(new Error('Student not found'), { status: 404 });
   if (!cat) throw Object.assign(new Error('Fee category not found'), { status: 404 });
 
-  const receiptNumber = await generateReceiptNumber(tenantId);
   const year = academicYear || currentAcademicYear();
 
-  const payment = await prisma.feePayment.create({
-    data: {
-      tenantId, studentId, feeCategoryId,
-      academicYear: year,
-      amount: parseFloat(amount),
-      month: month || null,
-      paidAt: paidAt ? new Date(paidAt) : new Date(),
-      method: method || 'CASH',
-      referenceNumber: referenceNumber || null,
-      receiptNumber,
-      collectedById,
-      note: note || null,
-    },
-    include: {
-      student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
-      feeCategory: { select: { id: true, name: true } },
-      collectedBy: { select: { id: true, firstName: true, lastName: true } },
-    },
-  });
+  // A collection may not exceed what the student still owes for that category. A
+  // mistyped amount otherwise lands as a "200% cleared" account that only a manual
+  // DB edit can undo. Late fees count towards the ceiling — they are genuinely payable.
+  // Categories with no fee structure for the year have no defined amount to overpay,
+  // so they stay uncapped (ad-hoc fines, one-off charges).
+  const { breakdown } = await getStudentFeeAccount(tenantId, studentId, year);
+  const rows = breakdown.filter(b => b.feeCategoryId === feeCategoryId);
+  if (rows.length) {
+    const payable = rows.reduce((a, b) => a + b.due + b.lateFee, 0);
+    if (parseFloat(amount) - payable > 0.005) {
+      throw Object.assign(
+        new Error(
+          payable > 0
+            ? `Amount exceeds the outstanding balance for ${cat.name} (₹${payable.toLocaleString('en-IN')} remaining).`
+            : `${cat.name} is already paid in full for ${year}.`,
+        ),
+        { status: 422 },
+      );
+    }
+  }
+
+  // Two clerks collecting at the same moment can read the same "next" receipt number.
+  // The unique index rejects the loser, so re-read and retry a few times.
+  let payment;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      payment = await prisma.feePayment.create({
+        data: {
+          tenantId, studentId, feeCategoryId,
+          academicYear: year,
+          amount: parseFloat(amount),
+          month: month || null,
+          paidAt: paidAt ? new Date(paidAt) : new Date(),
+          method: method || 'CASH',
+          referenceNumber: referenceNumber || null,
+          receiptNumber: await generateReceiptNumber(tenantId),
+          collectedById,
+          note: note || null,
+        },
+        include: {
+          student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
+          feeCategory: { select: { id: true, name: true } },
+          collectedBy: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
+      break;
+    } catch (err) {
+      if (err.code !== 'P2002' || attempt >= 4) throw err;
+    }
+  }
 
   // Notify guardians a payment was received (all enabled channels). Fire-and-forget.
   notify.notifyStudentGuardians(tenantId, studentId, 'FEE_RECEIVED', {

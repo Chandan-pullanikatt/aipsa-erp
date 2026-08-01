@@ -605,7 +605,7 @@ model FeePayment {
   paidAt          DateTime      @default(now())
   method          PaymentMethod @default(CASH)
   referenceNumber String?
-  receiptNumber   String        @unique
+  receiptNumber   String
   collectedById   String
   note            String?
   createdAt       DateTime      @default(now())
@@ -615,6 +615,8 @@ model FeePayment {
   feeCategory FeeCategory @relation(fields: [feeCategoryId], references: [id])
   collectedBy User        @relation("FeeCollector", fields: [collectedById], references: [id])
 
+  // Receipt numbers restart per school, so they are only unique within a tenant.
+  @@unique([tenantId, receiptNumber])
   @@index([tenantId, studentId])
   @@index([tenantId, academicYear])
   @@map("fee_payments")

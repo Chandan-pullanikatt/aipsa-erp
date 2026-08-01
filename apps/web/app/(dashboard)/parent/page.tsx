@@ -783,7 +783,10 @@ function ParentDashboardContent() {
                                 <div className="flex items-center justify-between text-xs text-gray-400 mt-2 font-medium">
                                   <span className="font-bold">
                                     {fees.summary.totalStructure > 0
-                                      ? Math.round((fees.summary.totalPaid / fees.summary.totalStructure) * 100)
+                                      ? Math.min(
+                                          100,
+                                          Math.round((fees.summary.totalPaid / fees.summary.totalStructure) * 100)
+                                        )
                                       : 0}
                                     % Cleared
                                   </span>
