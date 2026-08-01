@@ -30,19 +30,9 @@ const parseCsv = (text) => csv.parseCsv(text, TEMPLATE_COLUMNS, { required: 'fir
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-/**
- * Temp password the admin can read down a phone line: full name + "erp".
- *
- * The full name, not just the first: a staff room holds several Anithas, and on
- * first-name-only passwords each of them could guess the others' — the login
- * address follows the same public rule. Padded with the year when a short name
- * would fall under the 8 characters the change-password endpoint demands, so
- * every teacher can actually replace what they were given.
- */
-function tempPasswordFor(firstName, lastName) {
-  const stem = `${slug(firstName)}${slug(lastName)}erp`;
-  return stem.length >= 8 ? stem : `${stem}${new Date().getFullYear()}`;
-}
+// Lives in hr.service now: single creates, bulk imports and admin resets all
+// hand out the same readable shape, so there is one rule to explain to a school.
+const { tempPasswordFor } = hr;
 
 function normaliseRow(row) {
   return {

@@ -53,7 +53,7 @@ router.get('/users', authorize('SCHOOL_ADMIN'), async (req, res, next) => {
         where,
         skip,
         take: parseInt(limit),
-        select: { id: true, email: true, role: true, firstName: true, lastName: true, phone: true, isActive: true, createdAt: true },
+        select: { id: true, email: true, role: true, firstName: true, lastName: true, phone: true, photoUrl: true, isActive: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.user.count({ where }),
@@ -95,7 +95,7 @@ router.patch('/users/:id', authorize('SCHOOL_ADMIN'), async (req, res, next) => 
         ...(lastName !== undefined && { lastName: lastName.trim() }),
         ...(phone !== undefined && { phone: phone ? phone.trim() : null }),
       },
-      select: { id: true, email: true, role: true, firstName: true, lastName: true, phone: true, isActive: true },
+      select: { id: true, email: true, role: true, firstName: true, lastName: true, phone: true, photoUrl: true, isActive: true },
     });
 
     res.json(updatedUser);

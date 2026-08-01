@@ -132,6 +132,7 @@ model User {
   firstName          String
   lastName           String
   phone              String?
+  photoUrl           String?
   isActive           Boolean  @default(true)
   emailVerified      Boolean  @default(false)
   mustChangePassword Boolean  @default(false)

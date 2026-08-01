@@ -4,7 +4,8 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { requireTenant } = require('../middleware/tenant');
 const svc = require('../services/hr.service');
 const teacherImport = require('../services/teacherImport.service');
-const { csvUpload } = require('../middleware/upload');
+const { csvUpload, joinPhotoUpload } = require('../middleware/upload');
+const { storage } = require('../lib/storage');
 
 const router = Router();
 router.use(authenticate, authorize('SCHOOL_ADMIN'), requireTenant);
@@ -116,6 +117,43 @@ router.put('/staff/:id/profile', [
 ], validate, async (req, res, next) => {
   try {
     res.json(await svc.updateStaffProfile(req.tenant.id, req.params.id, req.body));
+  } catch (err) { next(err); }
+});
+
+// POST /api/hr/staff/:id/reset-password — issues a fresh readable temp password
+// for a member who is locked out. Returns it once; the stored copy is hashed.
+router.post('/staff/:id/reset-password', async (req, res, next) => {
+  try {
+    res.json(await svc.resetStaffPassword(req.tenant.id, req.params.id, req.user, {
+      ipAddress: req.ip,
+    }));
+  } catch (err) { next(err); }
+});
+
+// POST /api/hr/staff/:id/photo — upload/replace the directory photo
+router.post('/staff/:id/photo', joinPhotoUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided (field name: "file").' });
+    const { url } = await storage.upload(req.file.buffer, {
+      folder: `aipsa/${req.tenant.id}/staff-photos`,
+      contentType: req.file.mimetype,
+    });
+    res.status(201).json(await svc.setStaffPhoto(req.tenant.id, req.params.id, url));
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/hr/staff/:id/photo
+router.delete('/staff/:id/photo', async (req, res, next) => {
+  try {
+    res.json(await svc.setStaffPhoto(req.tenant.id, req.params.id, null));
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/hr/staff/:id — permanent, and only for accounts with no school
+// records. Leavers should be deactivated via the status route instead.
+router.delete('/staff/:id', async (req, res, next) => {
+  try {
+    res.json(await svc.deleteStaff(req.tenant.id, req.params.id, req.user));
   } catch (err) { next(err); }
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import { 
   Plus, 
@@ -8,8 +8,9 @@ import {
   Trash2, 
   X, 
   Copy, 
-  Lock, 
-  Unlock, 
+  Lock,
+  Unlock,
+  KeyRound,
   Mail, 
   User, 
   BookOpen, 
@@ -23,6 +24,7 @@ interface StaffUser {
   lastName: string;
   email: string;
   phone: string | null;
+  photoUrl: string | null;
   role: 'SCHOOL_ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
   isActive: boolean;
   createdAt: string;
@@ -97,6 +99,18 @@ export default function StaffPage() {
 
   // Current logged in admin (to prevent self-lockout)
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // One-time temp password from a reset, surfaced until the admin dismisses it.
+  const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
+
+  // Edit name / phone
+  const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Photo viewer / uploader
+  const [photoTarget, setPhotoTarget] = useState<StaffUser | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Directory Records
   const fetchStaff = useCallback(async () => {
@@ -210,6 +224,116 @@ export default function StaffPage() {
     navigator.clipboard.writeText(joinCode);
     setCodeCopied(true);
     setTimeout(() => setCodeCopied(false), 2000);
+  }
+
+  // Reset a locked-out member to a fresh temp password. Shown once — the server
+  // only ever stores the hash, so a dismissed card cannot be recovered.
+  async function handleResetPassword(u: StaffUser) {
+    if (!confirm(`Reset the password for ${u.firstName} ${u.lastName}? Their current password stops working immediately.`)) return;
+
+    setActionLoadingId(u.id + '-pwd');
+    setError('');
+    try {
+      const { data } = await api.post(`/hr/staff/${u.id}/reset-password`);
+      setTempPassword({ email: data.email, password: data.tempPassword });
+      setSuccess(`Temporary password issued for ${data.name}.`);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to reset the password.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  // Edit name / phone. Email is the login identity and is left alone here.
+  function openEdit(u: StaffUser) {
+    setEditingStaff(u);
+    setEditForm({ firstName: u.firstName, lastName: u.lastName, phone: u.phone || '' });
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingStaff) return;
+    if (!editForm.firstName.trim() || !editForm.lastName.trim()) {
+      setError('First and last name are required.');
+      return;
+    }
+
+    setSavingEdit(true);
+    setError('');
+    try {
+      const { data } = await api.patch(`/schools/users/${editingStaff.id}`, {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        phone: editForm.phone.trim() || null,
+      });
+      setStaff((prev) => prev.map((u) => (u.id === data.id ? { ...u, ...data } : u)));
+      setSuccess('Staff details updated.');
+      setEditingStaff(null);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update staff details.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // Permanent removal. The server refuses anyone carrying school records and
+  // says so; deactivation is the route for a teacher who has actually taught.
+  async function handleDeleteStaff(u: StaffUser) {
+    if (!confirm(`Permanently delete ${u.firstName} ${u.lastName}? This cannot be undone. To remove access for someone who has taught here, suspend the account instead.`)) return;
+
+    setActionLoadingId(u.id + '-del');
+    setError('');
+    try {
+      await api.delete(`/hr/staff/${u.id}`);
+      setStaff((prev) => prev.filter((s) => s.id !== u.id));
+      setSuccess(`${u.firstName} ${u.lastName} was deleted.`);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete this staff member.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !photoTarget) return;
+
+    setActionLoadingId(photoTarget.id + '-photo');
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      // Override the instance's default JSON content-type so the browser sets
+      // the multipart boundary itself.
+      const { data } = await api.post(`/hr/staff/${photoTarget.id}/photo`, body, {
+        headers: { 'Content-Type': undefined } as any,
+      });
+      setStaff((prev) => prev.map((u) => (u.id === data.id ? { ...u, photoUrl: data.photoUrl } : u)));
+      setPhotoTarget({ ...photoTarget, photoUrl: data.photoUrl });
+      setSuccess('Photo updated.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to upload the photo.');
+    } finally {
+      setActionLoadingId(null);
+      // Clear the input so re-picking the same file fires onChange again.
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  }
+
+  async function handlePhotoRemove() {
+    if (!photoTarget) return;
+    setActionLoadingId(photoTarget.id + '-photo');
+    setError('');
+    try {
+      const { data } = await api.delete(`/hr/staff/${photoTarget.id}/photo`);
+      setStaff((prev) => prev.map((u) => (u.id === data.id ? { ...u, photoUrl: null } : u)));
+      setPhotoTarget({ ...photoTarget, photoUrl: null });
+      setSuccess('Photo removed.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to remove the photo.');
+    } finally {
+      setActionLoadingId(null);
+    }
   }
 
   // PATCH Staff Attributes (Role, status)
@@ -391,6 +515,30 @@ export default function StaffPage() {
         <div className="bg-[#D6F0E4] text-[#0F6E56] text-[14px] px-4 py-3 rounded-lg border border-[#E5E7EB] flex items-center justify-between">
           <span>{success}</span>
           <button onClick={() => setSuccess('')} className="font-bold hover:underline">Dismiss</button>
+        </div>
+      )}
+
+      {/* Temp password card — the only moment this value is readable */}
+      {tempPassword && (
+        <div className="bg-white rounded-xl border border-[#26A96B] p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-[16px] font-semibold text-[#1A1D23] flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} /> Temporary Password Issued
+            </h3>
+            <button onClick={() => setTempPassword(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" strokeWidth={1.75} /></button>
+          </div>
+          <p className="font-body text-[13px] text-[#6B7280]">
+            Share this with <span className="font-semibold text-[#1A1D23]">{tempPassword.email}</span>. They must change it on next sign-in. It cannot be shown again once dismissed.
+          </p>
+          <div className="flex items-center gap-3 bg-[#F7F8FA] p-3 border border-[#E5E7EB] rounded-lg">
+            <span className="font-mono text-lg font-bold text-[#1A1D23] tracking-wide">{tempPassword.password}</span>
+            <button
+              onClick={() => { navigator.clipboard.writeText(tempPassword.password); setSuccess('Password copied.'); }}
+              className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-8 px-3 rounded-md font-medium text-[13px]"
+            >
+              <Copy className="mr-1.5 w-3.5 h-3.5" strokeWidth={1.75} /> Copy
+            </button>
+          </div>
         </div>
       )}
 
@@ -620,9 +768,16 @@ export default function StaffPage() {
                   >
                     {/* Circle initials avatar */}
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[#D6F0E4] border border-[#26A96B] flex items-center justify-center font-bold text-xs text-[#0F6E56] select-none uppercase shrink-0">
-                        {initials}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoTarget(u)}
+                        title={u.photoUrl ? 'View or change photo' : 'Upload photo'}
+                        className="w-10 h-10 rounded-full bg-[#D6F0E4] border border-[#26A96B] flex items-center justify-center font-bold text-xs text-[#0F6E56] select-none uppercase shrink-0 overflow-hidden hover:opacity-80"
+                      >
+                        {u.photoUrl
+                          ? <img src={u.photoUrl} alt={`${u.firstName} ${u.lastName}`} className="w-full h-full object-cover" />
+                          : initials}
+                      </button>
 
                       <div className="min-w-0 flex-1">
                         <h4 className="font-display text-[14px] font-semibold text-[#1A1D23] truncate">
@@ -680,6 +835,15 @@ export default function StaffPage() {
                               <Unlock className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
                             )}
                           </button>
+
+                          <button
+                            onClick={() => handleResetPassword(u)}
+                            disabled={isCurrentUser || actionLoadingId === u.id + '-pwd'}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-[#E5E7EB] bg-white text-[#1A1D23] hover:bg-[#F7F8FA] disabled:opacity-50 shrink-0"
+                            title={isCurrentUser ? 'Change your own password from account settings' : 'Reset password'}
+                          >
+                            <KeyRound className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -690,14 +854,33 @@ export default function StaffPage() {
                         Joined {new Date(u.createdAt).toLocaleDateString('en-IN')}
                       </span>
 
-                      {u.role === 'TEACHER' && (
+                      <div className="flex items-center gap-2">
+                        {u.role === 'TEACHER' && (
+                          <button
+                            onClick={() => setSelectedTeacher(u)}
+                            className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-8 px-3 rounded-md font-medium transition-colors duration-150 text-[12px]"
+                          >
+                            Syllabus Assign
+                          </button>
+                        )}
+
                         <button
-                          onClick={() => setSelectedTeacher(u)}
-                          className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-8 px-3 rounded-md font-medium transition-colors duration-150 text-[12px]"
+                          onClick={() => openEdit(u)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-[#E5E7EB] bg-white text-[#1A1D23] hover:bg-[#F7F8FA] shrink-0"
+                          title="Edit name and phone"
                         >
-                          Syllabus Assign
+                          <Pencil className="w-4 h-4" strokeWidth={1.75} />
                         </button>
-                      )}
+
+                        <button
+                          onClick={() => handleDeleteStaff(u)}
+                          disabled={isCurrentUser || actionLoadingId === u.id + '-del'}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-[#E5E7EB] bg-white text-[#1A1D23] hover:bg-[#FCEBEB] disabled:opacity-50 shrink-0"
+                          title={isCurrentUser ? 'You cannot delete your own account' : 'Delete permanently'}
+                        >
+                          <Trash2 className="w-4 h-4 text-[#DC2626]" strokeWidth={1.75} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1062,6 +1245,131 @@ export default function StaffPage() {
             >
               Close Panel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit name / phone */}
+      {editingStaff && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-[460px] max-w-[90vw] p-6 shadow-xl flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
+              <h3 className="font-display text-[20px] font-semibold text-[#1A1D23]">Edit Staff Details</h3>
+              <button onClick={() => setEditingStaff(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" strokeWidth={1.75} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">First Name</label>
+                  <input
+                    required
+                    value={editForm.firstName}
+                    onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Last Name</label>
+                  <input
+                    required
+                    value={editForm.lastName}
+                    onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-body text-[13px] font-medium text-[#374151] mb-1.5 block">Phone</label>
+                <input
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full"
+                />
+              </div>
+
+              <p className="font-body text-[12px] text-[#6B7280]">
+                Email is the sign-in identity and is not editable here — {editingStaff.email}
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px] disabled:opacity-50"
+                >
+                  {savingEdit ? 'Saving…' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingStaff(null)}
+                  className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA] h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Photo viewer / uploader */}
+      {photoTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-[420px] max-w-[90vw] p-6 shadow-xl flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
+              <h3 className="font-display text-[20px] font-semibold text-[#1A1D23]">
+                {photoTarget.firstName} {photoTarget.lastName}
+              </h3>
+              <button onClick={() => setPhotoTarget(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" strokeWidth={1.75} />
+              </button>
+            </div>
+
+            <div className="pt-4 flex flex-col items-center gap-4">
+              <div className="w-40 h-40 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] overflow-hidden flex items-center justify-center">
+                {photoTarget.photoUrl
+                  ? <img src={photoTarget.photoUrl} alt={`${photoTarget.firstName} ${photoTarget.lastName}`} className="w-full h-full object-cover" />
+                  : <User className="w-10 h-10 text-[#9CA3AF]" strokeWidth={1.5} />}
+              </div>
+
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={actionLoadingId === photoTarget.id + '-photo'}
+                  className="inline-flex items-center justify-center bg-[#1D7A4A] hover:bg-[#0B4D2E] text-white h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px] disabled:opacity-50"
+                >
+                  {actionLoadingId === photoTarget.id + '-photo'
+                    ? 'Working…'
+                    : photoTarget.photoUrl ? 'Replace Photo' : 'Upload Photo'}
+                </button>
+
+                {photoTarget.photoUrl && (
+                  <button
+                    type="button"
+                    onClick={handlePhotoRemove}
+                    disabled={actionLoadingId === photoTarget.id + '-photo'}
+                    className="inline-flex items-center justify-center bg-white border border-[#E5E7EB] text-[#1A1D23] hover:bg-[#FCEBEB] h-[38px] px-4 rounded-lg font-medium transition-colors duration-150 text-[14px] disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              <p className="font-body text-[12px] text-[#6B7280] text-center">JPG, PNG or WEBP, up to 4 MB.</p>
+            </div>
           </div>
         </div>
       )}
