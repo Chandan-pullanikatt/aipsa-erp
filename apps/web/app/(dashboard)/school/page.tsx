@@ -8,6 +8,7 @@ import api from '@/lib/api';
 
 interface Profile {
   schoolName: string;
+  logo: string | null;
   city: string;
   state: string;
   board: string;
@@ -29,6 +30,7 @@ import {
 
 interface Profile {
   schoolName: string;
+  logo: string | null;
   city: string;
   state: string;
   board: string;
@@ -89,13 +91,22 @@ export default function SchoolDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className="flex items-center gap-4">
+        {profile?.logo && (
+          <img
+            src={profile.logo}
+            alt=""
+            className="w-14 h-14 rounded-lg object-contain border border-border bg-white p-1 shrink-0"
+          />
+        )}
+        <div>
         <h1 className="font-display text-[32px] font-bold leading-tight text-text-primary">
           {profile?.schoolName || 'School Dashboard'}
         </h1>
         <p className="font-body text-[14px] text-text-muted mt-2 leading-relaxed">
           Welcome back, {user.firstName}. Select an operational module to manage your school.
         </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

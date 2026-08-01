@@ -72,6 +72,14 @@ router.post('/exams', adminOnly, [
 ], validate, async (req, res, next) => {
   try { res.status(201).json(await svc.createExam(req.tenant.id, req.body)); } catch (e) { next(e); }
 });
+// Same exam term scheduled across many classes in one submit.
+router.post('/exams/bulk', adminOnly, [
+  body('name').trim().notEmpty(),
+  body('classIds').isArray({ min: 1, max: 60 }),
+  body('startDate').isISO8601(),
+], validate, async (req, res, next) => {
+  try { res.status(201).json(await svc.createExamsBulk(req.tenant.id, req.body)); } catch (e) { next(e); }
+});
 router.put('/exams/:id', adminOrTeacher, async (req, res, next) => {
   try { res.json(await svc.updateExam(req.tenant.id, req.params.id, req.body)); } catch (e) { next(e); }
 });

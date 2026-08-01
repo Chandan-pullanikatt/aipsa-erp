@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import api from '@/lib/api';
 import { setAuth, getDashboardPath } from '@/lib/auth';
 import { Eye, EyeOff } from 'lucide-react';
@@ -37,6 +38,18 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
+          {/* The icon asset has an opaque white background, so it sits on a
+              white tile that matches the card below and blends seamlessly. */}
+          <div className="inline-flex items-center justify-center w-16 h-16 mb-4 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden">
+            <Image
+              src="/icons/icon-192.png"
+              alt="EduBridge"
+              width={64}
+              height={64}
+              preload
+              className="w-full h-full object-contain"
+            />
+          </div>
           <h1 className="text-3xl font-bold text-gray-900">EduBridge</h1>
           <p className="text-gray-500 mt-1">Sign in to your account</p>
         </div>

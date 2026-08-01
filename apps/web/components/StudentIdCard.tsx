@@ -89,7 +89,7 @@ export function StudentIdCard({ student, school }: { student: IdCardStudent; sch
         <div style={{ background: GREEN, color: '#fff', padding: '2mm 3mm', display: 'flex', alignItems: 'center', gap: '2mm', height: '11mm', boxSizing: 'border-box' }}>
           {school.logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={school.logo} alt="" style={{ width: '7mm', height: '7mm', borderRadius: '1mm', objectFit: 'cover', background: '#fff' }} />
+            <img src={school.logo} alt="" style={{ width: '7mm', height: '7mm', borderRadius: '1mm', objectFit: 'contain', background: '#fff', padding: '0.3mm' }} />
           ) : (
             <div style={{ width: '7mm', height: '7mm', borderRadius: '1mm', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <GraduationCap style={{ width: '4mm', height: '4mm', color: '#fff' }} />

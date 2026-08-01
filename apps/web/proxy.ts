@@ -79,5 +79,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico|docs).*)'],
+  // `icons` must be excluded: they are static PWA/branding assets fetched while
+  // signed out (login logo, manifest icons). Without this they redirect to /login
+  // and the image optimizer receives HTML instead of a PNG.
+  matcher: ['/((?!api|_next/static|_next/image|favicon\\.ico|icons|docs).*)'],
 };

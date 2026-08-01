@@ -450,8 +450,11 @@ function SubjectsTab({ classes, teachers }: { classes: ClassItem[]; teachers: Te
 function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYear: string }) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', classId: '', term: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' });
+  const [form, setForm] = useState({ name: '', term: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' });
+  // The same exam term is usually scheduled for several classes at once.
+  const [formClassIds, setFormClassIds] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     const { data } = await api.get('/exams/exams');
@@ -460,9 +463,27 @@ function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYea
 
   useEffect(() => { load(); }, [load]);
 
+  function toggleClass(classId: string) {
+    setFormClassIds(prev => prev.includes(classId) ? prev.filter(id => id !== classId) : [...prev, classId]);
+  }
+
+  function toggleAllClasses() {
+    setFormClassIds(prev => prev.length === classes.length ? [] : classes.map(c => c.id));
+  }
+
   async function handleCreate(e: React.FormEvent) {
-    e.preventDefault(); setError('');
-    try { await api.post('/exams/exams', form); setShowForm(false); setForm({ name: '', classId: '', term: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' }); load(); }
+    e.preventDefault(); setError(''); setNotice('');
+    if (formClassIds.length === 0) { setError('Select at least one class.'); return; }
+    try {
+      const { data } = await api.post('/exams/exams/bulk', { ...form, classIds: formClassIds });
+      setShowForm(false);
+      setForm({ name: '', term: '', startDate: '', endDate: '', maxMarks: '100', passingMarks: '35' });
+      setFormClassIds([]);
+      const parts = [`Created for ${data.created.length} class${data.created.length === 1 ? '' : 'es'}.`];
+      if (data.skipped.length > 0) parts.push(`${data.skipped.join(', ')} already had this term — skipped.`);
+      setNotice(parts.join(' '));
+      load();
+    }
     catch (err: any) { setError(err.response?.data?.error || 'Error creating exam.'); }
   }
 
@@ -486,6 +507,13 @@ function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYea
         </div>
       )}
 
+      {notice && (
+        <div className="bg-[#D6F0E4] border border-[#26A96B]/20 text-[#0F6E56] text-sm rounded-xl px-4 py-3 flex justify-between items-center font-body font-medium">
+          <span>{notice}</span>
+          <button onClick={() => setNotice('')} className="p-1 hover:bg-[#0F6E56]/10 rounded transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
       <div className="flex justify-end">
         <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white h-[38px] px-4 rounded-lg font-semibold transition-colors duration-150 text-[13px]">
           <Plus className="w-4 h-4" strokeWidth={2} />
@@ -506,13 +534,34 @@ function ExamsTab({ classes, academicYear }: { classes: ClassItem[]; academicYea
                 <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. First Term Exam"
                   className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] transition-all" />
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Class *</label>
-                <select required value={form.classId} onChange={e => setForm({ ...form, classId: e.target.value })}
-                  className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] bg-white transition-all">
-                  <option value="">Select class</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+              <div className="col-span-1 sm:col-span-2">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Classes * <span className="text-gray-400 normal-case font-normal tracking-normal">({formClassIds.length} selected)</span>
+                  </label>
+                  {classes.length > 0 && (
+                    <button type="button" onClick={toggleAllClasses}
+                      className="text-xs font-semibold text-[#1D7A4A] hover:text-[#155D37] transition-colors">
+                      {formClassIds.length === classes.length ? 'Clear all' : 'Select all'}
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {classes.map(c => {
+                    const on = formClassIds.includes(c.id);
+                    return (
+                      <button key={c.id} type="button" onClick={() => toggleClass(c.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                          on ? 'bg-[#1D7A4A] text-white border-[#1D7A4A]' : 'bg-white border-[#E5E7EB] text-[#1A1D23] hover:bg-[#F7F8FA]'
+                        }`}>
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  One exam is created per selected class. Classes that already have this progress card term are skipped.
+                </p>
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Progress Card Term</label>

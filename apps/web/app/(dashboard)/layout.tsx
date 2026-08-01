@@ -8,6 +8,8 @@ import type { AuthUser } from '@/lib/auth';
 import api from '@/lib/api';
 import PullToRefresh from '@/components/PullToRefresh';
 import { registerPushNotifications } from '@/lib/push';
+import { fetchBranding, getCachedBranding } from '@/lib/branding';
+import type { Branding } from '@/lib/branding';
 import {
   GraduationCap,
   CalendarCheck,
@@ -129,6 +131,7 @@ function getNavItems(role: AuthUser['role']): NavItem[] {
       { label: 'LMS', href: '/teacher/lms', available: true },
       { label: 'Events', href: '/school/events', available: true },
       { label: 'Join Requests', href: '/teacher/join-requests', available: true },
+      { label: 'Leave Requests', href: '/teacher/leave', available: true },
     ];
   } else if (role === 'STAFF') {
     items = [
@@ -292,6 +295,7 @@ function NotificationBell({ tenantId }: { tenantId: string }) {
     CIRCULAR: 'bg-purple-100 text-purple-600',
     EVENT: 'bg-green-100 text-green-600',
     ALERT: 'bg-red-100 text-red-600',
+    LEAVE: 'bg-amber-100 text-amber-700',
     INFO: 'bg-gray-100 text-gray-600',
   };
 
@@ -341,6 +345,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [branding, setBranding] = useState<Branding | null>(() => getCachedBranding());
 
   useEffect(() => {
     const u = getUser();
@@ -352,6 +357,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       registerPushNotifications();
     }
   }, [router]);
+
+  // School branding for the sidebar. Only tenant users have a school profile;
+  // SUPER_ADMIN keeps the EduBridge wordmark.
+  useEffect(() => {
+    if (!user?.tenantId || user.role === 'SUPER_ADMIN') return;
+    fetchBranding().then((b) => { if (b) setBranding(b); });
+  }, [user?.tenantId, user?.role]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -415,10 +427,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="rounded-none h-[100dvh] flex overflow-hidden bg-[#F7F8FA] font-body text-[14px] text-[#1A1D23]">
       {/* Sidebar */}
       <aside id="app-sidebar" className={`app-sidebar fixed inset-y-0 left-0 z-50 w-[72%] max-w-[280px] lg:w-[240px] bg-[#0B4D2E] flex flex-col transform transition-transform duration-200 ease-in-out shrink-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
-        {/* Logo */}
-        <div className="h-[60px] flex flex-col justify-center px-5 border-b border-white/10 shrink-0">
-          <p className="font-display text-[16px] font-bold text-white tracking-wide leading-none">EduBridge</p>
-          <p className="text-[11px] font-medium tracking-wide text-white/50 mt-1 uppercase">{roleLabel[user.role]}</p>
+        {/* Logo — the school's own mark once uploaded, EduBridge wordmark until then. */}
+        <div className="h-[60px] flex items-center gap-2.5 px-5 border-b border-white/10 shrink-0">
+          {branding?.logo && (
+            <img
+              src={branding.logo}
+              alt=""
+              className="w-9 h-9 rounded-md object-contain bg-white/95 p-0.5 shrink-0"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="font-display text-[16px] font-bold text-white tracking-wide leading-tight truncate">
+              {branding?.schoolName || 'EduBridge'}
+            </p>
+            <p className="text-[11px] font-medium tracking-wide text-white/50 mt-0.5 uppercase truncate">{roleLabel[user.role]}</p>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -477,7 +500,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 flex items-center" aria-label="Menu">
               <Menu className="w-6 h-6" strokeWidth={1.75} />
             </button>
-            <span className="font-display font-semibold text-gray-800 text-[16px] leading-none">EduBridge</span>
+            {branding?.logo && <img src={branding.logo} alt="" className="w-7 h-7 rounded object-contain shrink-0" />}
+            <span className="font-display font-semibold text-gray-800 text-[16px] leading-none truncate max-w-[190px]">
+              {branding?.schoolName || 'EduBridge'}
+            </span>
           </div>
         </header>
 

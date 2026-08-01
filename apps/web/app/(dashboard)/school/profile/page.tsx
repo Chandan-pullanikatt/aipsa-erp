@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { clearBranding } from '@/lib/branding';
 import {
   School,
   MapPin,
@@ -16,6 +17,8 @@ import {
   Activity,
   IndianRupee,
   GraduationCap,
+  ImagePlus,
+  Trash2,
 } from 'lucide-react';
 
 interface Profile {
@@ -28,6 +31,7 @@ interface Profile {
   email: string;
   website: string;
   board: string;
+  logo: string;
   establishedYear: string;
   lateFeeAmount: string;
   lateFeeGraceDays: string;
@@ -36,7 +40,7 @@ interface Profile {
 
 const EMPTY: Profile = {
   schoolName: '', address: '', city: '', state: '', country: 'India',
-  phone: '', email: '', website: '', board: '', establishedYear: '',
+  phone: '', email: '', website: '', board: '', logo: '', establishedYear: '',
   lateFeeAmount: '0', lateFeeGraceDays: '0', premiumLmsPrice: '',
 };
 
@@ -46,6 +50,7 @@ export default function SchoolProfilePage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     api.get('/schools/profile').then((r) => {
@@ -60,6 +65,7 @@ export default function SchoolProfilePage() {
           email: r.data.email ?? '',
           website: r.data.website ?? '',
           board: r.data.board ?? '',
+          logo: r.data.logo ?? '',
           establishedYear: r.data.establishedYear ? String(r.data.establishedYear) : '',
           lateFeeAmount: String(r.data.lateFeeAmount ?? 0),
           lateFeeGraceDays: String(r.data.lateFeeGraceDays ?? 0),
@@ -68,6 +74,25 @@ export default function SchoolProfilePage() {
       }
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
+
+  async function handleLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file after a failure
+    if (!file) return;
+    setError('');
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'branding');
+      const { data } = await api.post('/uploads', fd, { headers: { 'Content-Type': undefined } as any });
+      setForm((f) => ({ ...f, logo: data.url }));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Logo upload failed. Please try again.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +107,7 @@ export default function SchoolProfilePage() {
         lateFeeGraceDays: parseInt(form.lateFeeGraceDays) || 0,
         premiumLmsPrice: form.premiumLmsPrice !== '' ? parseFloat(form.premiumLmsPrice) : null,
       });
+      clearBranding(); // sidebar picks up the new logo / name on the next render
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch {
@@ -154,6 +180,40 @@ export default function SchoolProfilePage() {
             <School className="w-4 h-4 text-[#1D7A4A]" strokeWidth={1.75} />
             <h3 className="text-xs font-bold text-[#1A1D23] uppercase tracking-wider">Institution Identity</h3>
           </div>
+          {/* School logo — shown in the sidebar of every portal (admin, teacher, parent, student). */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280]">School Logo</label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] flex items-center justify-center overflow-hidden shrink-0">
+                {form.logo
+                  ? <img src={form.logo} alt="School logo" className="w-full h-full object-contain" />
+                  : <School className="w-8 h-8 text-[#9CA3AF]" strokeWidth={1.5} />}
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs font-semibold text-[#1A1D23] bg-white hover:bg-[#F7F8FA] transition-colors">
+                    <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>{uploadingLogo ? 'Uploading…' : form.logo ? 'Change logo' : 'Upload logo'}</span>
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogo} disabled={uploadingLogo} />
+                  </label>
+                  {form.logo && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, logo: '' })}
+                      className="inline-flex items-center gap-1.5 border border-[#FCA5A5] rounded-lg px-3 py-2 text-xs font-semibold text-[#DC2626] bg-white hover:bg-[#FEF2F2] transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-[#6B7280] font-body leading-relaxed">
+                  Square PNG or JPG works best (min 200×200, max 8 MB). Appears in the sidebar of the admin, teacher, parent and student portals. Remember to save.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {field('School Name', 'schoolName', 'text', 'E.g. St. Mary\'s High School', <School className="w-4 h-4" strokeWidth={1.75} />)}
           {field('Detailed Address', 'address', 'text', '123 Academic Road', <MapPin className="w-4 h-4" strokeWidth={1.75} />)}
           

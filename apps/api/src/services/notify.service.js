@@ -92,6 +92,22 @@ const EVENTS = {
     waTemplateEnv: 'MSG91_WA_TEMPLATE_PROGRAM_REGISTRATION',
     waBodyValues: (d) => [d.registrantName, d.programTitle],
   },
+  // Fired to SCHOOL_ADMIN when a teacher/staff member applies for leave, so the
+  // pending request surfaces on the bell badge instead of waiting to be noticed
+  // in HR › Leave Approvals.
+  LEAVE_REQUEST: {
+    type: 'LEAVE',
+    title: () => 'New Leave Request',
+    body: (d) => `${d.applicantName} (${d.applicantRole}) requested leave from ${d.fromDate} to ${d.toDate}.`,
+    email: (d) => ({
+      subject: `Leave request — ${d.applicantName}`,
+      html: shell('New Leave Request', `<p><strong>${esc(d.applicantName)}</strong> (${esc(d.applicantRole)}) has requested leave from <strong>${esc(d.fromDate)}</strong> to <strong>${esc(d.toDate)}</strong>.</p><p>Reason: ${esc(d.reason)}</p><p>Review it under HR › Leave Approvals.</p>`),
+    }),
+    smsTemplateEnv: 'MSG91_TEMPLATE_LEAVE_REQUEST',
+    smsVariables: (d) => ({ var1: d.applicantName, var2: d.fromDate, var3: d.toDate }),
+    waTemplateEnv: 'MSG91_WA_TEMPLATE_LEAVE_REQUEST',
+    waBodyValues: (d) => [d.applicantName, d.fromDate, d.toDate],
+  },
 };
 
 // pref defaults: in-app/email/push ON unless explicitly false; sms/whatsapp OFF

@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import {
   ClipboardCheck, FileText, BarChart3, CalendarDays, ArrowRight, Clock,
   UserPlus, CheckCircle2, AlertCircle, BookOpen, Users, ChevronRight,
+  CalendarPlus,
 } from 'lucide-react';
 
 const DAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
@@ -17,6 +18,7 @@ const QUICK_LINKS = [
   { label: 'Enter Marks', href: '/teacher/marks', desc: 'Upload exam results', icon: BarChart3 },
   { label: 'My Timetable', href: '/teacher/timetable', desc: 'View your weekly schedule', icon: CalendarDays },
   { label: 'My Students', href: '/teacher/students', desc: 'Browse your class roster', icon: Users },
+  { label: 'Leave Requests', href: '/teacher/leave', desc: 'Apply for leave & track approval', icon: CalendarPlus },
 ];
 
 export default function TeacherDashboard() {

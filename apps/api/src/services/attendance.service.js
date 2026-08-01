@@ -146,13 +146,34 @@ async function getTeacherAttendance(tenantId, { date, userId }) {
 async function applyLeave(tenantId, applicant, { fromDate, toDate, reason }) {
   const from = new Date(fromDate); from.setUTCHours(0,0,0,0);
   const to = new Date(toDate); to.setUTCHours(0,0,0,0);
-  return prisma.leave.create({
+  const leave = await prisma.leave.create({
     data: {
       tenantId,
       ...(applicant.studentId ? { studentId: applicant.studentId } : { userId: applicant.userId }),
       fromDate: from, toDate: to, reason,
     },
+    include: {
+      user: { select: { firstName: true, lastName: true, role: true } },
+      student: { select: { firstName: true, lastName: true } },
+    },
   });
+
+  // Fire-and-forget: the admin's bell badge polls unread-count, so the request
+  // shows up there within a minute without blocking this response.
+  const applicantName = leave.user
+    ? `${leave.user.firstName} ${leave.user.lastName}`
+    : leave.student ? `${leave.student.firstName} ${leave.student.lastName}` : 'A user';
+  notify.notifyRoles(tenantId, ['SCHOOL_ADMIN'], 'LEAVE_REQUEST', {
+    applicantName,
+    applicantRole: leave.user ? leave.user.role : 'STUDENT',
+    fromDate: from.toISOString().slice(0, 10),
+    toDate: to.toISOString().slice(0, 10),
+    reason,
+    referenceId: leave.id,
+  });
+
+  const { user, student, ...rest } = leave;
+  return rest;
 }
 
 async function listLeaves(tenantId, { studentId, userId, status, page = 1, limit = 20 }) {

@@ -402,6 +402,56 @@ async function createExam(tenantId, data) {
   });
 }
 
+// One exam row per class — an Exam belongs to a single class, so scheduling the
+// same term across classes means creating a batch of them.
+async function createExamsBulk(tenantId, data) {
+  const { name, classIds, academicYear, term, startDate, endDate, maxMarks, passingMarks } = data;
+  const ids = [...new Set((Array.isArray(classIds) ? classIds : []).filter(Boolean))];
+  if (ids.length === 0) throw Object.assign(new Error('Select at least one class'), { status: 422 });
+
+  const classes = await prisma.class.findMany({
+    where: { id: { in: ids }, tenantId },
+    select: { id: true, name: true },
+  });
+  if (classes.length !== ids.length) {
+    throw Object.assign(new Error('One or more classes were not found in this school'), { status: 404 });
+  }
+
+  const year = academicYear || currentAcademicYear();
+  if (term && !TERMS.includes(term)) throw Object.assign(new Error('Invalid term'), { status: 422 });
+
+  // A class already holding this term keeps its existing exam and is reported
+  // back, rather than failing the whole batch.
+  let alreadyHas = new Set();
+  if (term) {
+    const clashes = await prisma.exam.findMany({
+      where: { tenantId, academicYear: year, term, classId: { in: ids } },
+      select: { classId: true },
+    });
+    alreadyHas = new Set(clashes.map(c => c.classId));
+  }
+  const skipped = classes.filter(c => alreadyHas.has(c.id)).map(c => c.name);
+  const toCreate = classes.filter(c => !alreadyHas.has(c.id));
+
+  const created = await prisma.$transaction(
+    toCreate.map(cls => prisma.exam.create({
+      data: {
+        tenantId, name, classId: cls.id,
+        sectionId: null,
+        academicYear: year,
+        term: term || null,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        maxMarks: parseFloat(maxMarks) || 100,
+        passingMarks: parseFloat(passingMarks) || 35,
+      },
+      include: { class: { select: { id: true, name: true } } },
+    }))
+  );
+
+  return { created, skipped };
+}
+
 async function updateExam(tenantId, id, data) {
   const exam = await prisma.exam.findFirst({ where: { id, tenantId } });
   if (!exam) throw Object.assign(new Error('Exam not found'), { status: 404 });
@@ -547,7 +597,7 @@ function currentAcademicYear() {
 module.exports = {
   listSubjects, createSubject, createSubjectsBulk, updateSubject, deleteSubject,
   getTeachingGrid, setTeacherSubjects,
-  listExams, createExam, updateExam, deleteExam,
+  listExams, createExam, createExamsBulk, updateExam, deleteExam,
   getMarksEntry, saveMarks,
   getStudentReportCard, getExamSummary,
   currentAcademicYear, calculateGrade,
