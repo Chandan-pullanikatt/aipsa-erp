@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
-import { Plus, Pencil, Trash2, X, Search, FileText, CheckCircle, Calendar, GraduationCap, ClipboardList, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, FileText, CheckCircle, Calendar, GraduationCap, ClipboardList, BookOpen, Printer } from 'lucide-react';
+import { printElement } from '@/lib/print';
 import HolisticCardView from '@/components/HolisticCardView';
 import ReportLetterhead from '@/components/ReportLetterhead';
+import SubjectScoreChart from '@/components/SubjectScoreChart';
 
 type Tab = 'subjects' | 'exams' | 'marks' | 'reports' | 'progress';
 
@@ -890,14 +892,26 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
         <StudentPicker classes={classes} ctaLabel="Inspect Report Card →" onSelect={loadReportCard} />
       ) : (
         <div className="space-y-4">
-          <button onClick={() => { setSelected(null); setReportCard(null); }} className="text-sm font-semibold text-[#1A1D23] hover:text-[#1D7A4A] flex items-center gap-1.5 transition-colors font-body">
-            <span>← Return to Student List</span>
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 no-print">
+            <button onClick={() => { setSelected(null); setReportCard(null); }} className="text-sm font-semibold text-[#1A1D23] hover:text-[#1D7A4A] flex items-center gap-1.5 transition-colors font-body">
+              <span>← Return to Student List</span>
+            </button>
+            {reportCard && (
+              // A year's worth of exams can run past one sheet, so this flows rather
+              // than shrinking to fit like the single-exam sheets do.
+              <button
+                onClick={() => printElement(document.getElementById('admin-report-card'), { fit: 'flow' })}
+                className="inline-flex items-center gap-1.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white px-4 py-2 rounded-lg text-sm font-semibold font-display"
+              >
+                <Printer className="w-4 h-4" strokeWidth={2} /> Print Report Card
+              </button>
+            )}
+          </div>
 
           {loading && <div className="py-12 text-center text-gray-400 font-body text-sm">Generating academic report card...</div>}
 
           {reportCard && (
-            <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
+            <div id="admin-report-card" className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
               {/* Header */}
               <div className="bg-[#1A1D23] text-white px-6 py-6 text-center space-y-3">
                 <ReportLetterhead align="center" tone="dark" title="Official Report Card" />
@@ -960,6 +974,15 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
                       {es.results.length === 0 && <tr><td colSpan={6} className="px-6 py-4 text-center text-gray-400 text-xs font-body">No exam results recorded for this segment.</td></tr>}
                     </tbody>
                   </table>
+                  </div>
+
+                  <div className="px-6 py-4 border-t border-[#E5E7EB]">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2 font-display">Subject-wise performance</p>
+                    <SubjectScoreChart
+                      scores={es.results.map((r: any) => ({ subject: r.subject.name, marks: r.marksObtained, isAbsent: r.isAbsent }))}
+                      maxMarks={es.exam.maxMarks}
+                      passingPercent={es.exam.passingMarks}
+                    />
                   </div>
                 </div>
               ))}

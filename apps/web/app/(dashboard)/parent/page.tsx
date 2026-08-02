@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
 import ReportLetterhead from '@/components/ReportLetterhead';
+import SubjectScoreChart from '@/components/SubjectScoreChart';
 import {
   Search,
   AlertCircle, 
@@ -1017,6 +1018,16 @@ function ParentDashboardContent() {
                                           <p className="text-2xl font-black text-[#1D7A4A] mt-0.5">{summary.percentage}%</p>
                                         </div>
                                       </div>
+                                    </div>
+
+                                    {/* Subject-wise marks */}
+                                    <div>
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 font-display">Subject-wise performance</p>
+                                      <SubjectScoreChart
+                                        scores={summary.results.map((r) => ({ subject: r.subject.name, marks: r.marksObtained, isAbsent: r.isAbsent }))}
+                                        maxMarks={summary.exam.maxMarks}
+                                        passingPercent={summary.exam.passingMarks}
+                                      />
                                     </div>
 
                                     {/* Official Signature Lines (Print Only) */}

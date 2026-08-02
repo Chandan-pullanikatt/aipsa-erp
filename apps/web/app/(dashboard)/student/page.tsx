@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
 import ReportLetterhead from '@/components/ReportLetterhead';
+import SubjectScoreChart from '@/components/SubjectScoreChart';
 import {
   Calendar,
   Clock,
@@ -1010,6 +1011,16 @@ function StudentPortalContent() {
                             </tr>
                           </tbody>
                         </table>
+                      </div>
+
+                      {/* Subject-wise marks */}
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-2 font-display">Subject-wise performance</p>
+                        <SubjectScoreChart
+                          scores={summary.results.map(r => ({ subject: r.subject.name, marks: r.marksObtained, isAbsent: r.isAbsent }))}
+                          maxMarks={summary.exam.maxMarks}
+                          passingPercent={summary.exam.passingMarks}
+                        />
                       </div>
 
                       {/* Authorized Stamp Signatures */}
