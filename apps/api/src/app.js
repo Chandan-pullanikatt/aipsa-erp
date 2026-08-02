@@ -60,6 +60,16 @@ const authLimiter = rateLimit({
   message: { error: 'Too many auth attempts, please try again later.' },
 });
 
+// Uploads write 8 MB at a time to the server's disk, and every student and parent
+// can now post photos of their homework — a far larger population than when only
+// staff could upload. Enough headroom for a full notebook, not for a flood.
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  skip: () => RATE_LIMIT_DISABLED || process.env.NODE_ENV !== 'production',
+  message: { error: 'Too many uploads, please wait a few minutes and try again.' },
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -80,7 +90,7 @@ app.use('/api/exams', examRoutes);
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/homework', homeworkRoutes);
 app.use('/api/lms', lmsRoutes);
-app.use('/api/uploads', uploadRoutes);
+app.use('/api/uploads', uploadLimiter, uploadRoutes);
 // Serve locally-stored uploads (STORAGE_DRIVER=local). Reached from the browser
 // through the Next.js proxy at /api/proxy/files/<key>. No-op for cloud drivers.
 app.use('/api/files', express.static(UPLOAD_DIR, { fallthrough: false, maxAge: '7d' }));

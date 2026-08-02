@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
+import AttachmentUploader, { type Attachment } from '@/components/AttachmentUploader';
+import AttachmentList from '@/components/AttachmentList';
 import {
-  FileText, Calendar, Trash2, ExternalLink, Plus, BookOpen,
+  FileText, Calendar, Trash2, Plus, BookOpen,
   Clock, AlertCircle, CheckCircle2, Users, ChevronDown, ChevronUp,
   Send, Award, X, Loader2,
 } from 'lucide-react';
@@ -18,6 +20,7 @@ interface HomeworkItem {
   description: string | null;
   dueDate: string | null;
   attachmentUrl: string | null;
+  attachments: Attachment[] | null;
   createdAt: string;
   class: { id: string; name: string };
   subject: { id: string; name: string } | null;
@@ -28,6 +31,7 @@ interface Submission {
   id: string;
   note: string | null;
   attachmentUrl: string | null;
+  attachments: Attachment[] | null;
   submittedAt: string;
   grade: string | null;
   feedback: string | null;
@@ -47,6 +51,7 @@ export default function TeacherHomeworkPage() {
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [attachmentUrl, setAttachmentUrl] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -105,10 +110,11 @@ export default function TeacherHomeworkPage() {
         classId, subjectId: subjectId || undefined,
         title: title.trim(), description: description.trim() || undefined,
         dueDate: dueDate || undefined, attachmentUrl: attachmentUrl.trim() || undefined,
+        attachments,
         teacherId: u.id,
       });
       setSuccess('Homework successfully posted!');
-      setTitle(''); setDescription(''); setDueDate(''); setAttachmentUrl(''); setSubjectId('');
+      setTitle(''); setDescription(''); setDueDate(''); setAttachmentUrl(''); setAttachments([]); setSubjectId('');
       loadHomeworks();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to post homework.');
@@ -248,11 +254,16 @@ export default function TeacherHomeworkPage() {
                 className="w-full border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]" />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 font-display">Resource Link</label>
-              <input type="url" placeholder="https://drive.google.com/..." value={attachmentUrl} onChange={(e) => setAttachmentUrl(e.target.value)}
-                className="w-full border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]" />
-            </div>
+            <AttachmentUploader
+              value={attachments}
+              onChange={setAttachments}
+              folder="homework"
+              label="Photos & Resources"
+              hint="Snap the textbook page or worksheet — photos and PDFs both work."
+              link={attachmentUrl}
+              onLinkChange={setAttachmentUrl}
+              disabled={submitting}
+            />
 
             <button type="submit" disabled={submitting}
               className="w-full py-2.5 bg-[#1D7A4A] text-white rounded-lg text-sm font-semibold hover:bg-[#155B37] disabled:opacity-50 transition-colors shadow-sm font-display flex items-center justify-center gap-2 cursor-pointer">
@@ -317,20 +328,16 @@ export default function TeacherHomeworkPage() {
                         <p className="text-sm text-gray-600 mt-2 mb-3 whitespace-pre-wrap leading-relaxed line-clamp-2">{hw.description}</p>
                       )}
 
+                      <div className="mt-3">
+                        <AttachmentList attachments={hw.attachments} attachmentUrl={hw.attachmentUrl} />
+                      </div>
+
                       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200/60 text-xs">
                         <span className="text-gray-400">
                           Posted {new Date(hw.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                         </span>
 
                         <div className="flex items-center gap-3">
-                          {hw.attachmentUrl && (
-                            <a href={hw.attachmentUrl} target="_blank" rel="noopener noreferrer"
-                              className="text-[#1D7A4A] hover:text-[#155B37] font-semibold inline-flex items-center gap-1 transition-colors">
-                              <ExternalLink className="w-3.5 h-3.5" strokeWidth={2} />
-                              Reference
-                            </a>
-                          )}
-
                           <button
                             onClick={() => toggleSubmissions(hw.id)}
                             className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#1D7A4A] bg-white border border-gray-200 hover:border-[#1D7A4A]/30 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
@@ -403,13 +410,14 @@ export default function TeacherHomeworkPage() {
                                   </div>
                                 )}
 
-                                {sub.attachmentUrl && (
-                                  <a href={sub.attachmentUrl} target="_blank" rel="noopener noreferrer"
-                                    className="mt-2 text-[10px] text-[#1D7A4A] hover:underline font-semibold inline-flex items-center gap-1 font-body">
-                                    <ExternalLink className="w-3 h-3" strokeWidth={2} />
-                                    View submitted attachment
-                                  </a>
-                                )}
+                                <div className="mt-3">
+                                  <AttachmentList
+                                    attachments={sub.attachments}
+                                    attachmentUrl={sub.attachmentUrl}
+                                    linkLabel="Submitted link"
+                                    size="sm"
+                                  />
+                                </div>
 
                                 {sub.feedback && (
                                   <div className="mt-2 text-[10px] text-gray-500 italic font-body">

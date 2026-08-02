@@ -8,6 +8,9 @@ import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
 import ReportLetterhead from '@/components/ReportLetterhead';
 import SubjectScoreChart from '@/components/SubjectScoreChart';
+import ReportPhoto from '@/components/ReportPhoto';
+import AttachmentUploader, { type Attachment } from '@/components/AttachmentUploader';
+import AttachmentList from '@/components/AttachmentList';
 import {
   Search,
   AlertCircle, 
@@ -27,7 +30,6 @@ import {
   AlertTriangle,
   Info,
   Clock,
-  Download,
   Pin,
   Send,
   Camera
@@ -146,6 +148,7 @@ interface HomeworkItem {
   description: string | null;
   dueDate: string | null;
   attachmentUrl: string | null;
+  attachments: Attachment[] | null;
   createdAt: string;
   class: { id: string; name: string };
   subject: { id: string; name: string } | null;
@@ -206,6 +209,7 @@ function ParentDashboardContent() {
   const [submitHwItem, setSubmitHwItem] = useState<HomeworkItem | null>(null);
   const [submitNote, setSubmitNote] = useState('');
   const [submitUrl, setSubmitUrl] = useState('');
+  const [submitFiles, setSubmitFiles] = useState<Attachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
 
@@ -408,11 +412,13 @@ function ParentDashboardContent() {
         studentId: activeStudent.id,
         note: submitNote.trim() || undefined,
         attachmentUrl: submitUrl.trim() || undefined,
+        attachments: submitFiles,
       });
       setSubmittedIds(prev => new Set([...prev, submitHwItem.id]));
       setSubmitHwItem(null);
       setSubmitNote('');
       setSubmitUrl('');
+      setSubmitFiles([]);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to submit homework.');
     } finally {
@@ -941,11 +947,14 @@ function ParentDashboardContent() {
                                           section — without this the sheet never says which exam it is. */}
                                       <p className="text-sm font-bold uppercase tracking-wide text-gray-900 mt-3">{summary.exam.name}</p>
 
-                                      <div className="grid grid-cols-2 text-left text-xs text-gray-700 mt-4 border border-gray-300 p-3 rounded">
-                                        <p><span className="font-bold">Student:</span> {activeStudent?.firstName} {activeStudent?.lastName}</p>
-                                        <p><span className="font-bold">Adm No:</span> {activeStudent?.admissionNumber}</p>
-                                        <p><span className="font-bold">Class:</span> {activeStudent?.class?.name} {activeStudent?.section?.name ? `(${activeStudent.section.name})` : ''}</p>
-                                        <p><span className="font-bold">Academic Year:</span> {exams.academicYear}</p>
+                                      <div className="flex items-center gap-4 text-left mt-4 border border-gray-300 p-3 rounded">
+                                        <ReportPhoto src={activeStudent?.photoUrl} name={`${activeStudent?.firstName || ''} ${activeStudent?.lastName || ''}`} size={56} />
+                                        <div className="grid grid-cols-2 gap-x-4 flex-1 text-xs text-gray-700">
+                                          <p><span className="font-bold">Student:</span> {activeStudent?.firstName} {activeStudent?.lastName}</p>
+                                          <p><span className="font-bold">Adm No:</span> {activeStudent?.admissionNumber}</p>
+                                          <p><span className="font-bold">Class:</span> {activeStudent?.class?.name} {activeStudent?.section?.name ? `(${activeStudent.section.name})` : ''}</p>
+                                          <p><span className="font-bold">Academic Year:</span> {exams.academicYear}</p>
+                                        </div>
                                       </div>
                                     </div>
 
@@ -1112,6 +1121,14 @@ function ParentDashboardContent() {
                                       {hw.description}
                                     </p>
                                   )}
+
+                                  <div className="mt-3">
+                                    <AttachmentList
+                                      attachments={hw.attachments}
+                                      attachmentUrl={hw.attachmentUrl}
+                                      linkLabel="Open resource"
+                                    />
+                                  </div>
                                 </div>
 
                                 <div className="mt-5 pt-3.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-[11px]">
@@ -1132,17 +1149,6 @@ function ParentDashboardContent() {
                                   </div>
 
                                   <div className="flex items-center gap-3">
-                                    {hw.attachmentUrl && (
-                                      <a
-                                        href={hw.attachmentUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-[#1D7A4A] hover:text-[#155B37] hover:underline font-bold inline-flex items-center gap-1 shrink-0 font-display transition-colors"
-                                      >
-                                        <Download className="w-3.5 h-3.5" strokeWidth={2} />
-                                        Attachment
-                                      </a>
-                                    )}
                                     {submittedIds.has(hw.id) ? (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1D7A4A] bg-[#E5F6EE] border border-[#1D7A4A]/10 px-2.5 py-1 rounded-full font-display">
                                         <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
@@ -1240,7 +1246,7 @@ function ParentDashboardContent() {
                 </p>
               </div>
               <button
-                onClick={() => { setSubmitHwItem(null); setSubmitNote(''); setSubmitUrl(''); }}
+                onClick={() => { setSubmitHwItem(null); setSubmitNote(''); setSubmitUrl(''); setSubmitFiles([]); }}
                 className="text-gray-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" strokeWidth={2} />
@@ -1248,37 +1254,37 @@ function ParentDashboardContent() {
             </div>
 
             <form onSubmit={handleSubmitHomework} className="p-6 space-y-4">
+              <AttachmentUploader
+                value={submitFiles}
+                onChange={setSubmitFiles}
+                folder="homework-submissions"
+                label="Photos of the Work"
+                hint="Take a photo of each page of the notebook. You can add up to 10."
+                link={submitUrl}
+                onLinkChange={setSubmitUrl}
+                disabled={submitting}
+              />
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 font-display">Notes / Answer</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 font-display">Notes for the Teacher (optional)</label>
                 <textarea
-                  rows={4}
-                  placeholder="Write the answer, notes, or comments here..."
+                  rows={3}
+                  placeholder="Anything you want to tell the teacher about this work..."
                   value={submitNote}
                   onChange={(e) => setSubmitNote(e.target.value)}
                   className="w-full border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A] resize-none"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 font-display">Attachment Link (optional)</label>
-                <input
-                  type="url"
-                  placeholder="e.g. https://drive.google.com/..."
-                  value={submitUrl}
-                  onChange={(e) => setSubmitUrl(e.target.value)}
-                  className="w-full border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/20 focus:border-[#1D7A4A]"
-                />
-              </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setSubmitHwItem(null); setSubmitNote(''); setSubmitUrl(''); }}
+                  onClick={() => { setSubmitHwItem(null); setSubmitNote(''); setSubmitUrl(''); setSubmitFiles([]); }}
                   className="px-4 py-2 border border-[#E5E7EB] hover:bg-gray-50 text-xs font-semibold text-gray-700 rounded-lg transition-all cursor-pointer font-display"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || (!submitNote.trim() && !submitUrl.trim())}
+                  disabled={submitting || (!submitNote.trim() && !submitUrl.trim() && !submitFiles.length)}
                   className="px-5 py-2 bg-[#1D7A4A] hover:bg-[#155B37] text-white text-xs font-semibold rounded-lg transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-display"
                 >
                   {submitting ? (

@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, X, Search, FileText, CheckCircle, Calendar, Gradu
 import { printElement } from '@/lib/print';
 import HolisticCardView from '@/components/HolisticCardView';
 import ReportLetterhead from '@/components/ReportLetterhead';
+import ReportPhoto from '@/components/ReportPhoto';
 import SubjectScoreChart from '@/components/SubjectScoreChart';
 
 type Tab = 'subjects' | 'exams' | 'marks' | 'reports' | 'progress';
@@ -918,7 +919,10 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
                 {/* Deliberately a <p>, not a heading: globals.css pins every h1–h3 to the
                     dark body colour with an !important size, which on this band renders
                     the student's name invisible. */}
-                <p className="text-2xl font-bold font-display tracking-tight text-white pt-3 border-t border-white/10">{reportCard.student.firstName} {reportCard.student.lastName}</p>
+                <div className="flex items-center justify-center gap-4 pt-3 border-t border-white/10">
+                  <ReportPhoto src={reportCard.student.photoUrl} name={`${reportCard.student.firstName} ${reportCard.student.lastName}`} tone="dark" size={64} />
+                  <p className="text-2xl font-bold font-display tracking-tight text-white text-left">{reportCard.student.firstName} {reportCard.student.lastName}</p>
+                </div>
                 <div className="flex justify-center items-center gap-2 text-xs text-gray-400 font-body flex-wrap">
                   <span>Class {reportCard.student.class?.name || '—'}</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />

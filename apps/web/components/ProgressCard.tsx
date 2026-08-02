@@ -99,7 +99,10 @@ export default function ProgressCard({ card, variant = 'full', draftPreview = fa
 
       <div id="progress-card-print" className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden font-body">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#1D7A4A] to-[#155D37] text-white px-6 py-5 flex items-center justify-between gap-4">
+        {/* Solid fill, not a gradient: globals.css strips `background-image` from
+            every element, so a `bg-gradient-*` band renders white and takes the
+            white letterhead text down with it. */}
+        <div className="bg-[#1D7A4A] text-white px-6 py-5 flex items-center justify-between gap-4">
           <ReportLetterhead
             tone="dark"
             title={ccaOnly ? 'Co-Curricular Activities (CCA)' : 'Holistic Progress Card'}

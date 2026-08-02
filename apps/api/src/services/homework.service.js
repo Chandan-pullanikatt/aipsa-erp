@@ -1,6 +1,38 @@
 ﻿const prisma = require('../lib/prisma');
+const { storage } = require('../lib/storage');
 
-async function createHomework(tenantId, teacherId, { classId, subjectId, title, description, dueDate, attachmentUrl }) {
+const MAX_ATTACHMENTS = 10;
+
+// Attachments arrive from the uploader as [{ url, key, name, type }]. Keep only
+// those four fields so a client can't smuggle extra data into the JSON column,
+// and cap the list — a phone gallery makes it easy to select fifty photos.
+function normalizeAttachments(input) {
+  if (!Array.isArray(input)) return null;
+  const clean = input
+    .filter(a => a && typeof a.url === 'string' && a.url.trim())
+    .slice(0, MAX_ATTACHMENTS)
+    .map(a => ({
+      url: a.url.trim(),
+      key: typeof a.key === 'string' ? a.key : null,
+      name: typeof a.name === 'string' ? a.name.slice(0, 120) : null,
+      type: a.type === 'pdf' ? 'pdf' : 'image',
+    }));
+  return clean.length ? clean : null;
+}
+
+// `attachmentUrl` predates the list and is still read by older clients. An
+// explicitly pasted link wins it, because that's a resource the uploads don't
+// contain; otherwise it mirrors the first upload so those clients still see one.
+function attachmentFields(attachments, attachmentUrl) {
+  const list = normalizeAttachments(attachments);
+  const link = typeof attachmentUrl === 'string' ? attachmentUrl.trim() : '';
+  return {
+    attachments: list,
+    attachmentUrl: link || (list ? list[0].url : null),
+  };
+}
+
+async function createHomework(tenantId, teacherId, { classId, subjectId, title, description, dueDate, attachmentUrl, attachments }) {
   const cls = await prisma.class.findFirst({ where: { id: classId, tenantId } });
   if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
   return prisma.homework.create({
@@ -10,7 +42,7 @@ async function createHomework(tenantId, teacherId, { classId, subjectId, title, 
       title: title.trim(),
       description: description || null,
       dueDate: dueDate ? new Date(dueDate) : null,
-      attachmentUrl: attachmentUrl || null,
+      ...attachmentFields(attachments, attachmentUrl),
     },
     include: {
       class: { select: { id: true, name: true } },
@@ -45,14 +77,17 @@ async function updateHomework(tenantId, id, teacherId, data) {
   const hw = await prisma.homework.findFirst({ where: { id, tenantId } });
   if (!hw) throw Object.assign(new Error('Homework not found'), { status: 404 });
   if (hw.teacherId !== teacherId) throw Object.assign(new Error('Not authorized'), { status: 403 });
-  const { title, description, dueDate, attachmentUrl } = data;
+  const { title, description, dueDate, attachmentUrl, attachments } = data;
   return prisma.homework.update({
     where: { id },
     data: {
       ...(title && { title: title.trim() }),
       ...(description !== undefined && { description: description || null }),
       ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
-      ...(attachmentUrl !== undefined && { attachmentUrl: attachmentUrl || null }),
+      // The list wins when sent: it also rewrites the mirrored attachmentUrl.
+      ...(attachments !== undefined
+        ? attachmentFields(attachments, attachmentUrl)
+        : attachmentUrl !== undefined && { attachmentUrl: attachmentUrl || null }),
     },
     include: {
       class: { select: { id: true, name: true } },
@@ -65,7 +100,21 @@ async function deleteHomework(tenantId, id, userId, userRole) {
   const hw = await prisma.homework.findFirst({ where: { id, tenantId } });
   if (!hw) throw Object.assign(new Error('Homework not found'), { status: 404 });
   if (hw.teacherId !== userId && userRole !== 'SCHOOL_ADMIN') throw Object.assign(new Error('Not authorized'), { status: 403 });
+  // Collect the submissions' files before the cascade removes the rows.
+  const subs = await prisma.homeworkSubmission.findMany({
+    where: { tenantId, homeworkId: id }, select: { attachments: true },
+  });
   await prisma.homework.delete({ where: { id } });
+  await removeFiles([hw, ...subs]);
+}
+
+// Best-effort cleanup of uploaded files whose owning row is gone. A failure here
+// only leaves an orphan on disk, so it must never fail the request.
+async function removeFiles(rows) {
+  const keys = rows.flatMap(r => (Array.isArray(r.attachments) ? r.attachments : []))
+    .map(a => a && a.key)
+    .filter(Boolean);
+  await Promise.all(keys.map(k => storage.remove(k).catch(() => {})));
 }
 
 // Returns distinct classes a teacher is assigned to, via the subject they own,
@@ -107,15 +156,22 @@ async function getTeacherClasses(tenantId, teacherId) {
   return all.filter(c => seen.has(c.id) ? false : seen.add(c.id));
 }
 
-async function submitHomework(tenantId, homeworkId, studentId, { note, attachmentUrl }) {
+async function submitHomework(tenantId, homeworkId, studentId, { note, attachmentUrl, attachments }) {
   const hw = await prisma.homework.findFirst({ where: { id: homeworkId, tenantId } });
   if (!hw) throw Object.assign(new Error('Homework not found'), { status: 404 });
 
-  return prisma.homeworkSubmission.upsert({
+  // Resubmitting replaces the previous attempt, so its files become orphans.
+  const previous = await prisma.homeworkSubmission.findUnique({
+    where: { homeworkId_studentId: { homeworkId, studentId } },
+    select: { attachments: true },
+  });
+
+  const files = attachmentFields(attachments, attachmentUrl);
+  const submission = await prisma.homeworkSubmission.upsert({
     where: { homeworkId_studentId: { homeworkId, studentId } },
     update: {
       note: note || null,
-      attachmentUrl: attachmentUrl || null,
+      ...files,
       submittedAt: new Date(),
       grade: null,
       feedback: null,
@@ -127,12 +183,15 @@ async function submitHomework(tenantId, homeworkId, studentId, { note, attachmen
       homeworkId,
       studentId,
       note: note || null,
-      attachmentUrl: attachmentUrl || null,
+      ...files,
     },
     include: {
       student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
     },
   });
+
+  if (previous) await removeFiles([previous]);
+  return submission;
 }
 
 async function getSubmissions(tenantId, homeworkId) {

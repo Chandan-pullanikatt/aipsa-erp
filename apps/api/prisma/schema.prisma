@@ -996,6 +996,9 @@ model Homework {
   description   String?
   dueDate       DateTime? @db.Date
   attachmentUrl String?
+  // Uploaded photos/PDFs: [{ url, key, name, type }]. `attachmentUrl` mirrors the
+  // first entry so older clients that only read a single link keep working.
+  attachments   Json?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -1081,6 +1084,9 @@ model HomeworkSubmission {
   studentId     String
   note          String?
   attachmentUrl String?
+  // Uploaded photos/PDFs of the completed work: [{ url, key, name, type }].
+  // `attachmentUrl` mirrors the first entry for backwards compatibility.
+  attachments   Json?
   submittedAt   DateTime  @default(now())
   grade         String?
   feedback      String?

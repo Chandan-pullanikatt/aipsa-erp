@@ -19,13 +19,18 @@ interface Props {
   /** `dark` sits on the green header band; `plain` on white paper. */
   tone?: 'plain' | 'dark';
   align?: 'left' | 'center';
+  /** Address / board / phone line under the school name. Off for tight headers. */
+  details?: boolean;
   className?: string;
 }
 
-export default function ReportLetterhead({ title, subtitle, tone = 'plain', align = 'left', className = '' }: Props) {
-  const { logo, schoolName } = useBranding();
+export default function ReportLetterhead({ title, subtitle, tone = 'plain', align = 'left', details = true, className = '' }: Props) {
+  const { logo, schoolName, address, city, state, phone, board } = useBranding();
   const dark = tone === 'dark';
   const centered = align === 'center';
+
+  const addressLine = [address, city, state].filter(Boolean).join(', ');
+  const metaLine = [board ? `${board} Curriculum` : null, phone].filter(Boolean).join(' · ');
 
   return (
     <div className={`flex items-center gap-3 ${centered ? 'flex-col text-center' : ''} ${className}`}>
@@ -45,7 +50,14 @@ export default function ReportLetterhead({ title, subtitle, tone = 'plain', alig
         <p className={`font-display font-bold leading-tight tracking-wide ${dark ? 'text-white text-lg' : 'text-gray-900 text-base uppercase'}`}>
           {schoolName || 'EduBridge'}
         </p>
-        <p className={`font-display font-semibold uppercase tracking-wider text-[11px] mt-0.5 ${dark ? 'text-white/85' : 'text-[#1D7A4A]'}`}>
+        {details && (addressLine || metaLine) && (
+          <p className={`text-[10px] leading-snug mt-0.5 ${dark ? 'text-white/70' : 'text-gray-500'}`}>
+            {addressLine}
+            {addressLine && metaLine ? <span className={dark ? 'text-white/40' : 'text-gray-300'}> · </span> : null}
+            {metaLine}
+          </p>
+        )}
+        <p className={`font-display font-semibold uppercase tracking-wider text-[11px] mt-1 ${dark ? 'text-white/85' : 'text-[#1D7A4A]'}`}>
           {title}
         </p>
         {subtitle && (
