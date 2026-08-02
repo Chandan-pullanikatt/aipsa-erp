@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import {
   GraduationCap,
@@ -18,6 +18,8 @@ import {
   Copy,
   Link2,
   UserCheck,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 
 interface Teacher {
@@ -41,6 +43,49 @@ interface Section {
   _count: { students: number };
 }
 
+interface DeleteImpact {
+  target: { id: string; name: string; type: 'class' | 'section'; className: string };
+  counts: Record<string, number>;
+}
+
+interface DeleteTarget {
+  type: 'class' | 'section';
+  id: string;
+  name: string;
+  /** Which class list to refresh afterwards. Only set for sections. */
+  classId?: string;
+}
+
+// Rendered in this order, so the irreversible things sit at the top where they
+// are read rather than at the bottom where they are scrolled past. `danger`
+// marks the rows that are money or permanent academic record.
+const IMPACT_ROWS: { key: string; one: string; many: string; danger?: boolean }[] = [
+  { key: 'students', one: 'student record', many: 'student records', danger: true },
+  { key: 'portalLogins', one: 'portal login', many: 'portal logins', danger: true },
+  { key: 'feePayments', one: 'fee payment', many: 'fee payments', danger: true },
+  { key: 'examResults', one: 'recorded mark', many: 'recorded marks', danger: true },
+  { key: 'progressCards', one: 'progress card', many: 'progress cards', danger: true },
+  { key: 'purchases', one: 'store purchase', many: 'store purchases', danger: true },
+  { key: 'registrations', one: 'programme registration', many: 'programme registrations', danger: true },
+  { key: 'guardians', one: 'guardian contact', many: 'guardian contacts' },
+  { key: 'attendance', one: 'attendance record', many: 'attendance records' },
+  { key: 'leaves', one: 'leave request', many: 'leave requests' },
+  { key: 'sections', one: 'section', many: 'sections' },
+  { key: 'exams', one: 'exam', many: 'exams' },
+  { key: 'homeworks', one: 'homework', many: 'homeworks' },
+  { key: 'homeworkSubmissions', one: 'homework submission', many: 'homework submissions' },
+  { key: 'feeStructures', one: 'fee structure', many: 'fee structures' },
+  { key: 'subjects', one: 'subject', many: 'subjects' },
+  { key: 'lmsMaterials', one: 'LMS material', many: 'LMS materials' },
+  { key: 'ccaAreas', one: 'CCA area', many: 'CCA areas' },
+  { key: 'ccaGrades', one: 'CCA grade', many: 'CCA grades' },
+  { key: 'timetablePeriods', one: 'timetable period', many: 'timetable periods' },
+  { key: 'subjectTeacherAssignments', one: 'teacher assignment', many: 'teacher assignments' },
+  { key: 'events', one: 'school event', many: 'school events' },
+  { key: 'bookIssues', one: 'library issue', many: 'library issues' },
+  { key: 'joinRequests', one: 'join request', many: 'join requests' },
+];
+
 export default function ClassesPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -59,6 +104,15 @@ export default function ClassesPage() {
   const [generatingCodeFor, setGeneratingCodeFor] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [savingSectionInchargeFor, setSavingSectionInchargeFor] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [impact, setImpact] = useState<DeleteImpact | null>(null);
+  const [impactError, setImpactError] = useState('');
+  const [confirmName, setConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  // Counts the dialog openings so a slow impact response cannot land in a
+  // dialog opened after it — the admin would then be confirming one class's
+  // name against another class's numbers.
+  const impactRequest = useRef(0);
 
   async function fetchClasses() {
     try {
@@ -158,13 +212,55 @@ export default function ClassesPage() {
     }
   }
 
-  async function handleDeleteClass(id: string) {
-    if (!confirm('Delete this class? This cannot be undone.')) return;
+  // Deleting a class or section now takes its students and their records with
+  // it, so the flow is: ask the server what would go, show it, and only accept
+  // the delete once the admin has typed the name back.
+  async function openDelete(target: DeleteTarget) {
+    const request = ++impactRequest.current;
+    setDeleteTarget(target);
+    setImpact(null);
+    setImpactError('');
+    setConfirmName('');
+    const path = target.type === 'class'
+      ? `/sis/classes/${target.id}/delete-impact`
+      : `/sis/sections/${target.id}/delete-impact`;
     try {
-      await api.delete(`/sis/classes/${id}`);
-      fetchClasses();
+      const { data } = await api.get(path);
+      if (impactRequest.current === request) setImpact(data);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Cannot delete class.');
+      if (impactRequest.current === request) {
+        setImpactError(err.response?.data?.error || 'Could not work out what this delete would remove.');
+      }
+    }
+  }
+
+  function closeDelete() {
+    impactRequest.current++;
+    setDeleteTarget(null);
+    setImpact(null);
+    setImpactError('');
+    setConfirmName('');
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const path = deleteTarget.type === 'class'
+        ? `/sis/classes/${deleteTarget.id}`
+        : `/sis/sections/${deleteTarget.id}`;
+      const { data } = await api.delete(path);
+      closeDelete();
+      if (deleteTarget.type === 'section' && deleteTarget.classId) {
+        await fetchSections(deleteTarget.classId);
+      }
+      await fetchClasses();
+      setSuccessMsg(data?.message || 'Deleted.');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setImpactError(err.response?.data?.error || `Delete failed. (${err.message})`);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -198,16 +294,6 @@ export default function ClassesPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   }
 
-  async function handleDeleteSection(sectionId: string, classId: string) {
-    if (!confirm('Delete this section?')) return;
-    try {
-      await api.delete(`/sis/sections/${sectionId}`);
-      fetchSections(classId);
-      fetchClasses();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Cannot delete section.');
-    }
-  }
 
   return (
     <div className="max-w-2xl space-y-6 pb-12">
@@ -297,7 +383,7 @@ export default function ClassesPage() {
                   <button onClick={() => setEditingClass({ id: cls.id, name: cls.name })} className="cursor-pointer p-1.5 rounded-md hover:bg-[#F3F4F6] text-[#4B5563] hover:text-[#1D7A4A] transition-all">
                     <Edit2 className="w-3.5 h-3.5" strokeWidth={2} />
                   </button>
-                  <button onClick={() => handleDeleteClass(cls.id)} className="cursor-pointer p-1.5 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
+                  <button onClick={() => openDelete({ type: 'class', id: cls.id, name: cls.name })} className="cursor-pointer p-1.5 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
                     <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
                   </button>
                 </div>
@@ -402,7 +488,7 @@ export default function ClassesPage() {
                             Section {sec.name}
                             <span className="text-[#9CA3AF] font-medium">({sec._count.students} students)</span>
                           </span>
-                          <button onClick={() => handleDeleteSection(sec.id, cls.id)} className="p-1 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
+                          <button onClick={() => openDelete({ type: 'section', id: sec.id, name: sec.name, classId: cls.id })} className="cursor-pointer p-1 rounded-md hover:bg-[#FEF2F2] text-[#DC2626] hover:text-[#B91C1C] transition-all">
                             <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                           </button>
                         </div>
@@ -460,6 +546,113 @@ export default function ClassesPage() {
               <p className="text-xs text-[#6B7280]">Add your institution's grade levels and administrative sections to begin enrolling students.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-[#E5E7EB] w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-[#F3F4F6]">
+              <div className="w-9 h-9 rounded-lg bg-[#FEF2F2] text-[#DC2626] flex items-center justify-center shrink-0 border border-[#FCA5A5]/50">
+                <AlertTriangle className="w-4.5 h-4.5" strokeWidth={2} />
+              </div>
+              <div>
+                <h2 className="font-bold text-[#1A1D23] text-base leading-snug">
+                  Delete {deleteTarget.type === 'class' ? 'class' : 'section'}{' '}
+                  {deleteTarget.type === 'section' && impact ? `${impact.target.className} — ` : ''}
+                  {deleteTarget.name}?
+                </h2>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  This permanently removes the students in it, along with everything listed below.
+                  It cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto flex-1">
+              {impactError && (
+                <div className="bg-[#FEF2F2] border border-[#FCA5A5] text-[#DC2626] text-xs font-semibold rounded-lg px-3 py-2.5 mb-3">
+                  {impactError}
+                </div>
+              )}
+
+              {!impact && !impactError && (
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#6B7280] py-6 justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking what this would remove...
+                </div>
+              )}
+
+              {impact && (() => {
+                const rows = IMPACT_ROWS.filter((r) => (impact.counts[r.key] ?? 0) > 0);
+                if (rows.length === 0) {
+                  return (
+                    <p className="text-sm text-[#6B7280] py-2">
+                      Nothing is attached to this {deleteTarget.type} — it will just be removed.
+                    </p>
+                  );
+                }
+                return (
+                  <>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-[#6B7280] mb-2">
+                      Will be permanently deleted
+                    </p>
+                    <ul className="space-y-1 mb-4">
+                      {rows.map((r) => {
+                        const n = impact.counts[r.key];
+                        return (
+                          <li
+                            key={r.key}
+                            className={`flex items-baseline justify-between gap-3 text-sm px-3 py-1.5 rounded-md ${r.danger ? 'bg-[#FEF2F2] text-[#991B1B]' : 'bg-[#F9FAFB] text-[#4B5563]'}`}
+                          >
+                            <span className={r.danger ? 'font-semibold' : 'font-medium'}>
+                              {n === 1 ? r.one : r.many}
+                            </span>
+                            <span className="font-bold tabular-nums">{n}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                );
+              })()}
+
+              {impact && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#4B5563] mb-1.5">
+                    Type <span className="font-mono font-bold text-[#1A1D23]">{impact.target.name}</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmName}
+                    onChange={(e) => setConfirmName(e.target.value)}
+                    autoFocus
+                    className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm bg-white text-[#1A1D23] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20 focus:border-[#DC2626] transition-all"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-[#F3F4F6] bg-[#F9FAFB]/60 rounded-b-xl">
+              <button
+                type="button"
+                onClick={closeDelete}
+                disabled={deleting}
+                className="cursor-pointer px-4 py-2 border border-[#E5E7EB] hover:bg-white bg-white rounded-lg text-sm font-semibold text-[#4B5563] transition-all disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleting || !impact || confirmName.trim() !== impact.target.name}
+                className="cursor-pointer px-4 py-2 bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold transition-all inline-flex items-center gap-1.5 shadow-sm"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" strokeWidth={2.25} />}
+                {deleting ? 'Deleting...' : `Delete ${deleteTarget.type}`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

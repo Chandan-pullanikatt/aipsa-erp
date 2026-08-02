@@ -44,11 +44,8 @@ async function patchClass(tenantId, classId, { name, inchargeTeacherId }) {
   return prisma.class.update({ where: { id: classId }, data, include: CLASS_INCLUDE });
 }
 
-async function deleteClass(tenantId, id) {
-  const cls = await prisma.class.findFirst({ where: { id, tenantId }, include: { _count: { select: { students: true } } } });
-  if (!cls) throw Object.assign(new Error('Class not found'), { status: 404 });
-  if (cls._count.students > 0) throw Object.assign(new Error('Cannot delete class with enrolled students'), { status: 409 });
-  await prisma.class.delete({ where: { id } });
+async function deleteClass(tenantId, id, actingUser) {
+  return removeClassOrSection(tenantId, { classId: id }, actingUser);
 }
 
 // ─── Sections ────────────────────────────────────────────────────────────────
@@ -95,11 +92,307 @@ async function patchSection(tenantId, id, { inchargeTeacherId }) {
   return prisma.section.update({ where: { id }, data, include: SECTION_INCLUDE });
 }
 
-async function deleteSection(tenantId, id) {
-  const sec = await prisma.section.findFirst({ where: { id, tenantId }, include: { _count: { select: { students: true } } } });
-  if (!sec) throw Object.assign(new Error('Section not found'), { status: 404 });
-  if (sec._count.students > 0) throw Object.assign(new Error('Cannot delete section with enrolled students'), { status: 409 });
-  await prisma.section.delete({ where: { id } });
+async function deleteSection(tenantId, id, actingUser) {
+  return removeClassOrSection(tenantId, { sectionId: id }, actingUser);
+}
+
+// ─── Deleting a class or section ─────────────────────────────────────────────
+//
+// Deleting a class is not a tidy-up. The row anchors a whole grade, so it takes
+// its students with it — and with them their marks, fee payments and portal
+// logins. Two details make the database a bad judge of that.
+//
+// Exam and Homework hold a *required* classId, which is Restrict, so Postgres
+// refuses the delete outright unless those rows go first. FeeStructure and
+// SchoolEvent hold an *optional* one, which is SetNull — and null already means
+// "applies to the whole school" (see fee.service listStructures and
+// event.service listForUser). Left to referential actions, deleting Class 6
+// would quietly promote its fees and its events to every child in the building.
+// Both are therefore deleted explicitly below rather than left to the schema.
+//
+// The student side needs the same care. Fee payments and exam results are
+// Restrict and would block the delete; attendance, leaves and registrations are
+// SetNull and would instead survive as rows pointing at nobody. All five are
+// therefore cleared explicitly ahead of the students. Everything else hanging
+// off a student or a class already cascades.
+//
+// None of this is recoverable, which is why getDeleteImpact exists: the admin
+// UI shows these counts and makes them the thing the admin confirms against.
+
+/** Ids of everything in scope, for one class (with its sections) or one section. */
+async function resolveDeleteScope(client, tenantId, { classId, sectionId }) {
+  const sectionIds = classId
+    ? (await client.section.findMany({ where: { tenantId, classId }, select: { id: true } })).map((s) => s.id)
+    : [sectionId];
+
+  // The OR catches a student sitting in a section of this class whose own
+  // classId drifted out of sync — rare, but it would survive a classId-only
+  // delete and then point at a section that no longer exists.
+  const students = await client.student.findMany({
+    where: classId
+      ? { tenantId, OR: [{ classId }, ...(sectionIds.length ? [{ sectionId: { in: sectionIds } }] : [])] }
+      : { tenantId, sectionId },
+    select: { id: true, userId: true },
+  });
+  const studentIds = students.map((s) => s.id);
+  const userIds = students.map((s) => s.userId).filter(Boolean);
+
+  // Exam.sectionId has no foreign key of its own, so a section delete leaves it
+  // dangling unless we find those exams by hand.
+  const examIds = (await client.exam.findMany({
+    where: classId ? { tenantId, classId } : { tenantId, sectionId },
+    select: { id: true },
+  })).map((e) => e.id);
+
+  // Subjects belong to the class, so they only go when the whole class does.
+  const subjectIds = classId
+    ? (await client.subject.findMany({ where: { tenantId, classId }, select: { id: true } })).map((s) => s.id)
+    : [];
+
+  return { sectionIds, studentIds, userIds, examIds, subjectIds };
+}
+
+/**
+ * What deleting this class or section would destroy. Read-only — every count
+ * here corresponds to rows removeClassOrSection actually removes.
+ */
+async function getDeleteImpact(tenantId, { classId, sectionId }) {
+  const target = classId
+    ? await prisma.class.findFirst({ where: { id: classId, tenantId }, select: { id: true, name: true } })
+    : await prisma.section.findFirst({
+      where: { id: sectionId, tenantId },
+      select: { id: true, name: true, class: { select: { name: true } } },
+    });
+  if (!target) {
+    throw Object.assign(new Error(classId ? 'Class not found' : 'Section not found'), { status: 404 });
+  }
+
+  const { sectionIds, studentIds, userIds, examIds, subjectIds } =
+    await resolveDeleteScope(prisma, tenantId, { classId, sectionId });
+
+  const byStudent = { tenantId, studentId: { in: studentIds } };
+  const zero = () => Promise.resolve(0);
+
+  const [
+    examResults, homeworkSubmissions, feePayments, attendance, leaves,
+    guardians, bookIssues, purchases, registrations, progressCards, ccaGrades,
+    homeworks, feeStructures, events, subjects, lmsMaterials, ccaAreas,
+    joinRequests, timetablePeriods, subjectTeacherAssignments,
+  ] = await Promise.all([
+    prisma.examResult.count({
+      where: {
+        tenantId,
+        OR: [
+          { examId: { in: examIds } },
+          { studentId: { in: studentIds } },
+          ...(subjectIds.length ? [{ subjectId: { in: subjectIds } }] : []),
+        ],
+      },
+    }),
+    prisma.homeworkSubmission.count({
+      where: {
+        tenantId,
+        OR: [
+          { studentId: { in: studentIds } },
+          ...(classId ? [{ homework: { classId } }] : []),
+        ],
+      },
+    }),
+    prisma.feePayment.count({ where: byStudent }),
+    prisma.attendance.count({
+      where: {
+        tenantId,
+        OR: [
+          { studentId: { in: studentIds } },
+          ...(classId ? [{ classId }] : []),
+          ...(sectionIds.length ? [{ sectionId: { in: sectionIds } }] : []),
+        ],
+      },
+    }),
+    prisma.leave.count({ where: byStudent }),
+    prisma.guardian.count({ where: byStudent }),
+    prisma.bookIssue.count({ where: byStudent }),
+    prisma.purchase.count({ where: byStudent }),
+    prisma.registration.count({
+      where: {
+        tenantId,
+        OR: [
+          { studentId: { in: studentIds } },
+          ...(userIds.length ? [{ registrantUserId: { in: userIds } }] : []),
+        ],
+      },
+    }),
+    prisma.progressTerm.count({ where: byStudent }),
+    prisma.ccaGrade.count({ where: byStudent }),
+    // Class-level records. A section delete leaves all of these alone — they
+    // belong to the grade, not to 6-A.
+    classId ? prisma.homework.count({ where: { tenantId, classId } }) : zero(),
+    classId ? prisma.feeStructure.count({ where: { tenantId, classId } }) : zero(),
+    classId ? prisma.schoolEvent.count({ where: { tenantId, classId } }) : zero(),
+    classId ? prisma.subject.count({ where: { tenantId, classId } }) : zero(),
+    subjectIds.length ? prisma.lmsMaterial.count({ where: { tenantId, subjectId: { in: subjectIds } } }) : zero(),
+    classId ? prisma.ccaArea.count({ where: { tenantId, classId } }) : zero(),
+    classId ? prisma.classJoinRequest.count({ where: { tenantId, classId } }) : zero(),
+    prisma.period.count({ where: classId ? { tenantId, classId } : { tenantId, sectionId } }),
+    prisma.subjectTeacher.count({
+      where: classId
+        ? { tenantId, OR: [{ sectionId: { in: sectionIds } }, ...(subjectIds.length ? [{ subjectId: { in: subjectIds } }] : [])] }
+        : { tenantId, sectionId },
+    }),
+  ]);
+
+  return {
+    target: {
+      id: target.id,
+      name: target.name,
+      type: classId ? 'class' : 'section',
+      className: classId ? target.name : target.class.name,
+    },
+    counts: {
+      students: studentIds.length,
+      portalLogins: userIds.length,
+      sections: classId ? sectionIds.length : 0,
+      exams: examIds.length,
+      examResults,
+      homeworks,
+      homeworkSubmissions,
+      feePayments,
+      feeStructures,
+      attendance,
+      leaves,
+      guardians,
+      events,
+      timetablePeriods,
+      subjects,
+      lmsMaterials,
+      ccaAreas,
+      ccaGrades,
+      progressCards,
+      bookIssues,
+      purchases,
+      registrations,
+      joinRequests,
+      subjectTeacherAssignments,
+    },
+  };
+}
+
+async function removeClassOrSection(tenantId, { classId, sectionId }, actingUser) {
+  const impact = await getDeleteImpact(tenantId, { classId, sectionId });
+  const { target, counts } = impact;
+
+  try {
+    await runDeleteTransaction(tenantId, { classId, sectionId });
+  } catch (err) {
+    // A foreign key we have not accounted for means some module added a
+    // Restrict relation to Class, Section or Student since this was written.
+    // The transaction has rolled back, so nothing is half-deleted — but the
+    // global handler would turn this into a bare "Internal server error", and
+    // Prisma's own message is not safe to echo (it carries the query and the
+    // constraint name). Say what happened and leave the detail in the log.
+    if (err && err.code === 'P2003') {
+      throw Object.assign(
+        new Error(
+          `${target.name} could not be deleted: something else in the school still `
+          + 'refers to it. Nothing was removed. Please report this — it needs a code change.',
+        ),
+        { status: 409, cause: err },
+      );
+    }
+    throw err;
+  }
+
+  // Written after the transaction, not before it as deleteStudent does: this
+  // one can genuinely fail and roll back, and a CLASS_DELETED line for a class
+  // that still exists is worse than no line. auditLog has no foreign key back
+  // to any of the deleted rows, so nothing is lost by waiting. The counts are
+  // the only surviving record of what went with it.
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      userId: actingUser ? actingUser.id : null,
+      action: classId ? 'CLASS_DELETED' : 'SECTION_DELETED',
+      entity: classId ? 'Class' : 'Section',
+      entityId: target.id,
+      meta: { name: target.name, className: target.className, counts },
+    },
+  });
+
+  return { deleted: true, ...impact };
+}
+
+function runDeleteTransaction(tenantId, { classId, sectionId }) {
+  return prisma.$transaction(async (tx) => {
+    // Re-resolved inside the transaction rather than reused from the impact
+    // read above: a student admitted into the class in between would otherwise
+    // be missed by the deletes and then block the final class.delete.
+    const { sectionIds, studentIds, userIds, examIds, subjectIds } =
+      await resolveDeleteScope(tx, tenantId, { classId, sectionId });
+
+    // Restrict foreign keys, innermost first. Exam results go before exams so
+    // that results belonging to a *surviving* exam but a deleted student (or a
+    // deleted subject) are cleared too — the exam-level cascade would miss them.
+    await tx.examResult.deleteMany({
+      where: {
+        tenantId,
+        OR: [
+          { examId: { in: examIds } },
+          { studentId: { in: studentIds } },
+          ...(subjectIds.length ? [{ subjectId: { in: subjectIds } }] : []),
+        ],
+      },
+    });
+    await tx.exam.deleteMany({ where: { tenantId, id: { in: examIds } } });
+    await tx.feePayment.deleteMany({ where: { tenantId, studentId: { in: studentIds } } });
+    await tx.attendance.deleteMany({
+      where: {
+        tenantId,
+        OR: [
+          { studentId: { in: studentIds } },
+          ...(classId ? [{ classId }] : []),
+          ...(sectionIds.length ? [{ sectionId: { in: sectionIds } }] : []),
+        ],
+      },
+    });
+    await tx.leave.deleteMany({ where: { tenantId, studentId: { in: studentIds } } });
+
+    // Registration.studentId is SetNull, so deleting the student would leave a
+    // registration attached to nobody. The one a student booked themselves
+    // hangs off registrantUserId instead and would cascade with the portal user
+    // below — this catches both so the counts shown to the admin are honest.
+    await tx.registration.deleteMany({
+      where: {
+        tenantId,
+        OR: [
+          { studentId: { in: studentIds } },
+          ...(userIds.length ? [{ registrantUserId: { in: userIds } }] : []),
+        ],
+      },
+    });
+
+    if (classId) {
+      // Homework is Restrict; fee structures and events are the SetNull pair
+      // that would otherwise go school-wide. Submissions, waivers, reminder
+      // logs and event media cascade off these.
+      await tx.homework.deleteMany({ where: { tenantId, classId } });
+      await tx.feeStructure.deleteMany({ where: { tenantId, classId } });
+      await tx.schoolEvent.deleteMany({ where: { tenantId, classId } });
+    }
+
+    // Guardians, submissions, CCA grades, progress cards, library issues,
+    // purchases, hostel and transport rows all cascade off the student.
+    await tx.student.deleteMany({ where: { tenantId, id: { in: studentIds } } });
+
+    // The portal login is a separate User the student pointed at, so nothing
+    // removes it for us — without this the school keeps orphaned accounts that
+    // can still sign in.
+    if (userIds.length) await tx.user.deleteMany({ where: { id: { in: userIds } } });
+
+    // Sections, subjects (and their LMS material), CCA areas, timetable periods,
+    // subject-teacher assignments and join requests all cascade off the class.
+    if (classId) await tx.class.delete({ where: { id: classId } });
+    else await tx.section.delete({ where: { id: sectionId } });
+  }, { timeout: 120000, maxWait: 15000 });
 }
 
 // ─── Students ────────────────────────────────────────────────────────────────
@@ -900,6 +1193,7 @@ async function deleteStudentActivity(tenantId, activityId, requesterId, requeste
 module.exports = {
   listClasses, createClass, updateClass, deleteClass, patchClass,
   listSections, createSection, updateSection, patchSection, deleteSection,
+  getDeleteImpact,
   listStudents, getStudent, createStudent, updateStudent, deleteStudent,
   listGuardians, createGuardian, updateGuardian, deleteGuardian,
   getPortalPin, resetPortalPin, listSectionCredentials, getParentStudents, getStudentByUserId, setFeeAccessOverride,

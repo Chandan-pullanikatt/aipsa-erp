@@ -6,6 +6,7 @@ import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
 import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
+import ReportLetterhead from '@/components/ReportLetterhead';
 import {
   Calendar,
   Clock,
@@ -952,10 +953,10 @@ function StudentPortalContent() {
                     <div id={`exam-sheet-${summary.exam.id}`} className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-6 text-slate-800 relative text-xs font-body">
                       {/* Logo header */}
                       <div className="flex items-start justify-between border-b border-gray-200 pb-4 gap-4">
-                        <div>
-                          <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wide font-display">Academic Progress Card</h2>
-                          <p className="text-[10px] text-gray-400 mt-0.5">Academic Session • {exams.academicYear}</p>
-                        </div>
+                        <ReportLetterhead
+                          title={`Academic Progress Card • ${summary.exam.name}`}
+                          subtitle={`Academic Session • ${exams.academicYear}`}
+                        />
                         <div className="text-right">
                           <h4 className="font-semibold text-slate-850 font-display">{student.firstName} {student.lastName}</h4>
                           <p className="text-[10px] text-gray-400 mt-0.5">Adm No: {student.admissionNumber}</p>

@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 import { Plus, Pencil, Trash2, X, Search, FileText, CheckCircle, Calendar, GraduationCap, ClipboardList, BookOpen } from 'lucide-react';
+import HolisticCardView from '@/components/HolisticCardView';
+import ReportLetterhead from '@/components/ReportLetterhead';
 
-type Tab = 'subjects' | 'exams' | 'marks' | 'reports';
+type Tab = 'subjects' | 'exams' | 'marks' | 'reports' | 'progress';
 
 interface ClassItem { id: string; name: string; }
 interface SectionItem { id: string; name: string; }
@@ -55,7 +57,7 @@ export default function ExamsPage() {
       </div>
 
       <div className="flex gap-1 bg-[#F3F4F6] p-1.5 rounded-xl w-fit border border-[#E5E7EB]">
-        {([['subjects','Subjects'],['exams','Exams'],['marks','Marks Entry'],['reports','Report Cards']] as [Tab,string][]).map(([t,l]) => (
+        {([['subjects','Subjects'],['exams','Exams'],['marks','Marks Entry'],['reports','Report Cards'],['progress','Progress Card']] as [Tab,string][]).map(([t,l]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? 'bg-white text-[#1A1D23] shadow-sm' : 'text-gray-500 hover:text-gray-950'}`}>
             {l}
@@ -67,6 +69,7 @@ export default function ExamsPage() {
       {tab === 'exams' && <ExamsTab classes={classes} academicYear={academicYear} />}
       {tab === 'marks' && <MarksEntryTab classes={classes} academicYear={academicYear} />}
       {tab === 'reports' && <ReportCardsTab classes={classes} academicYear={academicYear} />}
+      {tab === 'progress' && <HolisticCardTab classes={classes} academicYear={academicYear} />}
     </div>
   );
 }
@@ -801,13 +804,13 @@ function MarksEntryTab({ classes, academicYear }: { classes: ClassItem[]; academ
 
 // ─── Report Cards Tab ─────────────────────────────────────────────────────────
 
-function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; academicYear: string }) {
+// Class → student chooser shared by the two report tabs (exam report card and
+// holistic progress card), which differ only in what they render once a student
+// is picked.
+function StudentPicker({ classes, ctaLabel, onSelect }: { classes: ClassItem[]; ctaLabel: string; onSelect: (student: any) => void }) {
   const [classId, setClassId] = useState('');
   const [search, setSearch] = useState('');
   const [students, setStudents] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
-  const [reportCard, setReportCard] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!classId) { setStudents([]); return; }
@@ -819,17 +822,7 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
     !search || `${s.firstName} ${s.lastName} ${s.admissionNumber}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  async function loadReportCard(student: any) {
-    setSelected(student); setLoading(true);
-    try {
-      const { data } = await api.get(`/exams/report-card/${student.id}`, { params: { academicYear } });
-      setReportCard(data);
-    } finally { setLoading(false); }
-  }
-
   return (
-    <div className="max-w-4xl space-y-6">
-      {!selected ? (
         <div className="space-y-4">
           <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 shadow-sm flex flex-col sm:flex-row gap-4">
             <div className="w-full sm:w-64">
@@ -867,7 +860,7 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
                     <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3.5 font-semibold text-gray-900 font-display">{s.firstName} {s.lastName}</td>
                       <td className="px-4 py-3.5 font-mono text-xs text-gray-500 font-semibold">{s.admissionNumber}</td>
-                      <td className="px-4 py-3.5 text-right"><button onClick={() => loadReportCard(s)} className="text-xs font-bold text-[#1D7A4A] hover:underline font-body">Inspect Report Card →</button></td>
+                      <td className="px-4 py-3.5 text-right"><button onClick={() => onSelect(s)} className="text-xs font-bold text-[#1D7A4A] hover:underline font-body">{ctaLabel}</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -875,6 +868,26 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
             </div>
           )}
         </div>
+  );
+}
+
+function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; academicYear: string }) {
+  const [selected, setSelected] = useState<any>(null);
+  const [reportCard, setReportCard] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function loadReportCard(student: any) {
+    setSelected(student); setLoading(true);
+    try {
+      const { data } = await api.get(`/exams/report-card/${student.id}`, { params: { academicYear } });
+      setReportCard(data);
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      {!selected ? (
+        <StudentPicker classes={classes} ctaLabel="Inspect Report Card →" onSelect={loadReportCard} />
       ) : (
         <div className="space-y-4">
           <button onClick={() => { setSelected(null); setReportCard(null); }} className="text-sm font-semibold text-[#1A1D23] hover:text-[#1D7A4A] flex items-center gap-1.5 transition-colors font-body">
@@ -886,9 +899,12 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
           {reportCard && (
             <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
               {/* Header */}
-              <div className="bg-[#1A1D23] text-white px-6 py-6 text-center space-y-2">
-                <p className="text-[10px] font-bold bg-[#D6F0E4] text-[#0F6E56] px-2.5 py-0.5 rounded-full inline-block">OFFICIAL REPORT CARD</p>
-                <h3 className="text-2xl font-bold font-display tracking-tight mt-1">{reportCard.student.firstName} {reportCard.student.lastName}</h3>
+              <div className="bg-[#1A1D23] text-white px-6 py-6 text-center space-y-3">
+                <ReportLetterhead align="center" tone="dark" title="Official Report Card" />
+                {/* Deliberately a <p>, not a heading: globals.css pins every h1–h3 to the
+                    dark body colour with an !important size, which on this band renders
+                    the student's name invisible. */}
+                <p className="text-2xl font-bold font-display tracking-tight text-white pt-3 border-t border-white/10">{reportCard.student.firstName} {reportCard.student.lastName}</p>
                 <div className="flex justify-center items-center gap-2 text-xs text-gray-400 font-body flex-wrap">
                   <span>Class {reportCard.student.class?.name || '—'}</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
@@ -955,6 +971,37 @@ function ReportCardsTab({ classes, academicYear }: { classes: ClassItem[]; acade
               </div>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Holistic Progress Card Tab ───────────────────────────────────────────────
+
+// The year-long card families see in their portal (scholastic + CCA + conduct +
+// remarks), rendered here from the same component so staff review exactly what is
+// published — including terms still in draft, which the portals hide.
+function HolisticCardTab({ classes, academicYear }: { classes: ClassItem[]; academicYear: string }) {
+  const [selected, setSelected] = useState<any>(null);
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      {!selected ? (
+        <StudentPicker classes={classes} ctaLabel="View Progress Card →" onSelect={setSelected} />
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button onClick={() => setSelected(null)} className="text-sm font-semibold text-[#1A1D23] hover:text-[#1D7A4A] flex items-center gap-1.5 transition-colors font-body">
+              <span>← Return to Student List</span>
+            </button>
+            <p className="text-xs text-gray-500 font-body">
+              <span className="font-semibold text-gray-700 font-display">{selected.firstName} {selected.lastName}</span>
+              <span className="text-gray-300 mx-1.5">·</span>
+              <span className="font-mono">{selected.admissionNumber}</span>
+            </p>
+          </div>
+          <HolisticCardView key={`${selected.id}:${academicYear}`} studentId={selected.id} academicYear={academicYear || undefined} />
         </div>
       )}
     </div>

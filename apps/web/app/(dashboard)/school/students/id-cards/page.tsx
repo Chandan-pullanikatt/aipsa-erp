@@ -8,11 +8,14 @@ import { StudentIdCard, type IdCardStudent, type IdCardSchool } from '@/componen
 import { ArrowLeft, Printer, IdCard, Loader2 } from 'lucide-react';
 
 interface ClassItem { id: string; name: string; }
+interface SectionItem { id: string; name: string; }
 
 export default function IdCardsPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [sections, setSections] = useState<SectionItem[]>([]);
   const [school, setSchool] = useState<IdCardSchool>({});
   const [classId, setClassId] = useState('');
+  const [sectionId, setSectionId] = useState('');
   const [students, setStudents] = useState<IdCardStudent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,22 +40,44 @@ export default function IdCardsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function loadClass(id: string) {
-    setClassId(id);
+  // Sections belong to a class, so the list refreshes whenever the class changes.
+  useEffect(() => {
+    if (!classId) { setSections([]); return; }
+    let stale = false;
+    api.get(`/sis/classes/${classId}/sections`)
+      .then((r) => { if (!stale) setSections(r.data || []); })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [classId]);
+
+  async function loadStudents(cls: string, sec: string) {
     setStudents([]);
     setError('');
-    if (!id) return;
+    if (!cls) return;
     setLoading(true);
     try {
-      const { data } = await api.get('/sis/students', { params: { classId: id, limit: 500, status: 'ACTIVE' } });
+      const params: Record<string, string | number> = { classId: cls, limit: 500, status: 'ACTIVE' };
+      if (sec) params.sectionId = sec;
+      const { data } = await api.get('/sis/students', { params });
       const list: IdCardStudent[] = data.students || data || [];
-      if (!list.length) setError('No active students in this class.');
+      if (!list.length) setError(sec ? 'No active students in this section.' : 'No active students in this class.');
       setStudents(list);
     } catch {
       setError('Could not load students.');
     } finally {
       setLoading(false);
     }
+  }
+
+  function onClassChange(id: string) {
+    setClassId(id);
+    setSectionId('');
+    loadStudents(id, '');
+  }
+
+  function onSectionChange(id: string) {
+    setSectionId(id);
+    loadStudents(classId, id);
   }
 
   return (
@@ -77,23 +102,38 @@ export default function IdCardsPage() {
               <IdCard className="w-6 h-6 text-[#1D7A4A]" /> Student ID Cards
             </h1>
             <p className="text-sm text-[#6B7280] font-medium mt-1">
-              {singleMode ? 'Preview and print this student’s card.' : 'Pick a class to generate printable ID cards for every student.'}
+              {singleMode ? 'Preview and print this student’s card.' : 'Pick a class — and optionally a section — to generate printable ID cards.'}
             </p>
           </div>
 
           <div className="flex items-end gap-3">
             {!singleMode && (
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-1">Class</label>
-                <select
-                  value={classId}
-                  onChange={(e) => loadClass(e.target.value)}
-                  className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm font-medium bg-white min-w-[180px] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/30"
-                >
-                  <option value="">Select a class…</option>
-                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
+              <>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-1">Class</label>
+                  <select
+                    value={classId}
+                    onChange={(e) => onClassChange(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm font-medium bg-white min-w-[180px] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/30"
+                  >
+                    <option value="">Select a class…</option>
+                    {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-1">Section</label>
+                  <select
+                    value={sectionId}
+                    onChange={(e) => onSectionChange(e.target.value)}
+                    disabled={!classId || sections.length === 0}
+                    title={!classId ? 'Select a class first' : undefined}
+                    className="px-3 py-2 rounded-lg border border-[#E5E7EB] text-sm font-medium bg-white min-w-[180px] focus:outline-none focus:ring-2 focus:ring-[#1D7A4A]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">All Sections</option>
+                    {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+              </>
             )}
             <button
               onClick={() => printElement(document.getElementById('id-card-print-area'), { fit: 'flow' })}

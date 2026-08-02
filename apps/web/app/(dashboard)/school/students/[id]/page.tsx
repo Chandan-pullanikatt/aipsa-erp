@@ -34,6 +34,7 @@ import {
   X,
   IdCard,
   Camera,
+  BarChart3,
 } from 'lucide-react';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -382,12 +383,20 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${STATUS_STYLE[student.status]}`}>{student.status}</span>
             </div>
           </div>
-          <Link
-            href={`/school/students/id-cards?studentId=${student.id}`}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#E5E7EB] rounded-lg text-xs font-bold text-[#4B5563] bg-white hover:bg-[#F9FAFB] transition-all shadow-sm font-display"
-          >
-            <IdCard className="w-3.5 h-3.5" strokeWidth={1.75} /> ID Card
-          </Link>
+          <div className="ml-auto flex items-center gap-2">
+            <Link
+              href={`/school/students/${student.id}/progress`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#E5E7EB] rounded-lg text-xs font-bold text-[#4B5563] bg-white hover:bg-[#F9FAFB] transition-all shadow-sm font-display"
+            >
+              <BarChart3 className="w-3.5 h-3.5" strokeWidth={1.75} /> Progress Card
+            </Link>
+            <Link
+              href={`/school/students/id-cards?studentId=${student.id}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#E5E7EB] rounded-lg text-xs font-bold text-[#4B5563] bg-white hover:bg-[#F9FAFB] transition-all shadow-sm font-display"
+            >
+              <IdCard className="w-3.5 h-3.5" strokeWidth={1.75} /> ID Card
+            </Link>
+          </div>
         </div>
       </div>
 

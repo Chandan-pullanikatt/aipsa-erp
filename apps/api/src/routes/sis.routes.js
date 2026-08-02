@@ -41,10 +41,18 @@ router.put('/classes/:id', adminOnly, [body('name').trim().notEmpty()], validate
   } catch (err) { next(err); }
 });
 
+// What a delete would destroy. The admin UI shows these counts and makes the
+// admin confirm against them, because none of it comes back.
+router.get('/classes/:id/delete-impact', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.getDeleteImpact(req.tenant.id, { classId: req.params.id }));
+  } catch (err) { next(err); }
+});
+
 router.delete('/classes/:id', adminOnly, async (req, res, next) => {
   try {
-    await sis.deleteClass(req.tenant.id, req.params.id);
-    res.json({ message: 'Class deleted.' });
+    const result = await sis.deleteClass(req.tenant.id, req.params.id, req.user);
+    res.json({ message: `Class ${result.target.name} deleted.`, ...result });
   } catch (err) { next(err); }
 });
 
@@ -74,10 +82,16 @@ router.put('/sections/:id', adminOnly, [body('name').trim().notEmpty()], validat
   } catch (err) { next(err); }
 });
 
+router.get('/sections/:id/delete-impact', adminOnly, async (req, res, next) => {
+  try {
+    res.json(await sis.getDeleteImpact(req.tenant.id, { sectionId: req.params.id }));
+  } catch (err) { next(err); }
+});
+
 router.delete('/sections/:id', adminOnly, async (req, res, next) => {
   try {
-    await sis.deleteSection(req.tenant.id, req.params.id);
-    res.json({ message: 'Section deleted.' });
+    const result = await sis.deleteSection(req.tenant.id, req.params.id, req.user);
+    res.json({ message: `Section ${result.target.name} deleted.`, ...result });
   } catch (err) { next(err); }
 });
 

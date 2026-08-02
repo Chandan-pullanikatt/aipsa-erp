@@ -7,6 +7,9 @@
 // wordmark) while a background refresh keeps it current. `clearBranding()` is called
 // by the School Profile page after a save so the new logo shows immediately.
 
+'use client';
+
+import { useEffect, useState } from 'react';
 import api from './api';
 
 export interface Branding {
@@ -29,6 +32,25 @@ export function getCachedBranding(): Branding | null {
 export function clearBranding() {
   if (typeof window === 'undefined') return;
   try { sessionStorage.removeItem(KEY); } catch { /* private mode */ }
+}
+
+/**
+ * Branding for anything rendered outside the shell — printed report cards, mark
+ * sheets. The dashboard layout refreshes the cache on every navigation, so a cache
+ * hit here is already current and needs no second request; only a cold pane (deep
+ * link, hard reload) pays for a fetch.
+ */
+export function useBranding(): Branding {
+  const [branding, setBranding] = useState<Branding | null>(() => getCachedBranding());
+
+  useEffect(() => {
+    if (getCachedBranding()) return;
+    let alive = true;
+    fetchBranding().then((b) => { if (alive && b) setBranding(b); });
+    return () => { alive = false; };
+  }, []);
+
+  return branding ?? { logo: null, schoolName: null };
 }
 
 export async function fetchBranding(): Promise<Branding | null> {

@@ -1,7 +1,8 @@
 'use client';
 
-import { Printer, Award, GraduationCap, Users } from 'lucide-react';
+import { Printer, Award, GraduationCap, Users, Eye } from 'lucide-react';
 import { printElement } from '@/lib/print';
+import ReportLetterhead from '@/components/ReportLetterhead';
 
 const TERMS = ['TERM_1', 'TERM_2', 'ANNUAL'] as const;
 const TERM_LABELS: Record<string, string> = { TERM_1: 'Term 1', TERM_2: 'Term 2', ANNUAL: 'Annual' };
@@ -33,9 +34,16 @@ function gradeCell(m: Marks | null) {
   return <span className="font-semibold text-gray-800">{m.obtained}<span className="text-gray-400 font-normal">/{m.max}</span> {m.grade && <span className="text-[#1D7A4A]">({m.grade})</span>}</span>;
 }
 
-export default function ProgressCard({ card, variant = 'full' }: { card: CardData; variant?: 'full' | 'cca' }) {
+/**
+ * `draftPreview` is for staff (admin / class teacher) looking at a student's card
+ * before it goes out. The API already sends them every term, published or not, so
+ * the only thing standing in the way is the "not published yet" wall families see —
+ * this drops it and warns instead.
+ */
+export default function ProgressCard({ card, variant = 'full', draftPreview = false }: { card: CardData; variant?: 'full' | 'cca'; draftPreview?: boolean }) {
   const termMeta = Object.fromEntries(card.terms.map(t => [t.term, t]));
   const ccaOnly = variant === 'cca';
+  const unpublished = draftPreview ? card.terms.filter(t => !t.published).map(t => TERM_LABELS[t.term] || t.term) : [];
 
   // The holistic card is a multi-section record, not a one-sheet summary — it prints
   // at its natural A4 size and runs onto as many pages as it needs, repeating table
@@ -44,7 +52,7 @@ export default function ProgressCard({ card, variant = 'full' }: { card: CardDat
     printElement(document.getElementById('progress-card-print'), { fit: 'flow' });
   }
 
-  if (!card.anyPublished) {
+  if (!card.anyPublished && !draftPreview) {
     return (
       <div className="py-20 text-center border border-dashed border-gray-250 rounded-2xl bg-gray-50">
         <GraduationCap className="w-12 h-12 text-gray-300 mx-auto mb-3" strokeWidth={1.5} />
@@ -70,6 +78,19 @@ export default function ProgressCard({ card, variant = 'full' }: { card: CardDat
 
   return (
     <div className="space-y-4">
+      {unpublished.length > 0 && (
+        <div className="no-print flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          <Eye className="w-4 h-4 shrink-0 mt-px" strokeWidth={1.75} />
+          <p>
+            <span className="font-bold">Staff preview.</span>{' '}
+            {unpublished.length === card.terms.length
+              ? 'No term has been published yet — the student and parent still see an empty card.'
+              : `${unpublished.join(', ')} ${unpublished.length > 1 ? 'are' : 'is'} not published yet, so the family cannot see ${unpublished.length > 1 ? 'those terms' : 'that term'}.`}{' '}
+            Publish from Progress Cards under the class teacher&apos;s portal.
+          </p>
+        </div>
+      )}
+
       <div className="flex justify-end no-print">
         <button onClick={print} className="inline-flex items-center gap-1.5 bg-[#1D7A4A] hover:bg-[#155D37] text-white px-4 py-2 rounded-lg text-sm font-semibold">
           <Printer className="w-4 h-4" /> {ccaOnly ? 'Print CCA Record' : 'Print Card'}
@@ -79,10 +100,11 @@ export default function ProgressCard({ card, variant = 'full' }: { card: CardDat
       <div id="progress-card-print" className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden font-body">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#1D7A4A] to-[#155D37] text-white px-6 py-5 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold font-display tracking-wide">{ccaOnly ? 'Co-Curricular Activities (CCA)' : 'Holistic Progress Card'}</h2>
-            <p className="text-xs text-white/80 mt-0.5">Academic Year {card.academicYear}</p>
-          </div>
+          <ReportLetterhead
+            tone="dark"
+            title={ccaOnly ? 'Co-Curricular Activities (CCA)' : 'Holistic Progress Card'}
+            subtitle={`Academic Year ${card.academicYear}`}
+          />
           {card.student.photoUrl
             ? <img src={card.student.photoUrl} alt="" className="w-16 h-16 rounded-xl object-cover border-2 border-white/40" />
             : <div className="w-16 h-16 rounded-xl bg-white/15 flex items-center justify-center"><GraduationCap className="w-8 h-8 text-white/80" /></div>}

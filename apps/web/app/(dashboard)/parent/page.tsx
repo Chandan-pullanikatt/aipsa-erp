@@ -6,6 +6,7 @@ import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
 import { printElement } from '@/lib/print';
 import ProgressCard, { type CardData } from '@/components/ProgressCard';
+import ReportLetterhead from '@/components/ReportLetterhead';
 import {
   Search,
   AlertCircle, 
@@ -932,11 +933,12 @@ function ParentDashboardContent() {
                                   <div id={`report-card-${summary.exam.id}`} className="p-6 space-y-6 bg-white">
                                     {/* Official Header (Visible on print only) */}
                                     <div className="print-only text-center border-b-2 border-gray-900 pb-4 mb-4 font-display">
-                                      <h2 className="text-xl font-black uppercase text-gray-900 tracking-wider">Official Academic Record</h2>
-                                      <p className="text-sm font-semibold text-gray-600 mt-1">EduBridge Multi-Tenant School ERP Systems</p>
+                                      {/* The sheet is filed and signed outside the app, so it carries the school's
+                                          own name and logo — not the platform's. */}
+                                      <ReportLetterhead align="center" title="Official Academic Record" />
                                       {/* The exam name lives in the on-screen header, which is outside the printed
                                           section — without this the sheet never says which exam it is. */}
-                                      <p className="text-sm font-bold uppercase tracking-wide text-gray-900 mt-2">{summary.exam.name}</p>
+                                      <p className="text-sm font-bold uppercase tracking-wide text-gray-900 mt-3">{summary.exam.name}</p>
 
                                       <div className="grid grid-cols-2 text-left text-xs text-gray-700 mt-4 border border-gray-300 p-3 rounded">
                                         <p><span className="font-bold">Student:</span> {activeStudent?.firstName} {activeStudent?.lastName}</p>
